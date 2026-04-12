@@ -1,0 +1,1724 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Devis & Facture</title>
+  <style>
+    :root {
+      --bg: #edf1f5;
+      --paper: #ffffff;
+      --ink: #111827;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --line-strong: #9ca3af;
+      --head: #f3f4f6;
+      --primary: #1d4ed8;
+      --danger: #b91c1c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .app {
+      max-width: 1450px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .title-wrap h1 {
+      margin: 0 0 4px;
+      font-size: 26px;
+    }
+
+    .title-wrap p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.4;
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    .file-label {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 8px;
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    button.danger {
+      background: var(--danger);
+      color: #fff;
+      border-color: var(--danger);
+    }
+
+    .file-label input {
+      display: none;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 9px 13px;
+      cursor: pointer;
+      font-weight: 700;
+      border-radius: 8px;
+    }
+
+    .tab.active {
+      background: #eaf1ff;
+      border-color: #b9cdfc;
+      color: var(--primary);
+    }
+
+    .page {
+      display: none;
+    }
+
+    .page.active {
+      display: block;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .toolbar .hint {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .sheet {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 22px 22px 18px;
+    }
+
+    .doc-head {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+
+    .doc-head-right {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .doc-title-top {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      margin: 0 0 14px;
+      text-align: left;
+    }
+
+    .seller {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 54px;
+    }
+
+    .seller-text {
+      min-width: 0;
+    }
+
+    .seller h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .seller-lines {
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-line;
+    }
+
+    .company-logo-wrap {
+      margin: 6px 0 0 16px;
+      flex-shrink: 0;
+    }
+
+    .company-logo {
+      max-width: 115px;
+      max-height: 115px;
+      width: auto;
+      height: auto;
+      display: block;
+      object-fit: contain;
+    }
+
+
+    .client-box {
+      border: 1px solid var(--line);
+      padding: 10px;
+      margin-top: 0;
+    }
+
+    .client-box .stack {
+      flex: 1;
+    }
+
+    .box-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 18px 0 8px;
+      text-align: left;
+    }
+
+    .meta-table-wrap {
+      margin-bottom: 14px;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .meta-table th,
+    .meta-table td {
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 8px 9px;
+      vertical-align: middle;
+      font-size: 12px;
+    }
+
+    .meta-table th:last-child,
+    .meta-table td:last-child {
+      border-right: none;
+    }
+
+    .meta-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .meta-table th {
+      background: var(--head);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .doc-table-wrap {
+      border: 1px solid var(--line);
+      overflow: auto;
+      margin-bottom: 14px;
+    }
+
+    .doc-table {
+      min-width: 980px;
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .doc-table th,
+    .doc-table td {
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 7px 7px;
+      font-size: 12px;
+      vertical-align: middle;
+    }
+
+    .doc-table th:last-child,
+    .doc-table td:last-child {
+      border-right: none;
+    }
+
+    .doc-table th {
+      background: var(--head);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      text-align: left;
+      font-weight: 700;
+    }
+
+    .doc-table td:nth-child(2),
+    .doc-table td:nth-child(3),
+    .doc-table td:nth-child(4),
+    .doc-table td:nth-child(5),
+    .doc-table td:nth-child(6),
+    .doc-table td:nth-child(7),
+    .doc-table th:nth-child(2),
+    .doc-table th:nth-child(3),
+    .doc-table th:nth-child(4),
+    .doc-table th:nth-child(5),
+    .doc-table th:nth-child(6),
+    .doc-table th:nth-child(7) {
+      text-align: center;
+    }
+
+    .doc-table th:first-child,
+    .doc-table td:first-child {
+      width: 44%;
+    }
+
+    .doc-table th:nth-child(2),
+    .doc-table td:nth-child(2) {
+      width: 95px;
+      /* Quantité */
+    }
+
+    .doc-table th:nth-child(3),
+    .doc-table td:nth-child(3) {
+      width: 70px;
+      /* Unité */
+    }
+
+    .doc-table th:nth-child(4),
+    .doc-table td:nth-child(4) {
+      width: 95px;
+      /* Pr. unit. */
+    }
+
+    .doc-table th:nth-child(5),
+    .doc-table td:nth-child(5) {
+      width: 85px;
+      /* Remise */
+    }
+
+    .doc-table th:nth-child(6),
+    .doc-table td:nth-child(6) {
+      width: 105px;
+      /* Total */
+    }
+
+    .doc-table th:nth-child(7),
+    .doc-table td:nth-child(7) {
+      width: 85px;
+      /* TVA */
+    }
+
+    .doc-table th:last-child,
+    .doc-table td:last-child {
+      width: 95px;
+      /* bouton */
+    }
+
+    .doc-table td:first-child textarea,
+    .doc-table th:first-child {
+      width: 100%;
+    }
+
+    .doc-table td:first-child textarea {
+      min-height: 22px;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      line-height: 1.25;
+      padding-top: 4px;
+      padding-bottom: 4px;
+    }
+
+    .doc-table td input,
+    .doc-table td select,
+    .doc-table td textarea {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid #d6dbe3;
+      background: #fff;
+      padding: 7px 8px;
+      font: inherit;
+      font-size: 12px;
+      border-radius: 0;
+    }
+
+    textarea {
+      min-height: 28px;
+      resize: none;
+      overflow: hidden;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 330px;
+      gap: 20px;
+      align-items: start;
+      margin-top: 8px;
+    }
+
+    .notes-block {
+      border: 1px solid var(--line);
+      padding: 10px;
+      min-height: 40px;
+    }
+
+    .totals {
+      width: 100%;
+      border: 1px solid var(--line);
+    }
+
+    .totals .row {
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .totals .row:last-child {
+      border-bottom: none;
+    }
+
+    .totals .row div {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .totals .row div:last-child {
+      text-align: right;
+      border-left: 1px solid var(--line);
+      font-weight: 700;
+    }
+
+    .totals .final {
+      background: #f7fafc;
+      font-weight: 700;
+    }
+
+    .pay-block {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .pay-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .conditions-screen {
+      margin-top: 18px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 22px;
+    }
+
+    .conditions-screen h3,
+    .conditions-print-page h3 {
+      margin: 0 0 14px;
+      font-size: 24px;
+    }
+
+    .conditions-content {
+      white-space: pre-line;
+      line-height: 1.6;
+      font-size: 12px;
+    }
+
+    .comm-panel {
+      background: #fff;
+      border: 1px solid var(--line);
+      padding: 20px;
+    }
+
+    .comm-panel h2 {
+      margin: 0 0 10px;
+      font-size: 24px;
+    }
+
+    .comm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 180px;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .comm-result {
+      border: 1px solid var(--line-strong);
+      background: #fafafa;
+      padding: 16px;
+      font-size: 30px;
+      font-weight: 700;
+      text-align: center;
+      letter-spacing: .03em;
+      word-break: break-word;
+    }
+
+    .comm-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .simple-box {
+      border: 1px solid var(--line);
+      padding: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      background: #fff;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .toggle-row label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .check-inline {
+      width: auto;
+      transform: scale(1.1);
+    }
+
+    .conditions-print-page {
+      display: none;
+    }
+
+    @media (max-width: 1100px) {
+
+      .doc-head,
+      .bottom,
+      .comm-grid,
+      .comm-meta,
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .app {
+        padding: 12px;
+      }
+
+      .sheet,
+      .comm-panel,
+      .conditions-screen {
+        padding: 14px;
+      }
+
+      .doc-title-top {
+        font-size: 26px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .doc-title-top {
+        font-size: 28px !important;
+        margin: 0 0 10px !important;
+      }
+
+      .doc-table td:first-child textarea {
+        white-space: pre-wrap !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+        height: auto !important;
+        min-height: 18px !important;
+        line-height: 1.25 !important;
+      }
+
+      .doc-table th,
+      .doc-table td {
+        font-size: 11px !important;
+        padding: 7px 7px !important;
+      }
+
+      .topbar,
+      .tabs,
+      .toolbar,
+      .no-print,
+      .conditions-screen {
+        display: none !important;
+      }
+
+      .app {
+        max-width: none;
+        padding: 0;
+      }
+
+      .page {
+        display: none !important;
+      }
+
+      .page.print-include {
+        display: block !important;
+      }
+
+      .sheet,
+      .comm-panel,
+      .conditions-print-page {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        background: #fff;
+      }
+
+      .doc-head {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 18px !important;
+        align-items: start !important;
+      }
+
+      .bottom {
+        grid-template-columns: 1fr 280px !important;
+        gap: 12px !important;
+        align-items: start !important;
+      }
+
+      .client-box {
+        min-height: auto !important;
+        padding: 8px !important;
+      }
+
+      .client-box textarea {
+        min-height: 52px !important;
+      }
+
+      .notes-block {
+        min-height: 0 !important;
+        height: auto !important;
+        padding: 6px 8px !important;
+      }
+
+      .totals,
+      .pay-block {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+
+      .notes-block textarea {
+        min-height: 0 !important;
+        height: auto !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
+      input,
+      textarea,
+      select {
+        border: none;
+        padding: 0;
+        background: transparent;
+      }
+
+      .doc-table-wrap {
+        overflow: visible;
+      }
+
+      .doc-table {
+        min-width: 0;
+      }
+
+      .company-logo {
+        max-width: 85px;
+        max-height: 85px;
+      }
+
+      .conditions-print-page {
+        display: block !important;
+        page-break-before: always;
+        break-before: page;
+      }
+
+      .conditions-content {
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title-wrap">
+        <h1>Devis & Facture</h1>
+      </div>
+      <div class="actions">
+        <button class="primary" onclick="saveData()">Sauvegarder</button>
+        <button onclick="exportData()">Exporter JSON</button>
+        <button onclick="printCurrentPage()">Imprimer l’onglet</button>
+        <button onclick="importData()">Importer JSON</button>
+        <button class="danger" onclick="resetData()">Réinitialiser</button>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="pages"></div>
+  </div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+
+  <script>
+    const STORAGE_KEY = 'devis-facture-style-vrai-document';
+
+    const GOOGLE_CLIENT_ID = 'ICI_TON_VRAI_CLIENT_ID';
+    const GOOGLE_API_KEY = 'ICI_TA_VRAIE_API_KEY';
+    const DRIVE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+
+    let googleTokenClient = null;
+    let googleAccessToken = null;
+    let googleDriveReady = false;
+
+    const defaultLines = () => ([
+      {
+        description: '',
+        qty: 1,
+        unit: 'p',
+        unitPrice: 0,
+        discount: 0,
+        vatRate: 21
+      }
+    ]);
+
+    const defaultData = {
+      company: {
+        name: '',
+        address: '',
+        city: '',
+        phone: '',
+        email: '',
+        website: '',
+        vat: '',
+        iban: '',
+        bic: '',
+        conditions: '',
+        logo: ''
+      },
+      quote: {
+        documentNumber: '',
+        clientNumber: '',
+        clientVat: '',
+        clientName: '',
+        address: '',
+        date: '',
+        validity: '',
+        siteName: '',
+        lines: defaultLines(),
+        suppliesEnabled: false,
+        suppliesLines: defaultLines(),
+        notes: ''
+      },
+      invoice: {
+        documentNumber: '',
+        clientNumber: '',
+        clientVat: '',
+        clientName: '',
+        address: '',
+        date: '',
+        dueDate: '',
+        siteName: '',
+        paidAmount: 0,
+        lines: defaultLines(),
+        suppliesEnabled: false,
+        suppliesLines: defaultLines(),
+        notes: ''
+      },
+      communication: {
+        clientNumber: '',
+        invoiceYear: '',
+        invoiceNumber: '',
+        controlNumber: '',
+        formatted: ''
+      }
+    };
+
+    const pageDefs = [
+      { key: 'quote', label: 'Devis' },
+      { key: 'invoice', label: 'Facture' },
+      { key: 'communication', label: 'Communication structurée' },
+      { key: 'peppol', label: 'Peppol / Doccle' },
+      { key: 'gdrive', label: 'Google Drive' },
+      { key: 'settings', label: 'Paramètres' }
+    ];
+
+    let data = loadData();
+    let activePage = 'quote';
+
+    function loadData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return structuredClone(defaultData);
+        return mergeDeep(structuredClone(defaultData), JSON.parse(raw));
+      } catch {
+        return structuredClone(defaultData);
+      }
+    }
+
+    function mergeDeep(target, source) {
+      for (const key in source) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          target[key] = mergeDeep(target[key] || {}, source[key]);
+        } else {
+          target[key] = source[key];
+        }
+      }
+      return target;
+    }
+
+    function saveData(showAlert = true) {
+      syncCommunicationFromInvoice(false);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (showAlert) alert('Données sauvegardées localement.');
+      render();
+    }
+
+    function exportData() {
+      exportJsonToDrive();
+    }
+
+    function importData() {
+      importJsonFromDrive();
+    }
+
+    function renderGoogleDrive() {
+      return `
+    <section class="page ${activePage === 'gdrive' ? 'active' : ''}" data-page="gdrive">
+      <div class="sheet">
+        <div class="toolbar no-print">
+          <div class="hint">Sauvegarde et restauration avec Google Drive</div>
+          <div class="inline-actions">
+            <button onclick="connectGoogleDrive()">Se connecter à Google</button>
+            <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
+            <button onclick="importJsonFromDrive()">Importer depuis Drive</button>
+          </div>
+        </div>
+
+        <div class="comm-panel">
+          <h2>Google Drive</h2>
+
+          <div class="simple-box" style="margin-bottom:16px;">
+            Cet onglet permet à chaque utilisateur de sauvegarder ses données dans son propre Google Drive.
+          </div>
+
+          <div class="simple-box" style="line-height:1.7;">
+            <strong>Étapes</strong><br>
+            1. Clique sur “Se connecter à Google”<br>
+            2. Autorise l’accès à Google Drive<br>
+            3. Clique sur “Exporter JSON vers Drive” pour sauvegarder<br>
+            4. Clique sur “Importer depuis Drive” pour récupérer la dernière sauvegarde
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+    }
+
+    function resetData() {
+      if (!confirm('Tout effacer et revenir à une base vide ?')) return;
+      data = structuredClone(defaultData);
+      saveData(false);
+    }
+
+    function money(value) {
+      return new Intl.NumberFormat('fr-BE', {
+        style: 'currency',
+        currency: 'EUR'
+      }).format(Number(value || 0));
+    }
+
+    function num(value, digits = 2) {
+      return Number(value || 0).toFixed(digits);
+    }
+
+    function toNumber(value) {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/`/g, '&#096;');
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+
+    function setField(path, value) {
+      const keys = path.split('.');
+      let ref = data;
+      for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
+      ref[keys[keys.length - 1]] = value;
+      saveData(false);
+    }
+
+    function lineBase(row) {
+      return toNumber(row.qty) * toNumber(row.unitPrice);
+    }
+
+    function lineDiscountAmount(row) {
+      return lineBase(row) * (toNumber(row.discount) / 100);
+    }
+
+    function lineNet(row) {
+      return lineBase(row) - lineDiscountAmount(row);
+    }
+
+    function lineVat(row) {
+      return lineNet(row) * (toNumber(row.vatRate) / 100);
+    }
+
+    function lineTvac(row) {
+      return lineNet(row) + lineVat(row);
+    }
+
+    function totalsFor(docKey) {
+      const doc = data[docKey];
+      const mainLines = Array.isArray(doc.lines) ? doc.lines : [];
+      const suppliesLines = doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [];
+      const allLines = [...mainLines, ...suppliesLines];
+
+      const htva = allLines.reduce((sum, row) => sum + lineNet(row), 0);
+      const vat = allLines.reduce((sum, row) => sum + lineVat(row), 0);
+      const tvac = htva + vat;
+      return { htva, vat, tvac };
+    }
+
+    function createEmptyLine() {
+      return {
+        description: '',
+        qty: 1,
+        unit: 'p',
+        unitPrice: 0,
+        discount: 0,
+        vatRate: 21
+      };
+    }
+
+    function addLine(docKey, section = 'lines') {
+      data[docKey][section].push(createEmptyLine());
+      saveData(false);
+    }
+
+    function deleteLine(docKey, section, index) {
+      if (!confirm('Supprimer cette ligne ?')) return;
+      data[docKey][section].splice(index, 1);
+      if (!data[docKey][section].length) {
+        data[docKey][section].push(createEmptyLine());
+      }
+      saveData(false);
+    }
+
+    function toggleSupplies(docKey, checked) {
+      data[docKey].suppliesEnabled = checked;
+      if (!Array.isArray(data[docKey].suppliesLines) || !data[docKey].suppliesLines.length) {
+        data[docKey].suppliesLines = defaultLines();
+      }
+      saveData(false);
+    }
+
+    function copyQuoteToInvoice() {
+      if (!confirm('Reprendre les données du devis dans la facture ? Cela remplacera les données actuelles de la facture.')) return;
+
+      data.invoice.clientNumber = data.quote.clientNumber;
+      data.invoice.clientVat = data.quote.clientVat;
+      data.invoice.clientName = data.quote.clientName;
+      data.invoice.address = data.quote.address;
+      data.invoice.siteName = data.quote.siteName;
+      data.invoice.notes = data.quote.notes;
+
+      data.invoice.lines = structuredClone(data.quote.lines || defaultLines());
+      data.invoice.suppliesEnabled = !!data.quote.suppliesEnabled;
+      data.invoice.suppliesLines = structuredClone(data.quote.suppliesLines || defaultLines());
+
+      saveData(false);
+      activePage = 'invoice';
+      render();
+    }
+
+    function getInvoicePaymentText() {
+      const totals = totalsFor('invoice');
+      const paidAmount = toNumber(data.invoice.paidAmount);
+      const balance = totals.tvac - paidAmount;
+
+      return `Paiement : ${money(balance)}
+Compte : ${data.company.iban || 'IBAN'}
+Communication : ${data.communication.formatted || '+++...+++'}`;
+    }
+
+    function normalizeClientNumber(value) {
+      let v = String(value || '').replace(/\D/g, '');
+
+      if (!v) return '';
+
+      // Si déjà sur 3 chiffres → on garde
+      if (v.length === 3) return v;
+
+      // Si 1 ou 2 chiffres → on ajoute "1" devant
+      if (v.length <= 2) {
+        return ('1' + v).slice(0, 3);
+      }
+
+      return v.slice(0, 3);
+    }
+
+    function normalizeYear(value) {
+      return String(value || '').replace(/\D/g, '').slice(0, 4);
+    }
+
+    function normalizeInvoiceNumber(value) {
+      return String(value || '').replace(/\D/g, '').slice(0, 2);
+    }
+
+    function computeStructuredCommunication(clientNumber, invoiceYear, invoiceNumber) {
+      const c = normalizeClientNumber(clientNumber);
+      const y = normalizeYear(invoiceYear);
+      const i = normalizeInvoiceNumber(invoiceNumber);
+
+      if (!c || !y || !i || y.length !== 4) {
+        return { base: '', control: '', formatted: '+++...+++' };
+      }
+
+      const base = `${c}${y}${i}`;
+      const mod = Number(base) % 97;
+      const control = mod === 0 ? 97 : mod;
+      const controlPadded = String(control).padStart(2, '0');
+
+      return {
+        base,
+        control: controlPadded,
+        formatted: `+++${c}/${y}/${i}${controlPadded}+++`
+      };
+    }
+
+    function syncCommunicationFromInvoice(shouldRender = true) {
+      // On force l'utilisation des données de la facture uniquement
+      const clientSource = data.invoice.clientNumber;
+      const yearSource = data.invoice.date ? String(data.invoice.date).slice(0, 4) : '';
+
+      const invoiceDigits = String(data.invoice.documentNumber || '').replace(/\D/g, '');
+      const invoiceShort = invoiceDigits ? invoiceDigits.slice(-2) : '';
+
+      const result = computeStructuredCommunication(clientSource, yearSource, invoiceShort);
+
+      data.communication.clientNumber = normalizeClientNumber(clientSource);
+      data.communication.invoiceYear = normalizeYear(yearSource);
+      data.communication.invoiceNumber = normalizeInvoiceNumber(invoiceShort);
+      data.communication.controlNumber = result.control;
+      data.communication.formatted = result.formatted;
+
+      if (shouldRender) render();
+      return result;
+    }
+
+    function copyCommunication() {
+      syncCommunicationFromInvoice(false);
+      navigator.clipboard.writeText(data.communication.formatted || '');
+      alert('Communication structurée copiée.');
+    }
+
+    function printCurrentPage() {
+      const pages = Array.from(document.querySelectorAll('.page'));
+      pages.forEach(page => page.classList.remove('print-include'));
+      const active = document.querySelector(`.page[data-page="${activePage}"]`);
+      if (active) active.classList.add('print-include');
+      window.print();
+      if (active) active.classList.remove('print-include');
+    }
+
+    async function initGoogleDrive() {
+      try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+
+        await gapi.client.init({
+          apiKey: GOOGLE_API_KEY,
+          discoveryDocs: [DRIVE_DISCOVERY_DOC]
+        });
+
+        googleTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: DRIVE_SCOPES,
+          callback: (resp) => {
+            if (resp.access_token) {
+              googleAccessToken = resp.access_token;
+              googleDriveReady = true;
+              alert('Connexion Google Drive réussie.');
+              render();
+            }
+          }
+        });
+
+        googleDriveReady = true;
+      } catch (error) {
+        console.error(error);
+        alert("Erreur lors de l'initialisation de Google Drive.");
+      }
+    }
+
+    function connectGoogleDrive() {
+      if (!googleTokenClient) {
+        alert("Google Drive n'est pas encore prêt.");
+        return;
+      }
+
+      googleTokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function exportJsonToDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      try {
+        syncCommunicationFromInvoice(false);
+
+        const fileName = `devis-facture-${data.invoice.documentNumber || data.quote.documentNumber || 'export'}.json`;
+        const content = JSON.stringify(data, null, 2);
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+
+        const metadata = {
+          name: fileName,
+          parents: ['appDataFolder']
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (files.length) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        alert(`Export Google Drive réussi : ${saved.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'export vers Google Drive.");
+      }
+    }
+
+    async function importJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      try {
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `mimeType='application/json' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 20,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        const files = list.result.files || [];
+
+        if (!files.length) {
+          alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
+          return;
+        }
+
+        const file = files[0];
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        syncCommunicationFromInvoice(false);
+        saveData(false);
+        alert(`Import réussi : ${file.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'import depuis Google Drive.");
+      }
+    }
+
+    function openDoccle() {
+      window.open('https://secure.doccle.be/ui/company', '_blank', 'noopener,noreferrer');
+    }
+
+    function printInvoiceFromPeppol() {
+      activePage = 'invoice';
+      render();
+
+      setTimeout(() => {
+        printCurrentPage();
+      }, 50);
+    }
+
+    function renderPeppol() {
+      const totals = totalsFor('invoice');
+      const hasInvoiceNumber = !!String(data.invoice.documentNumber || '').trim();
+      const hasClientName = !!String(data.invoice.clientName || '').trim();
+      const hasDate = !!String(data.invoice.date || '').trim();
+
+      return `
+    <section class="page ${activePage === 'peppol' ? 'active' : ''}" data-page="peppol">
+      <div class="sheet">
+        <div class="toolbar no-print">
+          <div class="hint">Prépare l’envoi de la facture via Doccle / Peppol</div>
+          <div class="inline-actions">
+            <button onclick="printInvoiceFromPeppol()">Imprimer la facture</button>
+            <button class="primary" onclick="openDoccle()">Ouvrir Doccle</button>
+          </div>
+        </div>
+
+        <div class="comm-panel">
+          <h2>Peppol / Doccle</h2>
+          <div class="simple-box" style="margin-bottom:16px;">
+            Utilise cet onglet comme étape finale : vérifie la facture, imprime-la en PDF, puis ouvre Doccle pour l’envoyer.
+          </div>
+
+          <div class="comm-meta" style="margin-bottom:18px;">
+            <div class="simple-box">
+              <strong>N° facture</strong><br>
+              ${escapeHtml(data.invoice.documentNumber || '—')}
+            </div>
+            <div class="simple-box">
+              <strong>Client</strong><br>
+              ${escapeHtml(data.invoice.clientName || '—')}
+            </div>
+            <div class="simple-box">
+              <strong>Total TVAC</strong><br>
+              ${escapeHtml(money(totals.tvac))}
+            </div>
+          </div>
+
+          <div class="simple-box" style="margin-bottom:18px; line-height:1.7;">
+            <strong>Checklist avant envoi</strong><br>
+            ${hasInvoiceNumber ? '✔' : '✖'} Numéro de facture renseigné<br>
+            ${hasClientName ? '✔' : '✖'} Nom du client renseigné<br>
+            ${hasDate ? '✔' : '✖'} Date de facture renseignée<br>
+            ${totals.tvac > 0 ? '✔' : '✖'} Montant total supérieur à 0
+          </div>
+
+          <div class="simple-box" style="line-height:1.7;">
+            <strong>Étapes</strong><br>
+            1. Vérifie l’onglet Facture<br>
+            2. Clique sur “Imprimer la facture” et enregistre en PDF<br>
+            3. Clique sur “Ouvrir Doccle”<br>
+            4. Dépose la facture PDF dans Doccle
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+    }
+
+    function renderTabs() {
+      const tabs = document.getElementById('tabs');
+      tabs.innerHTML = pageDefs.map(page => `
+        <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
+      `).join('');
+    }
+
+    function renderMetaTable(docKey, isQuote) {
+      const doc = data[docKey];
+      return `
+        <div class="meta-table-wrap">
+          <table class="meta-table">
+            <thead>
+              <tr>
+                <th>N° document</th>
+                <th>${isQuote ? 'Date de validité' : 'Date d’échéance'}</th>
+                <th>Votre n° de client</th>
+                <th>Votre n° TVA</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input value="${escapeAttr(doc.documentNumber)}" onchange="data.${docKey}.documentNumber=this.value; saveData(false)"></td>
+                <td><input type="date" value="${escapeAttr(isQuote ? doc.validity : doc.dueDate)}" onchange="data.${docKey}.${isQuote ? 'validity' : 'dueDate'}=this.value; saveData(false)"></td>
+                <td><input value="${escapeAttr(doc.clientNumber)}" onchange="data.${docKey}.clientNumber=this.value; saveData(false)"></td>
+                <td><input value="${escapeAttr(doc.clientVat)}" onchange="data.${docKey}.clientVat=this.value; saveData(false)"></td>
+                <td><input type="date" value="${escapeAttr(doc.date)}" onchange="data.${docKey}.date=this.value; saveData(false)"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderLinesTable(docKey, section, title = '') {
+      const rows = data[docKey][section] || [];
+
+      return `
+        ${title ? `<div class="section-title">${escapeHtml(title)}</div>` : ''}
+        <div class="doc-table-wrap">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Quantité</th>
+                <th>Unité</th>
+                <th>Pr. unit.</th>
+                <th>Remise</th>
+                <th>Total</th>
+                <th>TVA</th>
+                <th class="no-print"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row, i) => `
+                <tr>
+                  <td>
+  <textarea
+    oninput="autoResize(this); data.${docKey}.${section}[${i}].description=this.value; saveData(false)"
+  >${escapeHtml(row.description || '')}</textarea>
+</td>
+                  <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="data.${docKey}.${section}[${i}].qty=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.unit)}" onchange="data.${docKey}.${section}[${i}].unit=this.value; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.${docKey}.${section}[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="data.${docKey}.${section}[${i}].discount=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td>${money(lineNet(row))}</td>
+                  <td>
+                    <select onchange="data.${docKey}.${section}[${i}].vatRate=parseFloat(this.value)||0; saveData(false)">
+                      <option value="0" ${toNumber(row.vatRate) === 0 ? 'selected' : ''}>0%</option>
+                      <option value="6" ${toNumber(row.vatRate) === 6 ? 'selected' : ''}>6%</option>
+                      <option value="12" ${toNumber(row.vatRate) === 12 ? 'selected' : ''}>12%</option>
+                      <option value="21" ${toNumber(row.vatRate) === 21 ? 'selected' : ''}>21%</option>
+                    </select>
+                  </td>
+                  <td class="no-print"><button class="danger" onclick="deleteLine('${docKey}', '${section}', ${i})">Suppr.</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderCompanyBlock() {
+      return `
+    <div class="seller">
+
+  <div class="seller-text">
+    <h2>${escapeHtml(data.company.name || 'Nom de votre société')}</h2>
+    <div class="seller-lines">${escapeHtml(
+        [
+          data.company.address || 'Adresse',
+          data.company.city || 'Code postal - Ville',
+          data.company.phone ? 'Tél. ' + data.company.phone : 'Tél. —',
+          data.company.email || 'email@exemple.be',
+          data.company.website || '',
+          data.company.vat ? 'TVA ' + data.company.vat : 'TVA —'
+        ].filter(Boolean).join('\n')
+      )}</div>
+  </div>
+
+  ${data.company.logo ? `
+    <div class="company-logo-wrap">
+      <img src="${escapeAttr(data.company.logo)}" alt="Logo de l'entreprise" class="company-logo">
+    </div>
+  ` : ''}
+
+</div>
+  `;
+    }
+
+    function renderConditionsPages(docKey, label) {
+      const content = escapeHtml(data.company.conditions || '');
+
+      return `
+        <div class="conditions-screen">
+          <h3>Conditions</h3>
+          <div class="conditions-content">${content || 'Aucune condition renseignée.'}</div>
+        </div>
+
+        <div class="conditions-print-page">
+          <h3>${label} - Conditions</h3>
+          <div class="conditions-content">${content}</div>
+        </div>
+      `;
+    }
+
+    function renderDocumentPage(docKey) {
+      const doc = data[docKey];
+      const totals = totalsFor(docKey);
+      const isQuote = docKey === 'quote';
+      const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
+      const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
+
+      return `
+        <section class="page ${activePage === docKey ? 'active' : ''}" data-page="${docKey}">
+                    <div class="toolbar no-print">
+            <div class="hint"></div>
+            <div class="inline-actions">
+              ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
+              <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
+              ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
+            </div>
+          </div>
+
+          <div class="sheet">
+            <div class="doc-head">
+  ${renderCompanyBlock()}
+
+  <div class="doc-head-right">
+    <div class="doc-title-top">${isQuote ? 'DEVIS' : 'FACTURE'}</div>
+
+    <div class="client-box">
+      <div class="box-title">Client</div>
+      <div class="stack">
+        <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
+        <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value; saveData(false)">${escapeHtml(doc.address || '')}</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+            ${renderMetaTable(docKey, isQuote)}
+
+            ${renderLinesTable(docKey, 'lines')}
+
+            <div class="toggle-row no-print">
+              <input class="check-inline" type="checkbox" id="${docKey}-supplies-toggle" ${doc.suppliesEnabled ? 'checked' : ''} onchange="toggleSupplies('${docKey}', this.checked)">
+              <label for="${docKey}-supplies-toggle">Afficher le cadre Fournitures</label>
+            </div>
+
+            ${doc.suppliesEnabled ? renderLinesTable(docKey, 'suppliesLines', 'Fournitures') : ''}
+
+            <div class="bottom">
+  <div>
+    <div class="notes-block">
+      <div class="box-title">${isQuote ? 'Remarques du devis' : 'Remarques'}</div>
+      <textarea oninput="autoResize(this)" onchange="data.${docKey}.notes=this.value; saveData(false)">${escapeHtml(doc.notes || '')}</textarea>
+${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; line-height:1.35;">${escapeHtml(getInvoicePaymentText())}</div>` : ``}
+    </div>
+  </div>
+
+  <div>
+    <div class="totals">
+      <div class="row"><div>Total HTVA</div><div>${money(totals.htva)}</div></div>
+      <div class="row"><div>Total TVA</div><div>${money(totals.vat)}</div></div>
+      <div class="row final"><div>Total TVA incl.</div><div>${money(totals.tvac)}</div></div>
+    </div>
+
+    ${!isQuote ? `
+      <div class="pay-block">
+        <div class="field" style="margin-bottom:10px;">
+          <label>Montant payé</label>
+          <input type="number" step="0.01" value="${num(data.invoice.paidAmount)}" onchange="data.invoice.paidAmount=parseFloat(this.value)||0; saveData(false)">
+        </div>
+        <div class="pay-line"><span>Payé</span><strong>${money(paidAmount)}</strong></div>
+        <div class="pay-line"><span>Solde</span><strong>${money(balance)}</strong></div>
+      </div>
+    ` : ``}
+  </div>
+</div>
+
+          ${renderConditionsPages(docKey, isQuote ? 'DEVIS' : 'FACTURE')}
+        </section>
+      `;
+    }
+
+    function renderQuote() {
+      return renderDocumentPage('quote');
+    }
+
+    function renderInvoice() {
+      syncCommunicationFromInvoice(false);
+      return renderDocumentPage('invoice');
+    }
+
+    function renderCommunication() {
+      const result = syncCommunicationFromInvoice(false);
+
+      return `
+        <section class="page ${activePage === 'communication' ? 'active' : ''}" data-page="communication">
+          <div class="comm-panel">
+            <h2>Communication structurée</h2>
+            <div class="footer-note" style="margin-top:0; margin-bottom:16px;">
+              Génération simple, dans le même esprit que tes factures.
+            </div>
+
+            <div class="comm-grid">
+              <div class="field">
+                <label>Numéro client</label>
+                <input value="${escapeAttr(data.communication.clientNumber)}" onchange="setField('communication.clientNumber', this.value)">
+              </div>
+              <div class="field">
+                <label>Année de facturation</label>
+                <input value="${escapeAttr(data.communication.invoiceYear)}" onchange="setField('communication.invoiceYear', this.value)">
+              </div>
+              <div class="field">
+                <label>Numéro de facture</label>
+                <input value="${escapeAttr(data.communication.invoiceNumber)}" onchange="setField('communication.invoiceNumber', this.value)">
+              </div>
+              <div class="inline-actions no-print">
+                <button class="primary" style="width:100%;" onclick="copyCommunication()">Copier</button>
+              </div>
+            </div>
+
+            <div class="comm-result">${escapeHtml(result.formatted)}</div>
+
+            <div class="comm-meta">
+              <div class="simple-box"><strong>Base utilisée</strong><br>${escapeHtml(result.base || '—')}</div>
+              <div class="simple-box"><strong>Chiffre de contrôle</strong><br>${escapeHtml(result.control || '—')}</div>
+              <div class="simple-box"><strong>Rappel</strong><br>Peut reprendre automatiquement les infos de l’onglet Facture.</div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function handleLogoUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        data.company.logo = reader.result;
+        saveData(false);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeLogo() {
+      data.company.logo = '';
+      saveData(false);
+    }
+
+    function renderSettings() {
+      return `
+        <section class="page ${activePage === 'settings' ? 'active' : ''}" data-page="settings">
+          <div class="sheet">
+            <div class="toolbar no-print">
+              <div class="hint">Paramètres société utilisés pour devis et facture</div>
+            </div>
+
+            <div class="settings-grid">
+              <div class="stack">
+                <div class="field">
+                  <label>Logo</label>
+                  <label class="file-label" style="display:inline-block;">Importer un logo
+                    <input type="file" accept="image/*" onchange="handleLogoUpload(event)">
+                  </label>
+                  ${data.company.logo ? `
+                    <div style="margin-top:10px;">
+                      <img src="${escapeAttr(data.company.logo)}" alt="Aperçu logo" class="company-logo">
+                    </div>
+                    <div style="margin-top:8px;">
+                      <button type="button" class="danger" onclick="removeLogo()">Supprimer le logo</button>
+                    </div>
+                  ` : ''}
+                </div>
+
+                <div class="field">
+                  <label>Nom de la société</label>
+                  <input value="${escapeAttr(data.company.name)}" onchange="setField('company.name', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Adresse</label>
+                  <input value="${escapeAttr(data.company.address)}" onchange="setField('company.address', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Code postal / Ville</label>
+                  <input value="${escapeAttr(data.company.city)}" onchange="setField('company.city', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Téléphone</label>
+                  <input value="${escapeAttr(data.company.phone)}" onchange="setField('company.phone', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Email</label>
+                  <input value="${escapeAttr(data.company.email)}" onchange="setField('company.email', this.value)">
+                </div>
+              </div>
+
+              <div class="stack">
+                <div class="field">
+                  <label>Site web</label>
+                  <input value="${escapeAttr(data.company.website)}" onchange="setField('company.website', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>TVA</label>
+                  <input value="${escapeAttr(data.company.vat)}" onchange="setField('company.vat', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>IBAN</label>
+                  <input value="${escapeAttr(data.company.iban)}" onchange="setField('company.iban', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>BIC</label>
+                  <input value="${escapeAttr(data.company.bic)}" onchange="setField('company.bic', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Conditions</label>
+                  <textarea onchange="setField('company.conditions', this.value)">${escapeHtml(data.company.conditions || '')}</textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderPages() {
+      const wrap = document.getElementById('pages');
+      wrap.innerHTML = `
+    ${renderQuote()}
+    ${renderInvoice()}
+    ${renderCommunication()}
+    ${renderPeppol()}
+    ${renderGoogleDrive()}
+    ${renderSettings()}
+  `;
+    }
+
+    function render() {
+      syncCommunicationFromInvoice(false);
+      renderTabs();
+      renderPages();
+
+      setTimeout(() => {
+        document.querySelectorAll('textarea').forEach(autoResize);
+      }, 0);
+    }
+
+    window.addEventListener('load', async () => {
+      render();
+      await initGoogleDrive();
+    });
+  </script>
+</body>
+
+</html>
