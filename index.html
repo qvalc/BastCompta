@@ -739,6 +739,8 @@
 
     <div class="tabs" id="tabs"></div>
     <div id="pages"></div>
+    <input id="localJsonToDriveInput" type="file" accept="application/json" style="display:none"
+      onchange="uploadLocalJsonToDrive(event)">
   </div>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -882,10 +884,11 @@
         <div class="toolbar no-print">
           <div class="hint">Sauvegarde et restauration avec Google Drive</div>
           <div class="inline-actions">
-            <button onclick="connectGoogleDrive()">Se connecter à Google</button>
-            <button onclick="loadDriveFiles()">Actualiser la liste</button>
-            <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
-          </div>
+  <button onclick="connectGoogleDrive()">Se connecter à Google</button>
+  <button onclick="loadDriveFiles()">Actualiser la liste</button>
+  <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
+  <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
+</div>
         </div>
 
         <div class="comm-panel">
@@ -903,23 +906,24 @@
           </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
-            <label style="display:block; margin-bottom:8px; font-weight:700;">Sauvegarde à charger</label>
-            <select onchange="selectedDriveFileId=this.value; render()">
-              <option value="">-- Sélectionner une sauvegarde --</option>
-              ${options}
-            </select>
+  <label style="display:block; margin-bottom:8px; font-weight:700;">Sauvegarde à charger</label>
+  <select onchange="selectedDriveFileId=this.value; render()">
+    <option value="">-- Sélectionner une sauvegarde --</option>
+    ${options}
+  </select>
 
-            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-  <button onclick="importSelectedJsonFromDrive()">Charger</button>
-  <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
+  <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+    <button onclick="importSelectedJsonFromDrive()">Charger</button>
+    <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
+  </div>
 </div>
 
-          <div class="simple-box" style="line-height:1.7;">
-            <strong>Conseil</strong><br>
-            Donne toujours un numéro de devis ou de facture avant d’exporter.<br>
-            Même numéro = mise à jour du même fichier.<br>
-            Nouveau numéro = nouveau fichier JSON.
-          </div>
+<div class="simple-box" style="line-height:1.7;">
+  <strong>Conseil</strong><br>
+  Donne toujours un numéro de devis ou de facture avant d’exporter.<br>
+  Même numéro = mise à jour du même fichier.<br>
+  Nouveau numéro = nouveau fichier JSON.
+</div>
         </div>
       </div>
     </section>
@@ -1039,6 +1043,87 @@
       if (!confirm('Tout effacer et revenir à une base vide ?')) return;
       data = structuredClone(defaultData);
       saveData(false);
+    }
+
+    function pickLocalJsonForDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      const input = document.getElementById('localJsonToDriveInput');
+      if (!input) return;
+
+      input.value = '';
+      input.click();
+    }
+
+    async function uploadLocalJsonToDrive(event) {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const content = await file.text();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch {
+          alert("Le fichier sélectionné n'est pas un JSON valide.");
+          return;
+        }
+
+        const metadata = {
+          name: file.name,
+          parents: ['appDataFolder']
+        };
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${file.name.replace(/'/g, "\\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (files.length) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        selectedDriveFileId = saved.id;
+        await loadDriveFiles();
+
+        alert(`Fichier local envoyé vers Google Drive : ${saved.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'envoi du fichier local vers Google Drive.");
+      }
     }
 
     function money(value) {
