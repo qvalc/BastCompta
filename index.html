@@ -755,6 +755,8 @@
     let googleTokenClient = null;
     let googleAccessToken = null;
     let googleDriveReady = false;
+    let googleDriveFiles = [];
+    let selectedDriveFileId = '';
 
     const defaultLines = () => ([
       {
@@ -868,6 +870,12 @@
     }
 
     function renderGoogleDrive() {
+      const options = googleDriveFiles.map(file => `
+    <option value="${escapeAttr(file.id)}" ${selectedDriveFileId === file.id ? 'selected' : ''}>
+      ${escapeHtml(file.name)}${file.modifiedTime ? ' — ' + new Date(file.modifiedTime).toLocaleString('fr-BE') : ''}
+    </option>
+  `).join('');
+
       return `
     <section class="page ${activePage === 'gdrive' ? 'active' : ''}" data-page="gdrive">
       <div class="sheet">
@@ -875,8 +883,8 @@
           <div class="hint">Sauvegarde et restauration avec Google Drive</div>
           <div class="inline-actions">
             <button onclick="connectGoogleDrive()">Se connecter à Google</button>
+            <button onclick="loadDriveFiles()">Actualiser la liste</button>
             <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
-            <button onclick="importJsonFromDrive()">Importer depuis Drive</button>
           </div>
         </div>
 
@@ -884,20 +892,116 @@
           <h2>Google Drive</h2>
 
           <div class="simple-box" style="margin-bottom:16px;">
-            Cet onglet permet à chaque utilisateur de sauvegarder ses données dans son propre Google Drive.
+            Les sauvegardes sont créées sous forme de fichiers séparés, par exemple :
+            <br>• devis-DEV-001.json
+            <br>• facture-FA-2026-001.json
+          </div>
+
+          <div class="simple-box" style="margin-bottom:16px;">
+            <strong>Nom qui sera utilisé pour le prochain export :</strong><br>
+            ${escapeHtml(getDriveFileName())}
+          </div>
+
+          <div class="simple-box" style="margin-bottom:16px;">
+            <label style="display:block; margin-bottom:8px; font-weight:700;">Sauvegarde à charger</label>
+            <select onchange="selectedDriveFileId=this.value; render()">
+              <option value="">-- Sélectionner une sauvegarde --</option>
+              ${options}
+            </select>
+
+            <div style="margin-top:12px;">
+              <button onclick="importSelectedJsonFromDrive()">Charger la sauvegarde sélectionnée</button>
+            </div>
           </div>
 
           <div class="simple-box" style="line-height:1.7;">
-            <strong>Étapes</strong><br>
-            1. Clique sur “Se connecter à Google”<br>
-            2. Autorise l’accès à Google Drive<br>
-            3. Clique sur “Exporter JSON vers Drive” pour sauvegarder<br>
-            4. Clique sur “Importer depuis Drive” pour récupérer la dernière sauvegarde
+            <strong>Conseil</strong><br>
+            Donne toujours un numéro de devis ou de facture avant d’exporter.<br>
+            Même numéro = mise à jour du même fichier.<br>
+            Nouveau numéro = nouveau fichier JSON.
           </div>
         </div>
       </div>
     </section>
   `;
+    }
+
+    function getDriveFileName() {
+      const quoteNumber = String(data.quote.documentNumber || '').trim();
+      const invoiceNumber = String(data.invoice.documentNumber || '').trim();
+
+      if (invoiceNumber) {
+        return `facture-${invoiceNumber}.json`;
+      }
+
+      if (quoteNumber) {
+        return `devis-${quoteNumber}.json`;
+      }
+
+      return 'devis-facture-sans-numero.json';
+    }
+
+    async function loadDriveFiles() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      try {
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `mimeType='application/json' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 100,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        googleDriveFiles = list.result.files || [];
+
+        if (!selectedDriveFileId && googleDriveFiles.length) {
+          selectedDriveFileId = googleDriveFiles[0].id;
+        }
+
+        render();
+      } catch (error) {
+        console.error(error);
+        alert('Impossible de charger la liste des sauvegardes Drive.');
+      }
+    }
+
+    async function importSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        alert('Sélectionne d’abord une sauvegarde Google Drive.');
+        return;
+      }
+
+      try {
+        const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        syncCommunicationFromInvoice(false);
+        saveData(false);
+        alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'import depuis Google Drive.");
+      }
     }
 
     function resetData() {
@@ -1134,10 +1238,11 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         googleTokenClient = google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CLIENT_ID,
           scope: DRIVE_SCOPES,
-          callback: (resp) => {
+          callback: async (resp) => {
             if (resp.access_token) {
               googleAccessToken = resp.access_token;
               googleDriveReady = true;
+              await loadDriveFiles();
               alert('Connexion Google Drive réussie.');
               render();
             }
@@ -1169,7 +1274,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       try {
         syncCommunicationFromInvoice(false);
 
-        const fileName = `devis-facture-${data.invoice.documentNumber || data.quote.documentNumber || 'export'}.json`;
+        const fileName = getDriveFileName();
         const content = JSON.stringify(data, null, 2);
 
         const existing = await gapi.client.drive.files.list({
@@ -1210,6 +1315,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         }
 
         const saved = await res.json();
+        await loadDriveFiles();
+        selectedDriveFileId = saved.id;
         alert(`Export Google Drive réussi : ${saved.name}`);
       } catch (error) {
         console.error(error);
@@ -1239,49 +1346,41 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           return;
         }
 
-        const file = files[0];
+        async function importJsonFromDrive() {
+          await loadDriveFiles();
 
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
+          if (!googleDriveFiles.length) {
+            alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
+            return;
           }
-        });
 
-        if (!res.ok) {
-          throw new Error(await res.text());
+          if (!selectedDriveFileId) {
+            selectedDriveFileId = googleDriveFiles[0].id;
+          }
+
+          render();
         }
 
-        const parsed = await res.json();
-        data = mergeDeep(structuredClone(defaultData), parsed);
-        syncCommunicationFromInvoice(false);
-        saveData(false);
-        alert(`Import réussi : ${file.name}`);
-      } catch (error) {
-        console.error(error);
-        alert("Échec de l'import depuis Google Drive.");
-      }
-    }
+        function openDoccle() {
+          window.open('https://secure.doccle.be/ui/company', '_blank', 'noopener,noreferrer');
+        }
 
-    function openDoccle() {
-      window.open('https://secure.doccle.be/ui/company', '_blank', 'noopener,noreferrer');
-    }
+        function printInvoiceFromPeppol() {
+          activePage = 'invoice';
+          render();
 
-    function printInvoiceFromPeppol() {
-      activePage = 'invoice';
-      render();
+          setTimeout(() => {
+            printCurrentPage();
+          }, 50);
+        }
 
-      setTimeout(() => {
-        printCurrentPage();
-      }, 50);
-    }
+        function renderPeppol() {
+          const totals = totalsFor('invoice');
+          const hasInvoiceNumber = !!String(data.invoice.documentNumber || '').trim();
+          const hasClientName = !!String(data.invoice.clientName || '').trim();
+          const hasDate = !!String(data.invoice.date || '').trim();
 
-    function renderPeppol() {
-      const totals = totalsFor('invoice');
-      const hasInvoiceNumber = !!String(data.invoice.documentNumber || '').trim();
-      const hasClientName = !!String(data.invoice.clientName || '').trim();
-      const hasDate = !!String(data.invoice.date || '').trim();
-
-      return `
+          return `
     <section class="page ${activePage === 'peppol' ? 'active' : ''}" data-page="peppol">
       <div class="sheet">
         <div class="toolbar no-print">
@@ -1332,18 +1431,18 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       </div>
     </section>
   `;
-    }
+        }
 
-    function renderTabs() {
-      const tabs = document.getElementById('tabs');
-      tabs.innerHTML = pageDefs.map(page => `
+        function renderTabs() {
+          const tabs = document.getElementById('tabs');
+          tabs.innerHTML = pageDefs.map(page => `
         <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
       `).join('');
-    }
+        }
 
-    function renderMetaTable(docKey, isQuote) {
-      const doc = data[docKey];
-      return `
+        function renderMetaTable(docKey, isQuote) {
+          const doc = data[docKey];
+          return `
         <div class="meta-table-wrap">
           <table class="meta-table">
             <thead>
@@ -1367,12 +1466,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           </table>
         </div>
       `;
-    }
+        }
 
-    function renderLinesTable(docKey, section, title = '') {
-      const rows = data[docKey][section] || [];
+        function renderLinesTable(docKey, section, title = '') {
+          const rows = data[docKey][section] || [];
 
-      return `
+          return `
         ${title ? `<div class="section-title">${escapeHtml(title)}</div>` : ''}
         <div class="doc-table-wrap">
           <table class="doc-table">
@@ -1416,24 +1515,24 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           </table>
         </div>
       `;
-    }
+        }
 
-    function renderCompanyBlock() {
-      return `
+        function renderCompanyBlock() {
+          return `
     <div class="seller">
 
   <div class="seller-text">
     <h2>${escapeHtml(data.company.name || 'Nom de votre société')}</h2>
     <div class="seller-lines">${escapeHtml(
-        [
-          data.company.address || 'Adresse',
-          data.company.city || 'Code postal - Ville',
-          data.company.phone ? 'Tél. ' + data.company.phone : 'Tél. —',
-          data.company.email || 'email@exemple.be',
-          data.company.website || '',
-          data.company.vat ? 'TVA ' + data.company.vat : 'TVA —'
-        ].filter(Boolean).join('\n')
-      )}</div>
+            [
+              data.company.address || 'Adresse',
+              data.company.city || 'Code postal - Ville',
+              data.company.phone ? 'Tél. ' + data.company.phone : 'Tél. —',
+              data.company.email || 'email@exemple.be',
+              data.company.website || '',
+              data.company.vat ? 'TVA ' + data.company.vat : 'TVA —'
+            ].filter(Boolean).join('\n')
+          )}</div>
   </div>
 
   ${data.company.logo ? `
@@ -1444,12 +1543,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
 </div>
   `;
-    }
+        }
 
-    function renderConditionsPages(docKey, label) {
-      const content = escapeHtml(data.company.conditions || '');
+        function renderConditionsPages(docKey, label) {
+          const content = escapeHtml(data.company.conditions || '');
 
-      return `
+          return `
         <div class="conditions-screen">
           <h3>Conditions</h3>
           <div class="conditions-content">${content || 'Aucune condition renseignée.'}</div>
@@ -1460,16 +1559,16 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           <div class="conditions-content">${content}</div>
         </div>
       `;
-    }
+        }
 
-    function renderDocumentPage(docKey) {
-      const doc = data[docKey];
-      const totals = totalsFor(docKey);
-      const isQuote = docKey === 'quote';
-      const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
-      const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
+        function renderDocumentPage(docKey) {
+          const doc = data[docKey];
+          const totals = totalsFor(docKey);
+          const isQuote = docKey === 'quote';
+          const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
+          const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
 
-      return `
+          return `
         <section class="page ${activePage === docKey ? 'active' : ''}" data-page="${docKey}">
                     <div class="toolbar no-print">
             <div class="hint"></div>
@@ -1540,21 +1639,21 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           ${renderConditionsPages(docKey, isQuote ? 'DEVIS' : 'FACTURE')}
         </section>
       `;
-    }
+        }
 
-    function renderQuote() {
-      return renderDocumentPage('quote');
-    }
+        function renderQuote() {
+          return renderDocumentPage('quote');
+        }
 
-    function renderInvoice() {
-      syncCommunicationFromInvoice(false);
-      return renderDocumentPage('invoice');
-    }
+        function renderInvoice() {
+          syncCommunicationFromInvoice(false);
+          return renderDocumentPage('invoice');
+        }
 
-    function renderCommunication() {
-      const result = syncCommunicationFromInvoice(false);
+        function renderCommunication() {
+          const result = syncCommunicationFromInvoice(false);
 
-      return `
+          return `
         <section class="page ${activePage === 'communication' ? 'active' : ''}" data-page="communication">
           <div class="comm-panel">
             <h2>Communication structurée</h2>
@@ -1590,27 +1689,27 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           </div>
         </section>
       `;
-    }
+        }
 
-    function handleLogoUpload(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
+        function handleLogoUpload(event) {
+          const file = event.target.files?.[0];
+          if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        data.company.logo = reader.result;
-        saveData(false);
-      };
-      reader.readAsDataURL(file);
-    }
+          const reader = new FileReader();
+          reader.onload = () => {
+            data.company.logo = reader.result;
+            saveData(false);
+          };
+          reader.readAsDataURL(file);
+        }
 
-    function removeLogo() {
-      data.company.logo = '';
-      saveData(false);
-    }
+        function removeLogo() {
+          data.company.logo = '';
+          saveData(false);
+        }
 
-    function renderSettings() {
-      return `
+        function renderSettings() {
+          return `
         <section class="page ${activePage === 'settings' ? 'active' : ''}" data-page="settings">
           <div class="sheet">
             <div class="toolbar no-print">
@@ -1690,11 +1789,11 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           </div>
         </section>
       `;
-    }
+        }
 
-    function renderPages() {
-      const wrap = document.getElementById('pages');
-      wrap.innerHTML = `
+        function renderPages() {
+          const wrap = document.getElementById('pages');
+          wrap.innerHTML = `
     ${renderQuote()}
     ${renderInvoice()}
     ${renderCommunication()}
@@ -1702,22 +1801,22 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
     ${renderGoogleDrive()}
     ${renderSettings()}
   `;
-    }
+        }
 
-    function render() {
-      syncCommunicationFromInvoice(false);
-      renderTabs();
-      renderPages();
+        function render() {
+          syncCommunicationFromInvoice(false);
+          renderTabs();
+          renderPages();
 
-      setTimeout(() => {
-        document.querySelectorAll('textarea').forEach(autoResize);
-      }, 0);
-    }
+          setTimeout(() => {
+            document.querySelectorAll('textarea').forEach(autoResize);
+          }, 0);
+        }
 
-    window.addEventListener('load', async () => {
-      render();
-      await initGoogleDrive();
-    });
+        window.addEventListener('load', async () => {
+          render();
+          await initGoogleDrive();
+        });
   </script>
 </body>
 
