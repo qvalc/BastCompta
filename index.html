@@ -1325,62 +1325,40 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     }
 
     async function importJsonFromDrive() {
-      if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+      await loadDriveFiles();
+
+      if (!googleDriveFiles.length) {
+        alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
         return;
       }
 
-      try {
-        const list = await gapi.client.drive.files.list({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 20,
-          fields: 'files(id, name, modifiedTime)'
-        });
+      if (!selectedDriveFileId) {
+        selectedDriveFileId = googleDriveFiles[0].id;
+      }
 
-        const files = list.result.files || [];
+      render();
+    }
 
-        if (!files.length) {
-          alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
-          return;
-        }
+    function openDoccle() {
+      window.open('https://secure.doccle.be/ui/company', '_blank', 'noopener,noreferrer');
+    }
 
-        async function importJsonFromDrive() {
-          await loadDriveFiles();
+    function printInvoiceFromPeppol() {
+      activePage = 'invoice';
+      render();
 
-          if (!googleDriveFiles.length) {
-            alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
-            return;
-          }
+      setTimeout(() => {
+        printCurrentPage();
+      }, 50);
+    }
 
-          if (!selectedDriveFileId) {
-            selectedDriveFileId = googleDriveFiles[0].id;
-          }
+    function renderPeppol() {
+      const totals = totalsFor('invoice');
+      const hasInvoiceNumber = !!String(data.invoice.documentNumber || '').trim();
+      const hasClientName = !!String(data.invoice.clientName || '').trim();
+      const hasDate = !!String(data.invoice.date || '').trim();
 
-          render();
-        }
-
-        function openDoccle() {
-          window.open('https://secure.doccle.be/ui/company', '_blank', 'noopener,noreferrer');
-        }
-
-        function printInvoiceFromPeppol() {
-          activePage = 'invoice';
-          render();
-
-          setTimeout(() => {
-            printCurrentPage();
-          }, 50);
-        }
-
-        function renderPeppol() {
-          const totals = totalsFor('invoice');
-          const hasInvoiceNumber = !!String(data.invoice.documentNumber || '').trim();
-          const hasClientName = !!String(data.invoice.clientName || '').trim();
-          const hasDate = !!String(data.invoice.date || '').trim();
-
-          return `
+      return `
     <section class="page ${activePage === 'peppol' ? 'active' : ''}" data-page="peppol">
       <div class="sheet">
         <div class="toolbar no-print">
@@ -1431,18 +1409,18 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       </div>
     </section>
   `;
-        }
+    }
 
-        function renderTabs() {
-          const tabs = document.getElementById('tabs');
-          tabs.innerHTML = pageDefs.map(page => `
+    function renderTabs() {
+      const tabs = document.getElementById('tabs');
+      tabs.innerHTML = pageDefs.map(page => `
         <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
       `).join('');
-        }
+    }
 
-        function renderMetaTable(docKey, isQuote) {
-          const doc = data[docKey];
-          return `
+    function renderMetaTable(docKey, isQuote) {
+      const doc = data[docKey];
+      return `
         <div class="meta-table-wrap">
           <table class="meta-table">
             <thead>
@@ -1466,12 +1444,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           </table>
         </div>
       `;
-        }
+    }
 
-        function renderLinesTable(docKey, section, title = '') {
-          const rows = data[docKey][section] || [];
+    function renderLinesTable(docKey, section, title = '') {
+      const rows = data[docKey][section] || [];
 
-          return `
+      return `
         ${title ? `<div class="section-title">${escapeHtml(title)}</div>` : ''}
         <div class="doc-table-wrap">
           <table class="doc-table">
@@ -1515,24 +1493,24 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           </table>
         </div>
       `;
-        }
+    }
 
-        function renderCompanyBlock() {
-          return `
+    function renderCompanyBlock() {
+      return `
     <div class="seller">
 
   <div class="seller-text">
     <h2>${escapeHtml(data.company.name || 'Nom de votre société')}</h2>
     <div class="seller-lines">${escapeHtml(
-            [
-              data.company.address || 'Adresse',
-              data.company.city || 'Code postal - Ville',
-              data.company.phone ? 'Tél. ' + data.company.phone : 'Tél. —',
-              data.company.email || 'email@exemple.be',
-              data.company.website || '',
-              data.company.vat ? 'TVA ' + data.company.vat : 'TVA —'
-            ].filter(Boolean).join('\n')
-          )}</div>
+        [
+          data.company.address || 'Adresse',
+          data.company.city || 'Code postal - Ville',
+          data.company.phone ? 'Tél. ' + data.company.phone : 'Tél. —',
+          data.company.email || 'email@exemple.be',
+          data.company.website || '',
+          data.company.vat ? 'TVA ' + data.company.vat : 'TVA —'
+        ].filter(Boolean).join('\n')
+      )}</div>
   </div>
 
   ${data.company.logo ? `
@@ -1543,12 +1521,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
 </div>
   `;
-        }
+    }
 
-        function renderConditionsPages(docKey, label) {
-          const content = escapeHtml(data.company.conditions || '');
+    function renderConditionsPages(docKey, label) {
+      const content = escapeHtml(data.company.conditions || '');
 
-          return `
+      return `
         <div class="conditions-screen">
           <h3>Conditions</h3>
           <div class="conditions-content">${content || 'Aucune condition renseignée.'}</div>
@@ -1559,16 +1537,16 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           <div class="conditions-content">${content}</div>
         </div>
       `;
-        }
+    }
 
-        function renderDocumentPage(docKey) {
-          const doc = data[docKey];
-          const totals = totalsFor(docKey);
-          const isQuote = docKey === 'quote';
-          const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
-          const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
+    function renderDocumentPage(docKey) {
+      const doc = data[docKey];
+      const totals = totalsFor(docKey);
+      const isQuote = docKey === 'quote';
+      const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
+      const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
 
-          return `
+      return `
         <section class="page ${activePage === docKey ? 'active' : ''}" data-page="${docKey}">
                     <div class="toolbar no-print">
             <div class="hint"></div>
@@ -1639,21 +1617,21 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           ${renderConditionsPages(docKey, isQuote ? 'DEVIS' : 'FACTURE')}
         </section>
       `;
-        }
+    }
 
-        function renderQuote() {
-          return renderDocumentPage('quote');
-        }
+    function renderQuote() {
+      return renderDocumentPage('quote');
+    }
 
-        function renderInvoice() {
-          syncCommunicationFromInvoice(false);
-          return renderDocumentPage('invoice');
-        }
+    function renderInvoice() {
+      syncCommunicationFromInvoice(false);
+      return renderDocumentPage('invoice');
+    }
 
-        function renderCommunication() {
-          const result = syncCommunicationFromInvoice(false);
+    function renderCommunication() {
+      const result = syncCommunicationFromInvoice(false);
 
-          return `
+      return `
         <section class="page ${activePage === 'communication' ? 'active' : ''}" data-page="communication">
           <div class="comm-panel">
             <h2>Communication structurée</h2>
@@ -1689,27 +1667,27 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           </div>
         </section>
       `;
-        }
+    }
 
-        function handleLogoUpload(event) {
-          const file = event.target.files?.[0];
-          if (!file) return;
+    function handleLogoUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-          const reader = new FileReader();
-          reader.onload = () => {
-            data.company.logo = reader.result;
-            saveData(false);
-          };
-          reader.readAsDataURL(file);
-        }
+      const reader = new FileReader();
+      reader.onload = () => {
+        data.company.logo = reader.result;
+        saveData(false);
+      };
+      reader.readAsDataURL(file);
+    }
 
-        function removeLogo() {
-          data.company.logo = '';
-          saveData(false);
-        }
+    function removeLogo() {
+      data.company.logo = '';
+      saveData(false);
+    }
 
-        function renderSettings() {
-          return `
+    function renderSettings() {
+      return `
         <section class="page ${activePage === 'settings' ? 'active' : ''}" data-page="settings">
           <div class="sheet">
             <div class="toolbar no-print">
@@ -1789,11 +1767,11 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           </div>
         </section>
       `;
-        }
+    }
 
-        function renderPages() {
-          const wrap = document.getElementById('pages');
-          wrap.innerHTML = `
+    function renderPages() {
+      const wrap = document.getElementById('pages');
+      wrap.innerHTML = `
     ${renderQuote()}
     ${renderInvoice()}
     ${renderCommunication()}
@@ -1801,22 +1779,22 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
     ${renderGoogleDrive()}
     ${renderSettings()}
   `;
-        }
+    }
 
-        function render() {
-          syncCommunicationFromInvoice(false);
-          renderTabs();
-          renderPages();
+    function render() {
+      syncCommunicationFromInvoice(false);
+      renderTabs();
+      renderPages();
 
-          setTimeout(() => {
-            document.querySelectorAll('textarea').forEach(autoResize);
-          }, 0);
-        }
+      setTimeout(() => {
+        document.querySelectorAll('textarea').forEach(autoResize);
+      }, 0);
+    }
 
-        window.addEventListener('load', async () => {
-          render();
-          await initGoogleDrive();
-        });
+    window.addEventListener('load', async () => {
+      render();
+      await initGoogleDrive();
+    });
   </script>
 </body>
 
