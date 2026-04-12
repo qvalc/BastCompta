@@ -909,10 +909,10 @@
               ${options}
             </select>
 
-            <div style="margin-top:12px;">
-              <button onclick="importSelectedJsonFromDrive()">Charger la sauvegarde sélectionnée</button>
-            </div>
-          </div>
+            <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+  <button onclick="importSelectedJsonFromDrive()">Charger</button>
+  <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
+</div>
 
           <div class="simple-box" style="line-height:1.7;">
             <strong>Conseil</strong><br>
@@ -1001,6 +1001,37 @@
       } catch (error) {
         console.error(error);
         alert("Échec de l'import depuis Google Drive.");
+      }
+    }
+
+    async function deleteSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        alert('Sélectionne une sauvegarde à supprimer.');
+        return;
+      }
+
+      if (!confirm('Supprimer cette sauvegarde définitivement ?')) return;
+
+      try {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        selectedDriveFileId = '';
+        await loadDriveFiles();
+
+        alert('Sauvegarde supprimée.');
+      } catch (error) {
+        console.error(error);
+        alert('Erreur lors de la suppression.');
       }
     }
 
