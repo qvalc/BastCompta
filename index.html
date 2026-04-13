@@ -58,7 +58,7 @@
     }
 
     .showcase {
-      background: linear-gradient(145deg, rgba(255,255,255,0.94), rgba(248,250,252,0.9));
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9));
       border: 1px solid rgba(219, 228, 240, 0.9);
       border-radius: 32px;
       box-shadow: var(--shadow);
@@ -125,7 +125,7 @@
     }
 
     .feature-card {
-      background: rgba(255,255,255,0.9);
+      background: rgba(255, 255, 255, 0.9);
       border: 1px solid var(--line);
       border-radius: 22px;
       padding: 20px;
@@ -166,14 +166,14 @@
       padding: 18px 20px;
       border-radius: 20px;
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.82);
+      background: rgba(255, 255, 255, 0.82);
       color: var(--muted);
       line-height: 1.7;
       font-size: 14px;
     }
 
     .auth-card {
-      background: rgba(255,255,255,0.97);
+      background: rgba(255, 255, 255, 0.97);
       border: 1px solid rgba(219, 228, 240, 0.95);
       border-radius: 32px;
       box-shadow: var(--shadow);
@@ -277,6 +277,12 @@
       color: var(--muted);
     }
 
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
     .stack {
       display: grid;
       gap: 14px;
@@ -368,7 +374,7 @@
       gap: 16px;
       flex-wrap: wrap;
       margin-bottom: 18px;
-      background: rgba(255,255,255,0.86);
+      background: rgba(255, 255, 255, 0.86);
       border: 1px solid var(--line);
       border-radius: 24px;
       padding: 18px 20px;
@@ -406,7 +412,7 @@
     }
 
     .workspace {
-      background: rgba(255,255,255,0.94);
+      background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       border-radius: 28px;
       box-shadow: var(--shadow);
@@ -483,6 +489,9 @@
       }
     }
   </style>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
 </head>
 
 <body>
@@ -544,7 +553,8 @@
 
             <div class="field-group">
               <label for="loginPassword">Mot de passe</label>
-              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required />
+              <input id="loginPassword" type="password" autocomplete="current-password"
+                placeholder="Votre mot de passe" required />
             </div>
 
             <button class="primary" type="submit">Se connecter</button>
@@ -563,12 +573,14 @@
 
             <div class="field-group">
               <label for="registerPassword">Mot de passe</label>
-              <input id="registerPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Minimum 8 caractères" required />
+              <input id="registerPassword" type="password" autocomplete="new-password" minlength="8"
+                placeholder="Minimum 8 caractères" required />
             </div>
 
             <div class="field-group">
               <label for="registerPasswordConfirm">Confirmer le mot de passe</label>
-              <input id="registerPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Répète le mot de passe" required />
+              <input id="registerPasswordConfirm" type="password" autocomplete="new-password" minlength="8"
+                placeholder="Répète le mot de passe" required />
             </div>
 
             <button class="primary" type="submit">Créer le compte</button>
@@ -590,6 +602,8 @@
 
           <div class="user-actions">
             <div id="currentUser" class="user-pill"></div>
+            <button id="connectDriveBtn" class="ghost" type="button">Connecter Google Drive</button>
+            <button id="disconnectDriveBtn" class="ghost" type="button">Déconnecter Google Drive</button>
             <button id="sendVerificationBtn" class="ghost" type="button">Renvoyer email de vérification</button>
             <button id="logoutBtn" class="danger" type="button">Se déconnecter</button>
           </div>
@@ -606,11 +620,11 @@
           </div>
 
           <div id="panel-devis" class="tab-panel active">
-            <iframe src="devis-facture.html" title="Devis et Facture"></iframe>
+            <iframe id="devisFrame" src="devis-facture.html" title="Devis et Facture"></iframe>
           </div>
 
           <div id="panel-compta" class="tab-panel">
-            <iframe src="comptabilite.html" title="Comptabilité"></iframe>
+            <iframe id="comptaFrame" src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
         </div>
       </div>
@@ -641,6 +655,18 @@
       appId: "1:724620573737:web:b44e0d3f8b1cbf382b3038"
     };
 
+    const GOOGLE_CLIENT_ID = '533118350621-ov27k8jd0ki944rc773j4gr8a3l7vfpk.apps.googleusercontent.com';
+    const GOOGLE_API_KEY = 'AIzaSyC88moDvAWg7LFeJAgUSxXJV4nhAigSOKU';
+    const DRIVE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+
+    const GOOGLE_TOKEN_STORAGE_KEY = 'bastcompta_google_access_token';
+    const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
+
+    let googleTokenClient = null;
+    let googleAccessToken = null;
+    let googleDriveReady = false;
+
     const authScreen = document.getElementById('authScreen');
     const portalScreen = document.getElementById('portalScreen');
     const authMessage = document.getElementById('authMessage');
@@ -650,6 +676,10 @@
     const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
     const sendVerificationBtn = document.getElementById('sendVerificationBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const connectDriveBtn = document.getElementById('connectDriveBtn');
+    const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
+    const devisFrame = document.getElementById('devisFrame');
+    const comptaFrame = document.getElementById('comptaFrame');
     const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
     const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
@@ -681,6 +711,11 @@
       const verified = user.emailVerified ? 'email vérifié' : 'email non vérifié';
       currentUserEl.textContent = `Connecté : ${user.email} · ${verified}`;
       sendVerificationBtn.disabled = !!user.emailVerified;
+      updateDriveButtons();
+
+      if (googleAccessToken) {
+        broadcastDriveToken();
+      }
     }
 
     function showAuth() {
@@ -709,6 +744,127 @@
       return map[code] || 'Une erreur est survenue. Vérifie la configuration Firebase.';
     }
 
+    function updateDriveButtons() {
+      const connected = !!googleAccessToken;
+      connectDriveBtn.textContent = connected ? 'Google Drive connecté' : 'Connecter Google Drive';
+      connectDriveBtn.disabled = connected || !googleDriveReady;
+      disconnectDriveBtn.disabled = !connected;
+    }
+
+    function getFrameOrigin(frame) {
+      try {
+        return new URL(frame.src, window.location.href).origin;
+      } catch {
+        return window.location.origin;
+      }
+    }
+
+    function postToFrame(frame, message) {
+      if (!frame?.contentWindow) return;
+      frame.contentWindow.postMessage(message, getFrameOrigin(frame));
+    }
+
+    function broadcastDriveToken() {
+      if (!googleAccessToken) return;
+
+      const payload = {
+        type: 'BASTCOMPTA_GOOGLE_TOKEN',
+        accessToken: googleAccessToken
+      };
+
+      postToFrame(devisFrame, payload);
+      postToFrame(comptaFrame, payload);
+    }
+
+    function broadcastDriveDisconnected() {
+      const payload = {
+        type: 'BASTCOMPTA_GOOGLE_LOGOUT'
+      };
+
+      postToFrame(devisFrame, payload);
+      postToFrame(comptaFrame, payload);
+    }
+
+    function bindIframeMessaging() {
+      [devisFrame, comptaFrame].forEach(frame => {
+        frame.addEventListener('load', () => {
+          if (googleAccessToken) {
+            postToFrame(frame, {
+              type: 'BASTCOMPTA_GOOGLE_TOKEN',
+              accessToken: googleAccessToken
+            });
+          }
+        });
+      });
+    }
+
+    async function initGoogleDrive() {
+      try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+
+        await gapi.client.init({
+          apiKey: GOOGLE_API_KEY,
+          discoveryDocs: [DRIVE_DISCOVERY_DOC]
+        });
+
+        googleTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: DRIVE_SCOPES,
+          callback: async (resp) => {
+            if (!resp?.access_token) return;
+
+            googleAccessToken = resp.access_token;
+            googleDriveReady = true;
+            gapi.client.setToken({ access_token: resp.access_token });
+
+            localStorage.setItem(GOOGLE_TOKEN_STORAGE_KEY, resp.access_token);
+            localStorage.setItem(GOOGLE_WAS_CONNECTED_KEY, '1');
+
+            updateDriveButtons();
+            broadcastDriveToken();
+          }
+        });
+
+        googleDriveReady = true;
+
+        const savedToken = localStorage.getItem(GOOGLE_TOKEN_STORAGE_KEY);
+        if (savedToken) {
+          googleAccessToken = savedToken;
+          gapi.client.setToken({ access_token: savedToken });
+        }
+
+        updateDriveButtons();
+      } catch (error) {
+        console.error('Erreur lors de l’initialisation Google Drive :', error);
+        googleDriveReady = false;
+        updateDriveButtons();
+      }
+    }
+
+    function connectGoogleDrive() {
+      if (!googleTokenClient) {
+        setMessage("Google Drive n'est pas encore prêt.", 'warning');
+        return;
+      }
+
+      localStorage.setItem(GOOGLE_WAS_CONNECTED_KEY, '1');
+      googleTokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function disconnectGoogleDrive() {
+      googleAccessToken = null;
+
+      if (window.gapi?.client) {
+        gapi.client.setToken('');
+      }
+
+      localStorage.removeItem(GOOGLE_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(GOOGLE_WAS_CONNECTED_KEY);
+
+      updateDriveButtons();
+      broadcastDriveDisconnected();
+    }
+
     authTabs.forEach(btn => {
       btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
     });
@@ -717,9 +873,14 @@
       btn.addEventListener('click', () => switchMainTab(btn.dataset.mainTab));
     });
 
+    connectDriveBtn.addEventListener('click', connectGoogleDrive);
+    disconnectDriveBtn.addEventListener('click', disconnectGoogleDrive);
+
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     await setPersistence(auth, browserLocalPersistence);
+    await initGoogleDrive();
+    bindIframeMessaging();
 
     registerForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -785,6 +946,7 @@
 
     logoutBtn.addEventListener('click', async () => {
       try {
+        disconnectGoogleDrive();
         await signOut(auth);
       } catch (error) {
         setMessage(humanizeAuthError(error), 'error');
@@ -806,7 +968,7 @@
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
-        await user.reload().catch(() => {});
+        await user.reload().catch(() => { });
         showPortal(auth.currentUser || user);
       } else {
         showAuth();
