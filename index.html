@@ -1586,8 +1586,9 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
                 <tr>
                   <td>
   <textarea
-    oninput="autoResize(this); data.${docKey}.${section}[${i}].description=this.value; saveData(false)"
-  >${escapeHtml(row.description || '')}</textarea>
+  oninput="autoResize(this); data.${docKey}.${section}[${i}].description=this.value"
+  onchange="saveData(false)"
+>${escapeHtml(row.description || '')}</textarea>
 </td>
                   <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="data.${docKey}.${section}[${i}].qty=parseFloat(this.value)||0; saveData(false)"></td>
                   <td><input value="${escapeAttr(row.unit)}" onchange="data.${docKey}.${section}[${i}].unit=this.value; saveData(false)"></td>
@@ -1684,7 +1685,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       <div class="box-title">Client</div>
       <div class="stack">
         <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
-        <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value; saveData(false)">${escapeHtml(doc.address || '')}</textarea>
+        <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveData(false)">${escapeHtml(doc.address || '')}</textarea>
       </div>
     </div>
   </div>
@@ -1705,7 +1706,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
   <div>
     <div class="notes-block">
       <div class="box-title">${isQuote ? 'Remarques du devis' : 'Remarques'}</div>
-      <textarea oninput="autoResize(this)" onchange="data.${docKey}.notes=this.value; saveData(false)">${escapeHtml(doc.notes || '')}</textarea>
+      <textarea oninput="autoResize(this); data.${docKey}.notes=this.value" onchange="saveData(false)">${escapeHtml(doc.notes || '')}</textarea>
 ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; line-height:1.35;">${escapeHtml(getInvoicePaymentText())}</div>` : ``}
     </div>
   </div>
@@ -1876,7 +1877,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
 
                 <div class="field">
                   <label>Conditions</label>
-                  <textarea onchange="setField('company.conditions', this.value)">${escapeHtml(data.company.conditions || '')}</textarea>
+                  <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveData(false)">${escapeHtml(data.company.conditions || '')}</textarea>
                 </div>
               </div>
             </div>
