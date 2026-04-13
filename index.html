@@ -969,8 +969,20 @@
         }
 
         render();
+
       } catch (error) {
         console.error(error);
+
+        // si token expiré → on reconnecte automatiquement
+        if (googleTokenClient) {
+          try {
+            googleTokenClient.requestAccessToken({ prompt: '' });
+            return;
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
         alert('Impossible de charger la liste des sauvegardes Drive.');
       }
     }
