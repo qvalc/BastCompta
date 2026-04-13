@@ -465,6 +465,9 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       if (showAlert) alert('Données sauvegardées localement.');
       render();
+      setTimeout(notifyParentHeight, 0);
+      setTimeout(notifyParentHeight, 100);
+      setTimeout(notifyParentHeight, 300);
     }
 
     function exportData() {
@@ -1271,6 +1274,23 @@
       for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
       ref[keys[keys.length - 1]] = value;
       saveData(false);
+    }
+
+    function notifyParentHeight() {
+      const height = Math.max(
+        document.body.scrollHeight,
+        document.body.offsetHeight,
+        document.body.clientHeight,
+        document.documentElement.scrollHeight,
+        document.documentElement.offsetHeight,
+        document.documentElement.clientHeight
+      );
+
+      window.parent.postMessage({
+        type: 'BASTCOMPTA_IFRAME_HEIGHT',
+        source: 'comptabilite',
+        height: height + 40
+      }, window.location.origin);
     }
 
     function sortByDate(array) {
@@ -2213,22 +2233,37 @@
     }
 
     function render() {
-      sortByDate(data.purchases);
-      sortByDate(data.sales);
-
       const t = totals();
-      document.getElementById('metricSales').textContent = money(t.salesNet);
-      document.getElementById('metricPurchases').textContent = money(t.purchasesNet);
-      document.getElementById('metricVat').textContent = money(t.netVat);
-      document.getElementById('metricProfit').textContent = money(t.estimatedProfit);
+
       renderTabs();
       renderPages();
+
+      const metricSales = document.getElementById('metricSales');
+      const metricPurchases = document.getElementById('metricPurchases');
+      const metricVat = document.getElementById('metricVat');
+      const metricProfit = document.getElementById('metricProfit');
+
+      if (metricSales) metricSales.textContent = money(t.salesNet);
+      if (metricPurchases) metricPurchases.textContent = money(t.purchasesNet);
+      if (metricVat) metricVat.textContent = money(t.netVat);
+      if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
+
+      setTimeout(notifyParentHeight, 0);
+      setTimeout(notifyParentHeight, 100);
+      setTimeout(notifyParentHeight, 300);
+      setTimeout(notifyParentHeight, 700);
     }
 
     window.addEventListener('load', async () => {
       render();
       await initDriveClientOnly();
+      notifyParentHeight();
     });
+
+    window.addEventListener('resize', notifyParentHeight);
+    document.addEventListener('input', () => setTimeout(notifyParentHeight, 0), true);
+    document.addEventListener('change', () => setTimeout(notifyParentHeight, 0), true);
+    document.addEventListener('click', () => setTimeout(notifyParentHeight, 0), true);
   </script>
 </body>
 
