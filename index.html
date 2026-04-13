@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portail BastCompta</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-strong: #ffffff;
+      --line: #dbe4f0;
+      --text: #142033;
+      --muted: #64748b;
+      --primary: #1d4ed8;
+      --primary-soft: #e8f0ff;
+      --danger: #b91c1c;
+      --success: #166534;
+      --warning: #b45309;
+      --shadow: 0 22px 60px rgba(15, 23, 42, 0.10);
+      --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
+      --radius: 24px;
+      --radius-sm: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(29, 78, 216, 0.10), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.08), transparent 24%),
+        linear-gradient(180deg, #f7f9fc 0%, #eef3f9 100%);
+      min-height: 100vh;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .app {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .auth-layout {
+      min-height: calc(100vh - 56px);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    .showcase {
+      background: linear-gradient(145deg, rgba(255,255,255,0.94), rgba(248,250,252,0.9));
+      border: 1px solid rgba(219, 228, 240, 0.9);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .showcase::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 85% 15%, rgba(29, 78, 216, 0.11), transparent 18%),
+        radial-gradient(circle at 10% 85%, rgba(59, 130, 246, 0.08), transparent 20%);
+      pointer-events: none;
+    }
+
+    .brand {
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #eef4ff;
+      color: var(--primary);
+      border: 1px solid #cfe0ff;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 18px;
+    }
+
+    .brand h1 {
+      margin: 0 0 14px;
+      font-size: 46px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 680px;
+    }
+
+    .brand p {
+      margin: 0;
+      max-width: 680px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .feature-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+
+    .feature-card {
+      background: rgba(255,255,255,0.9);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 20px;
+      box-shadow: var(--shadow-soft);
+      min-height: 170px;
+    }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 20px;
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .feature-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .bottom-note {
+      position: relative;
+      z-index: 1;
+      margin-top: 22px;
+      padding: 18px 20px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.82);
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .auth-card {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(219, 228, 240, 0.95);
+      border-radius: 32px;
+      box-shadow: var(--shadow);
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 100%;
+    }
+
+    .auth-head {
+      margin-bottom: 22px;
+    }
+
+    .auth-head h2 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: -0.02em;
+    }
+
+    .auth-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .auth-tabs,
+    .main-tabs {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .auth-tabs {
+      margin-bottom: 22px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 6px;
+    }
+
+    .main-tabs {
+      margin-bottom: 18px;
+    }
+
+    .auth-tab,
+    .main-tab,
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 12px 16px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+      transition: 0.18s ease;
+    }
+
+    .auth-tab {
+      flex: 1;
+      border: none;
+      background: transparent;
+      text-align: center;
+    }
+
+    .auth-tab.active {
+      background: #fff;
+      color: var(--primary);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .main-tab.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: #bfd4ff;
+    }
+
+    button:hover,
+    .main-tab:hover,
+    .auth-tab:hover,
+    .link-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #fff;
+      border-color: #1d4ed8;
+      box-shadow: 0 12px 28px rgba(29, 78, 216, 0.24);
+    }
+
+    button.danger {
+      background: #b91c1c;
+      color: #fff;
+      border-color: #b91c1c;
+    }
+
+    button.ghost {
+      background: #fff;
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .field-group {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      display: block;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 15px;
+      font: inherit;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      transition: 0.18s ease;
+    }
+
+    input:focus {
+      border-color: #9ec0ff;
+      box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.08);
+    }
+
+    .hint,
+    .message,
+    .inline-note {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .message {
+      min-height: 22px;
+      margin-top: 10px;
+      font-weight: 700;
+    }
+
+    .message.error {
+      color: var(--danger);
+    }
+
+    .message.success {
+      color: var(--success);
+    }
+
+    .message.warning {
+      color: var(--warning);
+    }
+
+    .inline-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .link-btn {
+      border: none;
+      background: transparent;
+      color: var(--primary);
+      padding: 0;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
+
+    .portal-shell {
+      min-height: calc(100vh - 56px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .portal-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px 20px;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(10px);
+    }
+
+    .title-wrap h2 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+
+    .title-wrap p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .user-pill {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 11px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .workspace {
+      background: rgba(255,255,255,0.94);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .workspace-head {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .tab-panel {
+      display: none;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    iframe {
+      width: 100%;
+      height: calc(100vh - 220px);
+      border: none;
+      display: block;
+      background: white;
+    }
+
+    @media (max-width: 1150px) {
+      .auth-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .app {
+        padding: 14px;
+      }
+
+      .showcase,
+      .auth-card,
+      .workspace,
+      .portal-topbar {
+        border-radius: 22px;
+      }
+
+      .brand h1 {
+        font-size: 34px;
+      }
+
+      .auth-head h2 {
+        font-size: 26px;
+      }
+
+      .title-wrap h2 {
+        font-size: 24px;
+      }
+
+      iframe {
+        height: calc(100vh - 240px);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <section id="authScreen">
+      <div class="auth-layout">
+        <div class="showcase">
+          <div class="brand">
+            <div class="brand-badge">BastCompta • Espace sécurisé</div>
+            <h1>Gérez vos devis, factures et votre comptabilité depuis un seul portail.</h1>
+            <p>
+              Connectez-vous pour accéder à votre espace de travail et retrouver vos outils dans une interface claire,
+              propre et professionnelle.
+            </p>
+          </div>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="feature-icon">DF</div>
+              <h3>Devis & Facture</h3>
+              <p>Préparez vos documents commerciaux, imprimez-les proprement et conservez vos sauvegardes.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">€</div>
+              <h3>Comptabilité</h3>
+              <p>Suivez vos ventes, achats, investissements et résultats dans un environnement centralisé.</p>
+            </div>
+
+            <div class="feature-card">
+              <div class="feature-icon">🔒</div>
+              <h3>Accès sécurisé</h3>
+              <p>Inscription, connexion et récupération du mot de passe via Firebase Authentication.</p>
+            </div>
+          </div>
+
+          <div class="bottom-note">
+            Un seul accès, une interface plus claire, et vos outils regroupés au même endroit pour travailler plus
+            confortablement.
+          </div>
+        </div>
+
+        <div class="auth-card">
+          <div class="auth-head">
+            <h2>Connexion à votre espace</h2>
+            <p>Identifiez-vous ou créez votre compte pour accéder au portail.</p>
+          </div>
+
+          <div class="auth-tabs">
+            <button class="auth-tab active" data-auth-tab="login" type="button">Connexion</button>
+            <button class="auth-tab" data-auth-tab="register" type="button">Créer un compte</button>
+          </div>
+
+          <form id="loginForm" class="stack">
+            <div class="field-group">
+              <label for="loginEmail">Adresse mail</label>
+              <input id="loginEmail" type="email" autocomplete="email" placeholder="exemple@domaine.be" required />
+            </div>
+
+            <div class="field-group">
+              <label for="loginPassword">Mot de passe</label>
+              <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Votre mot de passe" required />
+            </div>
+
+            <button class="primary" type="submit">Se connecter</button>
+
+            <div class="inline-links">
+              <button id="forgotPasswordBtn" class="link-btn" type="button">Mot de passe oublié</button>
+              <span class="inline-note">Un email de réinitialisation pourra être envoyé.</span>
+            </div>
+          </form>
+
+          <form id="registerForm" class="stack hidden">
+            <div class="field-group">
+              <label for="registerEmail">Adresse mail</label>
+              <input id="registerEmail" type="email" autocomplete="email" placeholder="exemple@domaine.be" required />
+            </div>
+
+            <div class="field-group">
+              <label for="registerPassword">Mot de passe</label>
+              <input id="registerPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Minimum 8 caractères" required />
+            </div>
+
+            <div class="field-group">
+              <label for="registerPasswordConfirm">Confirmer le mot de passe</label>
+              <input id="registerPasswordConfirm" type="password" autocomplete="new-password" minlength="8" placeholder="Répète le mot de passe" required />
+            </div>
+
+            <button class="primary" type="submit">Créer le compte</button>
+            <div class="hint">Après création, un email de vérification peut être envoyé.</div>
+          </form>
+
+          <div id="authMessage" class="message"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="portalScreen" class="hidden">
+      <div class="portal-shell">
+        <div class="portal-topbar">
+          <div class="title-wrap">
+            <h2>Portail BastCompta</h2>
+            <p>Retrouvez vos outils de gestion dans un espace unique.</p>
+          </div>
+
+          <div class="user-actions">
+            <div id="currentUser" class="user-pill"></div>
+            <button id="sendVerificationBtn" class="ghost" type="button">Renvoyer email de vérification</button>
+            <button id="logoutBtn" class="danger" type="button">Se déconnecter</button>
+          </div>
+        </div>
+
+        <div class="main-tabs">
+          <button class="main-tab active" data-main-tab="devis" type="button">Devis &amp; Facture</button>
+          <button class="main-tab" data-main-tab="compta" type="button">Comptabilité</button>
+        </div>
+
+        <div class="workspace">
+          <div class="workspace-head">
+            Vos outils sont chargés directement dans le portail.
+          </div>
+
+          <div id="panel-devis" class="tab-panel active">
+            <iframe src="devis-facture.html" title="Devis et Facture"></iframe>
+          </div>
+
+          <div id="panel-compta" class="tab-panel">
+            <iframe src="Comptabilite-2026-gdrive.html" title="Comptabilité"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
+    import {
+      getAuth,
+      setPersistence,
+      browserLocalPersistence,
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      sendEmailVerification,
+      sendPasswordResetEmail,
+      signOut,
+      onAuthStateChanged,
+      updateProfile
+    } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDK3VeC-TOfXliPrY9IrHN0tFPf7KEm_j0",
+      authDomain: "bastcompta-3aa41.firebaseapp.com",
+      projectId: "bastcompta-3aa41",
+      storageBucket: "bastcompta-3aa41.firebasestorage.app",
+      messagingSenderId: "724620573737",
+      appId: "1:724620573737:web:b44e0d3f8b1cbf382b3038"
+    };
+
+    const authScreen = document.getElementById('authScreen');
+    const portalScreen = document.getElementById('portalScreen');
+    const authMessage = document.getElementById('authMessage');
+    const currentUserEl = document.getElementById('currentUser');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+    const sendVerificationBtn = document.getElementById('sendVerificationBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
+    const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
+
+    function normalizeEmail(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+
+    function setMessage(text, type = '') {
+      authMessage.textContent = text;
+      authMessage.className = 'message' + (type ? ' ' + type : '');
+    }
+
+    function switchAuthTab(tabName) {
+      authTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.authTab === tabName));
+      loginForm.classList.toggle('hidden', tabName !== 'login');
+      registerForm.classList.toggle('hidden', tabName !== 'register');
+      setMessage('');
+    }
+
+    function switchMainTab(tabName) {
+      mainTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.mainTab === tabName));
+      document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
+      document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
+    }
+
+    function showPortal(user) {
+      authScreen.classList.add('hidden');
+      portalScreen.classList.remove('hidden');
+      const verified = user.emailVerified ? 'email vérifié' : 'email non vérifié';
+      currentUserEl.textContent = `Connecté : ${user.email} · ${verified}`;
+      sendVerificationBtn.disabled = !!user.emailVerified;
+    }
+
+    function showAuth() {
+      portalScreen.classList.add('hidden');
+      authScreen.classList.remove('hidden');
+      loginForm.reset();
+      registerForm.reset();
+    }
+
+    function humanizeAuthError(error) {
+      const code = error?.code || '';
+      const map = {
+        'auth/email-already-in-use': 'Cette adresse mail est déjà utilisée.',
+        'auth/invalid-email': 'Adresse mail invalide.',
+        'auth/missing-password': 'Merci de saisir un mot de passe.',
+        'auth/weak-password': 'Le mot de passe est trop faible.',
+        'auth/invalid-credential': 'Adresse mail ou mot de passe incorrect.',
+        'auth/user-not-found': 'Adresse mail ou mot de passe incorrect.',
+        'auth/wrong-password': 'Adresse mail ou mot de passe incorrect.',
+        'auth/too-many-requests': 'Trop de tentatives. Réessaie plus tard.',
+        'auth/network-request-failed': 'Erreur réseau. Vérifie ta connexion.',
+        'auth/missing-email': 'Merci de saisir une adresse mail.',
+        'auth/user-disabled': 'Ce compte a été désactivé.',
+        'auth/configuration-not-found': 'La configuration Firebase est incomplète ou le domaine n’est pas autorisé.'
+      };
+      return map[code] || 'Une erreur est survenue. Vérifie la configuration Firebase.';
+    }
+
+    authTabs.forEach(btn => {
+      btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
+    });
+
+    mainTabs.forEach(btn => {
+      btn.addEventListener('click', () => switchMainTab(btn.dataset.mainTab));
+    });
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    await setPersistence(auth, browserLocalPersistence);
+
+    registerForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const email = normalizeEmail(document.getElementById('registerEmail').value);
+      const password = document.getElementById('registerPassword').value;
+      const confirmPassword = document.getElementById('registerPasswordConfirm').value;
+
+      if (!email) {
+        setMessage('Merci de saisir une adresse mail valide.', 'error');
+        return;
+      }
+
+      if (password.length < 8) {
+        setMessage('Le mot de passe doit contenir au moins 8 caractères.', 'error');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setMessage('Les mots de passe ne correspondent pas.', 'error');
+        return;
+      }
+
+      try {
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(credential.user, { displayName: email });
+        await sendEmailVerification(credential.user);
+        setMessage('Compte créé. Un email de vérification a été envoyé.', 'success');
+      } catch (error) {
+        setMessage(humanizeAuthError(error), 'error');
+      }
+    });
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const email = normalizeEmail(document.getElementById('loginEmail').value);
+      const password = document.getElementById('loginPassword').value;
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        setMessage('Connexion réussie.', 'success');
+      } catch (error) {
+        setMessage(humanizeAuthError(error), 'error');
+      }
+    });
+
+    forgotPasswordBtn.addEventListener('click', async () => {
+      const email = normalizeEmail(document.getElementById('loginEmail').value);
+
+      if (!email) {
+        setMessage('Saisis ton adresse mail dans le champ de connexion pour recevoir le lien.', 'warning');
+        return;
+      }
+
+      try {
+        await sendPasswordResetEmail(auth, email);
+        setMessage('Email de réinitialisation envoyé.', 'success');
+      } catch (error) {
+        setMessage(humanizeAuthError(error), 'error');
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        setMessage(humanizeAuthError(error), 'error');
+      }
+    });
+
+    sendVerificationBtn.addEventListener('click', async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      try {
+        await sendEmailVerification(user);
+        currentUserEl.textContent = `Connecté : ${user.email} · email non vérifié`;
+        setMessage('Email de vérification renvoyé.', 'success');
+      } catch (error) {
+        setMessage(humanizeAuthError(error), 'error');
+      }
+    });
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await user.reload().catch(() => {});
+        showPortal(auth.currentUser || user);
+      } else {
+        showAuth();
+      }
+    });
+  </script>
+</body>
+
+</html>
