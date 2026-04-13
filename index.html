@@ -759,6 +759,7 @@
     let googleDriveReady = false;
     let googleDriveFiles = [];
     let selectedDriveFileId = '';
+    const GOOGLE_DRIVE_WAS_CONNECTED_KEY = 'google_drive_was_connected';
 
     const defaultLines = () => ([
       {
@@ -885,6 +886,7 @@
           <div class="hint">Sauvegarde et restauration avec Google Drive</div>
           <div class="inline-actions">
   <button onclick="connectGoogleDrive()">Se connecter à Google</button>
+  <button onclick="disconnectGoogleDrive()">Déconnecter</button>
   <button onclick="loadDriveFiles()">Actualiser la liste</button>
   <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
   <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
@@ -1037,6 +1039,15 @@
         console.error(error);
         alert('Erreur lors de la suppression.');
       }
+    }
+
+    function disconnectGoogleDrive() {
+      googleAccessToken = null;
+      googleDriveFiles = [];
+      selectedDriveFileId = '';
+      localStorage.removeItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY);
+      render();
+      alert('Google Drive déconnecté sur cet appareil.');
     }
 
     function resetData() {
@@ -1358,12 +1369,22 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             if (resp.access_token) {
               googleAccessToken = resp.access_token;
               googleDriveReady = true;
+              localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
               await loadDriveFiles();
-              alert('Connexion Google Drive réussie.');
               render();
             }
           }
         });
+
+        googleDriveReady = true;
+
+        if (localStorage.getItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY) === '1') {
+          try {
+            googleTokenClient.requestAccessToken({ prompt: '' });
+          } catch (error) {
+            console.error(error);
+          }
+        }
 
         googleDriveReady = true;
       } catch (error) {
@@ -1379,6 +1400,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
 
       googleTokenClient.requestAccessToken({ prompt: 'consent' });
+      localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
     }
 
     async function exportJsonToDrive() {
