@@ -440,7 +440,7 @@
     iframe {
       width: 100%;
       min-height: 900px;
-      height: 900px;
+      height: auto;
       border: none;
       display: block;
       background: white;
@@ -973,17 +973,19 @@
 
         const body = doc.body;
         const html = doc.documentElement;
+        if (!body || !html) return;
 
         const height = Math.max(
-          body ? body.scrollHeight : 0,
-          body ? body.offsetHeight : 0,
-          html ? html.clientHeight : 0,
-          html ? html.scrollHeight : 0,
-          html ? html.offsetHeight : 0
+          body.scrollHeight,
+          body.offsetHeight,
+          body.clientHeight,
+          html.scrollHeight,
+          html.offsetHeight,
+          html.clientHeight
         );
 
         if (height > 0) {
-          frame.style.height = height + 'px';
+          frame.style.height = (height + 40) + 'px';
         }
       } catch (error) {
         console.warn('Impossible de redimensionner l’iframe :', error);
@@ -998,27 +1000,55 @@
 
         try {
           const doc = frame.contentDocument || frame.contentWindow.document;
-          if (!doc) return;
+          if (!doc || !doc.body || !doc.documentElement) return;
 
-          const observer = new MutationObserver(() => {
-            resizeIframeToContent(frame);
-          });
+          if (frame._mutationObserver) {
+            frame._mutationObserver.disconnect();
+          }
 
+          if (frame._resizeInterval) {
+            clearInterval(frame._resizeInterval);
+          }
+
+          const refresh = () => resizeIframeToContent(frame);
+
+          const observer = new MutationObserver(refresh);
           observer.observe(doc.body, {
             childList: true,
             subtree: true,
-            attributes: true
+            attributes: true,
+            characterData: true
           });
 
-          frame._resizeObserver = observer;
+          frame._mutationObserver = observer;
 
-          frame.contentWindow.addEventListener('resize', () => {
-            resizeIframeToContent(frame);
+          if (window.ResizeObserver) {
+            if (frame._bodyResizeObserver) frame._bodyResizeObserver.disconnect();
+            if (frame._htmlResizeObserver) frame._htmlResizeObserver.disconnect();
+
+            frame._bodyResizeObserver = new ResizeObserver(refresh);
+            frame._htmlResizeObserver = new ResizeObserver(refresh);
+
+            frame._bodyResizeObserver.observe(doc.body);
+            frame._htmlResizeObserver.observe(doc.documentElement);
+          }
+
+          ['input', 'change', 'click', 'keyup'].forEach(eventName => {
+            doc.addEventListener(eventName, refresh, true);
           });
 
-          setTimeout(() => resizeIframeToContent(frame), 100);
-          setTimeout(() => resizeIframeToContent(frame), 400);
-          setTimeout(() => resizeIframeToContent(frame), 1000);
+          frame.contentWindow.addEventListener('resize', refresh);
+
+          frame._resizeInterval = setInterval(refresh, 500);
+
+          requestAnimationFrame(refresh);
+          setTimeout(refresh, 50);
+          setTimeout(refresh, 150);
+          setTimeout(refresh, 300);
+          setTimeout(refresh, 600);
+          setTimeout(refresh, 1000);
+          setTimeout(refresh, 1500);
+          setTimeout(refresh, 2500);
         } catch (error) {
           console.warn('Observation iframe impossible :', error);
         }
