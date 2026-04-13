@@ -439,10 +439,12 @@
 
     iframe {
       width: 100%;
-      height: calc(100vh - 170px);
+      min-height: 900px;
+      height: 900px;
       border: none;
       display: block;
       background: white;
+      overflow: hidden;
     }
 
     @media (max-width: 1150px) {
@@ -872,6 +874,8 @@
     await setPersistence(auth, browserLocalPersistence);
     await initGoogleDrive();
     bindIframeMessaging();
+    bindIframeAutoResize(devisFrame);
+    bindIframeAutoResize(comptaFrame);
 
     registerForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -956,6 +960,67 @@
         setMessage(humanizeAuthError(error), 'error');
       }
     });
+
+    function resizeIframeToContent(frame) {
+      if (!frame || !frame.contentWindow) return;
+
+      try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        if (!doc) return;
+
+        const body = doc.body;
+        const html = doc.documentElement;
+
+        const height = Math.max(
+          body ? body.scrollHeight : 0,
+          body ? body.offsetHeight : 0,
+          html ? html.clientHeight : 0,
+          html ? html.scrollHeight : 0,
+          html ? html.offsetHeight : 0
+        );
+
+        if (height > 0) {
+          frame.style.height = height + 'px';
+        }
+      } catch (error) {
+        console.warn('Impossible de redimensionner l’iframe :', error);
+      }
+    }
+
+    function bindIframeAutoResize(frame) {
+      if (!frame) return;
+
+      frame.addEventListener('load', () => {
+        resizeIframeToContent(frame);
+
+        try {
+          const doc = frame.contentDocument || frame.contentWindow.document;
+          if (!doc) return;
+
+          const observer = new MutationObserver(() => {
+            resizeIframeToContent(frame);
+          });
+
+          observer.observe(doc.body, {
+            childList: true,
+            subtree: true,
+            attributes: true
+          });
+
+          frame._resizeObserver = observer;
+
+          frame.contentWindow.addEventListener('resize', () => {
+            resizeIframeToContent(frame);
+          });
+
+          setTimeout(() => resizeIframeToContent(frame), 100);
+          setTimeout(() => resizeIframeToContent(frame), 400);
+          setTimeout(() => resizeIframeToContent(frame), 1000);
+        } catch (error) {
+          console.warn('Observation iframe impossible :', error);
+        }
+      });
+    }
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
