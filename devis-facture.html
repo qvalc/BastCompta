@@ -1155,6 +1155,24 @@
     function autoResize(el) {
       el.style.height = 'auto';
       el.style.height = el.scrollHeight + 'px';
+      notifyParentHeight();
+    }
+
+    function notifyParentHeight() {
+      const height = Math.max(
+        document.body.scrollHeight,
+        document.body.offsetHeight,
+        document.body.clientHeight,
+        document.documentElement.scrollHeight,
+        document.documentElement.offsetHeight,
+        document.documentElement.clientHeight
+      );
+
+      window.parent.postMessage({
+        type: 'BASTCOMPTA_IFRAME_HEIGHT',
+        source: 'devis-facture',
+        height: height + 40
+      }, window.location.origin);
     }
 
     function setField(path, value) {
@@ -1914,13 +1932,24 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
 
       setTimeout(() => {
         document.querySelectorAll('textarea').forEach(autoResize);
+        notifyParentHeight();
       }, 0);
+
+      setTimeout(notifyParentHeight, 100);
+      setTimeout(notifyParentHeight, 300);
+      setTimeout(notifyParentHeight, 700);
     }
 
     window.addEventListener('load', async () => {
       render();
       await initDriveClientOnly();
+      notifyParentHeight();
     });
+
+    window.addEventListener('resize', notifyParentHeight);
+    document.addEventListener('input', () => setTimeout(notifyParentHeight, 0), true);
+    document.addEventListener('change', () => setTimeout(notifyParentHeight, 0), true);
+    document.addEventListener('click', () => setTimeout(notifyParentHeight, 0), true);
   </script>
 </body>
 
