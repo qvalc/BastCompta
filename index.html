@@ -779,22 +779,6 @@
       postToFrame(comptaFrame, payload);
     }
 
-    window.addEventListener('message', (event) => {
-      if (event.origin !== window.location.origin) return;
-
-      const message = event.data || {};
-
-      if (message.type === 'BASTCOMPTA_IFRAME_HEIGHT') {
-        if (message.source === 'devis-facture' && devisFrame) {
-          devisFrame.style.height = message.height + 'px';
-        }
-
-        if (message.source === 'comptabilite' && comptaFrame) {
-          comptaFrame.style.height = message.height + 'px';
-        }
-      }
-    });
-
     function bindIframeMessaging() {
       [devisFrame, comptaFrame].forEach(frame => {
         frame.addEventListener('load', () => {
