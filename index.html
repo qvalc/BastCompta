@@ -590,7 +590,7 @@
         <div class="portal-topbar">
           <div class="title-wrap">
             <h2>Portail BastCompta</h2>
-            <p>Retrouvez vos outils de gestion dans un espace unique.</p>
+            <p style="display:none;"></p>
           </div>
 
           <div class="user-actions">
@@ -701,9 +701,12 @@
     function showPortal(user) {
       authScreen.classList.add('hidden');
       portalScreen.classList.remove('hidden');
-      const verified = user.emailVerified ? 'email vérifié' : 'email non vérifié';
-      currentUserEl.textContent = `Connecté : ${user.email} · ${verified}`;
-      sendVerificationBtn.disabled = !!user.emailVerified;
+      currentUserEl.innerHTML = '🟢 Connecté';
+      if (user.emailVerified) {
+        sendVerificationBtn.style.display = 'none';
+      } else {
+        sendVerificationBtn.style.display = 'inline-flex';
+      }
       updateDriveButtons();
 
       if (googleAccessToken) {
