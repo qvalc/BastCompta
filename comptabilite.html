@@ -343,8 +343,8 @@
     }
   </style>
 
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
+
 </head>
 
 <body>
@@ -392,17 +392,9 @@
   <script>
     const STORAGE_KEY = 'comptabilite-local-v1';
 
-    const GOOGLE_CLIENT_ID = '533118350621-ov27k8jd0ki944rc773j4gr8a3l7vfpk.apps.googleusercontent.com';
-    const GOOGLE_API_KEY = 'AIzaSyC88moDvAWg7LFeJAgUSxXJV4nhAigSOKU';
-    const DRIVE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
-
-    let googleTokenClient = null;
     let googleAccessToken = null;
-    let googleDriveReady = false;
     let googleDriveFiles = [];
     let selectedDriveFileId = '';
-    const GOOGLE_DRIVE_WAS_CONNECTED_KEY = 'google_drive_was_connected_compta';
 
 
     const defaultData = {
@@ -504,6 +496,57 @@
       reader.readAsText(file);
     }
 
+    window.addEventListener('message', async (event) => {
+      if (event.origin !== window.location.origin) return;
+
+      const message = event.data || {};
+
+      if (message.type === 'BASTCOMPTA_GOOGLE_TOKEN') {
+        googleAccessToken = message.accessToken || null;
+
+        if (googleAccessToken && window.gapi?.client) {
+          try {
+            gapi.client.setToken({ access_token: googleAccessToken });
+            await loadDriveFiles();
+          } catch (error) {
+            console.error(error);
+          }
+        }
+
+        render();
+      }
+
+      if (message.type === 'BASTCOMPTA_GOOGLE_LOGOUT') {
+        googleAccessToken = null;
+        googleDriveFiles = [];
+        selectedDriveFileId = '';
+
+        if (window.gapi?.client) {
+          gapi.client.setToken(null);
+        }
+
+        render();
+      }
+    });
+
+    async function initDriveClientOnly() {
+      try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+
+        await gapi.client.init({
+          apiKey: 'AIzaSyC88moDvAWg7LFeJAgUSxXJV4nhAigSOKU',
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+        });
+
+        if (googleAccessToken) {
+          gapi.client.setToken({ access_token: googleAccessToken });
+        }
+      } catch (error) {
+        console.error(error);
+        alert("Erreur lors de l'initialisation du client Google Drive.");
+      }
+    }
+
     function getDriveFileName() {
       const period = String(data.company.period || '').trim();
       const company = String(data.company.name || '').trim()
@@ -522,7 +565,7 @@
 
     async function loadDriveFiles() {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -545,22 +588,13 @@
       } catch (error) {
         console.error(error);
 
-        if (googleTokenClient) {
-          try {
-            googleTokenClient.requestAccessToken({ prompt: '' });
-            return;
-          } catch (e) {
-            console.error(e);
-          }
-        }
-
-        alert('Impossible de charger la liste des sauvegardes Drive.');
+        alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Google Drive dans le portail.");
       }
     }
 
     async function importSelectedJsonFromDrive() {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -594,7 +628,7 @@
 
     async function deleteSelectedJsonFromDrive() {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -622,25 +656,9 @@
       }
     }
 
-    function disconnectGoogleDrive() {
-      googleAccessToken = null;
-      googleDriveFiles = [];
-      selectedDriveFileId = '';
-
-      if (window.gapi?.client) {
-        gapi.client.setToken('');
-      }
-
-      localStorage.removeItem('google_access_token_compta');
-      localStorage.removeItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY);
-
-      render();
-      alert('Google Drive déconnecté sur cet appareil.');
-    }
-
     function pickLocalJsonForDrive() {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -653,7 +671,7 @@
 
     async function uploadLocalJsonToDrive(event) {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -719,74 +737,9 @@
       }
     }
 
-    async function initGoogleDrive() {
-      try {
-        await new Promise((resolve) => gapi.load('client', resolve));
-
-        await gapi.client.init({
-          apiKey: GOOGLE_API_KEY,
-          discoveryDocs: [DRIVE_DISCOVERY_DOC]
-        });
-
-        googleTokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: DRIVE_SCOPES,
-          callback: async (resp) => {
-            if (resp.access_token) {
-              googleAccessToken = resp.access_token;
-              gapi.client.setToken({ access_token: resp.access_token });
-
-              localStorage.setItem('google_access_token_compta', resp.access_token);
-              googleDriveReady = true;
-              localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
-              await loadDriveFiles();
-              render();
-            }
-          }
-        });
-
-        googleDriveReady = true;
-
-        const savedToken = localStorage.getItem('google_access_token_compta');
-
-        if (savedToken) {
-          googleAccessToken = savedToken;
-          googleDriveReady = true;
-          gapi.client.setToken({ access_token: savedToken });
-
-          try {
-            await loadDriveFiles();
-          } catch (e) {
-            console.error(e);
-          }
-        } else if (localStorage.getItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY) === '1') {
-          try {
-            googleTokenClient.requestAccessToken({ prompt: '' });
-          } catch (error) {
-            console.error(error);
-          }
-        }
-
-        googleDriveReady = true;
-      } catch (error) {
-        console.error(error);
-        alert("Erreur lors de l'initialisation de Google Drive.");
-      }
-    }
-
-    function connectGoogleDrive() {
-      if (!googleTokenClient) {
-        alert("Google Drive n'est pas encore prêt.");
-        return;
-      }
-
-      googleTokenClient.requestAccessToken({ prompt: 'consent' });
-      localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
-    }
-
     async function exportJsonToDrive() {
       if (!googleAccessToken) {
-        alert('Connecte-toi d’abord à Google Drive.');
+        alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
@@ -869,15 +822,18 @@
             <div class="section-head">
               <div>
                 <h2>Google Drive</h2>
-                <div class="hint">Sauvegarde et restauration de la comptabilité via Google Drive.</div>
+
+<div class="muted-box" style="margin-bottom:16px;">
+  La connexion Google Drive se fait depuis le portail principal BastCompta.
+</div>
+
+<div class="hint">Sauvegarde et restauration de la comptabilité via Google Drive.</div>
               </div>
               <div class="inline-actions">
-                <button onclick="connectGoogleDrive()">Se connecter à Google</button>
-                <button onclick="disconnectGoogleDrive()">Déconnecter</button>
-                <button onclick="loadDriveFiles()">Actualiser la liste</button>
-                <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
-                <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
-              </div>
+  <button onclick="loadDriveFiles()">Actualiser la liste</button>
+  <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
+  <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
+</div>
             </div>
 
             <div class="grid-2">
@@ -2271,7 +2227,7 @@
 
     window.addEventListener('load', async () => {
       render();
-      await initGoogleDrive();
+      await initDriveClientOnly();
     });
   </script>
 </body>
