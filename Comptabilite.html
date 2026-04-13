@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Comptabilité</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --line: #dde3ee;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #1d4ed8;
+      --primary-soft: #dbeafe;
+      --danger: #b91c1c;
+      --success: #166534;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .title-wrap h1 {
+      margin: 0 0 6px;
+      font-size: 30px;
+    }
+
+    .title-wrap p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button,
+    .file-label {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      padding: 11px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+    }
+
+    button.primary {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .file-label input {
+      display: none;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .metric-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      background: var(--primary-soft);
+      border-color: #bfd7ff;
+      color: var(--primary);
+    }
+
+    .page {
+      display: none;
+      gap: 16px;
+    }
+
+    .page.active {
+      display: grid;
+    }
+
+    .page.two-cols {
+      grid-template-columns: 2fr 1fr;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    h2,
+    h3 {
+      margin: 0;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    /* Centrer les titres */
+    th {
+      text-align: center;
+    }
+
+    /* Colonnes centrées (table achats uniquement) */
+    /* Par défaut : tout à gauche */
+    .page.active table td {
+      text-align: left;
+    }
+
+    /* VENTES */
+    .table-sales td:nth-child(1),
+    .table-sales td:nth-child(3),
+    .table-sales td:nth-child(5),
+    .table-sales td:nth-child(6),
+    .table-sales td:nth-child(7),
+    .table-sales td:nth-child(8) {
+      text-align: center;
+    }
+
+    .table-sales th:nth-child(1),
+    .table-sales th:nth-child(3),
+    .table-sales th:nth-child(5),
+    .table-sales th:nth-child(6),
+    .table-sales th:nth-child(7),
+    .table-sales th:nth-child(8) {
+      text-align: center;
+    }
+
+    /* ACHATS */
+    .table-purchases td:nth-child(1),
+    .table-purchases td:nth-child(3),
+    .table-purchases td:nth-child(5),
+    .table-purchases td:nth-child(6),
+    .table-purchases td:nth-child(7),
+    .table-purchases td:nth-child(8),
+    .table-purchases td:nth-child(9),
+    .table-purchases td:nth-child(10) {
+      text-align: center;
+    }
+
+    .table-purchases th:nth-child(1),
+    .table-purchases th:nth-child(3),
+    .table-purchases th:nth-child(5),
+    .table-purchases th:nth-child(6),
+    .table-purchases th:nth-child(7),
+    .table-purchases th:nth-child(8),
+    .table-purchases th:nth-child(9),
+    .table-purchases th:nth-child(10) {
+      text-align: center;
+    }
+
+    th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      background: white;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .danger {
+      color: white;
+      background: var(--danger);
+      border-color: var(--danger);
+    }
+
+    .muted-box {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+      border-radius: 14px;
+      padding: 14px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .kv:last-child {
+      border-bottom: none;
+    }
+
+    .status-good {
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .status-bad {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 1100px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
+      }
+
+      .page.two-cols {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .app {
+        padding: 14px;
+      }
+
+      .summary-grid,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .title-wrap h1 {
+        font-size: 24px;
+      }
+
+      table {
+        font-size: 13px;
+      }
+    }
+  </style>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js"></script>
+</head>
+
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title-wrap">
+        <h1>Comptabilité</h1>
+      </div>
+      <div class="actions">
+        <button class="primary" onclick="saveData()">Sauvegarder</button>
+        <button onclick="exportData()">Exporter JSON</button>
+        <button onclick="openPrintReport()">Export PDF / Imprimer</button>
+        <label class="file-label">Importer JSON
+          <input type="file" accept="application/json" onchange="importData(event)">
+        </label>
+        <button class="danger" onclick="resetData()">Réinitialiser</button>
+      </div>
+    </div>
+
+    <div class="summary-grid">
+      <div class="card">
+        <div class="metric-label">Ventes HTVA</div>
+        <div class="metric-value" id="metricSales">0,00 €</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Achats HTVA</div>
+        <div class="metric-value" id="metricPurchases">0,00 €</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">TVA nette</div>
+        <div class="metric-value" id="metricVat">0,00 €</div>
+      </div>
+      <div class="card">
+        <div class="metric-label">Résultat estimé</div>
+        <div class="metric-value" id="metricProfit">0,00 €</div>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="pages"></div>
+    <input id="localJsonToDriveInput" type="file" accept="application/json" style="display:none"
+      onchange="uploadLocalJsonToDrive(event)">
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'comptabilite-local-v1';
+
+    const GOOGLE_CLIENT_ID = '533118350621-ov27k8jd0ki944rc773j4gr8a3l7vfpk.apps.googleusercontent.com';
+    const GOOGLE_API_KEY = 'AIzaSyC88moDvAWg7LFeJAgUSxXJV4nhAigSOKU';
+    const DRIVE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+
+    let googleTokenClient = null;
+    let googleAccessToken = null;
+    let googleDriveReady = false;
+    let googleDriveFiles = [];
+    let selectedDriveFileId = '';
+    const GOOGLE_DRIVE_WAS_CONNECTED_KEY = 'google_drive_was_connected_compta';
+
+
+    const defaultData = {
+      company: {
+        name: '',
+        period: '',
+        notes: ''
+      },
+      purchases: [],
+      sales: [],
+      investments: [],
+      assets: [],
+      stock: [],
+      losses: [],
+      km: [],
+      settings: {
+        vatCarryover: 0,
+        bankBalance: 0,
+        cashBalance: 0,
+        capitalStart: 0,
+        retainedEarnings: 0,
+        socialExemptionThreshold: 1881.76,
+        socialContributionRate: 20.5,
+        socialContributionFeeRate: 3.5
+      }
+    };
+
+    const pageDefs = [
+      { key: 'dashboard', label: 'Tableau de bord' },
+      { key: 'sales', label: 'Ventes' },
+      { key: 'purchases', label: 'Achats' },
+      { key: 'investments', label: 'Investissements' },
+      { key: 'assets', label: 'Immobilisations' },
+      { key: 'stock', label: 'Stock' },
+      { key: 'losses', label: 'Pertes & charges' },
+      { key: 'km', label: 'Kilomètres' },
+      { key: 'result', label: 'Compte de résultat' },
+      { key: 'balance', label: 'Bilan simplifié' },
+      { key: 'gdrive', label: 'Google Drive' },
+      { key: 'settings', label: 'Paramètres' }
+    ];
+
+    let data = loadData();
+    let activePage = 'dashboard';
+
+    function loadData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return structuredClone(defaultData);
+        return mergeDeep(structuredClone(defaultData), JSON.parse(raw));
+      } catch {
+        return structuredClone(defaultData);
+      }
+    }
+
+    function mergeDeep(target, source) {
+      for (const key in source) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          target[key] = mergeDeep(target[key] || {}, source[key]);
+        } else {
+          target[key] = source[key];
+        }
+      }
+      return target;
+    }
+
+    function saveData(showAlert = true) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      if (showAlert) alert('Données sauvegardées localement.');
+      render();
+    }
+
+    function exportData() {
+      exportJsonToDrive();
+    }
+
+    function importData(event) {
+      if (event?.target?.files?.length) {
+        importDataLocal(event);
+        return;
+      }
+      importJsonFromDrive();
+    }
+
+    function importDataLocal(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          data = mergeDeep(structuredClone(defaultData), parsed);
+          saveData(false);
+          alert('Import JSON réussi.');
+        } catch {
+          alert('Le fichier importé n\'est pas un JSON valide.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function getDriveFileName() {
+      const period = String(data.company.period || '').trim();
+      const company = String(data.company.name || '').trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40);
+
+      if (period && company) return `comptabilite-${company}-${period}.json`;
+      if (period) return `comptabilite-${period}.json`;
+      if (company) return `comptabilite-${company}.json`;
+      return 'comptabilite-export.json';
+    }
+
+    async function loadDriveFiles() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      try {
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-'`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 100,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        googleDriveFiles = list.result.files || [];
+
+        if (!selectedDriveFileId && googleDriveFiles.length) {
+          selectedDriveFileId = googleDriveFiles[0].id;
+        }
+
+        render();
+      } catch (error) {
+        console.error(error);
+
+        if (googleTokenClient) {
+          try {
+            googleTokenClient.requestAccessToken({ prompt: '' });
+            return;
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        alert('Impossible de charger la liste des sauvegardes Drive.');
+      }
+    }
+
+    async function importSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        alert('Sélectionne d’abord une sauvegarde Google Drive.');
+        return;
+      }
+
+      try {
+        const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        saveData(false);
+        alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'import depuis Google Drive.");
+      }
+    }
+
+    async function deleteSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        alert('Sélectionne une sauvegarde à supprimer.');
+        return;
+      }
+
+      if (!confirm('Supprimer cette sauvegarde définitivement ?')) return;
+
+      try {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        selectedDriveFileId = '';
+        await loadDriveFiles();
+        alert('Sauvegarde supprimée.');
+      } catch (error) {
+        console.error(error);
+        alert('Erreur lors de la suppression.');
+      }
+    }
+
+    function disconnectGoogleDrive() {
+      googleAccessToken = null;
+      googleDriveFiles = [];
+      selectedDriveFileId = '';
+
+      if (window.gapi?.client) {
+        gapi.client.setToken('');
+      }
+
+      localStorage.removeItem('google_access_token_compta');
+      localStorage.removeItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY);
+
+      render();
+      alert('Google Drive déconnecté sur cet appareil.');
+    }
+
+    function pickLocalJsonForDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      const input = document.getElementById('localJsonToDriveInput');
+      if (!input) return;
+
+      input.value = '';
+      input.click();
+    }
+
+    async function uploadLocalJsonToDrive(event) {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const content = await file.text();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch {
+          alert("Le fichier sélectionné n'est pas un JSON valide.");
+          return;
+        }
+
+        const metadata = {
+          name: file.name,
+          parents: ['appDataFolder']
+        };
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${file.name.replace(/'/g, "\\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (files.length) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        selectedDriveFileId = saved.id;
+        await loadDriveFiles();
+
+        alert(`Fichier local envoyé vers Google Drive : ${saved.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'envoi du fichier local vers Google Drive.");
+      }
+    }
+
+    async function initGoogleDrive() {
+      try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+
+        await gapi.client.init({
+          apiKey: GOOGLE_API_KEY,
+          discoveryDocs: [DRIVE_DISCOVERY_DOC]
+        });
+
+        googleTokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: DRIVE_SCOPES,
+          callback: async (resp) => {
+            if (resp.access_token) {
+              googleAccessToken = resp.access_token;
+              gapi.client.setToken({ access_token: resp.access_token });
+
+              localStorage.setItem('google_access_token_compta', resp.access_token);
+              googleDriveReady = true;
+              localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
+              await loadDriveFiles();
+              render();
+            }
+          }
+        });
+
+        googleDriveReady = true;
+
+        const savedToken = localStorage.getItem('google_access_token_compta');
+
+        if (savedToken) {
+          googleAccessToken = savedToken;
+          googleDriveReady = true;
+          gapi.client.setToken({ access_token: savedToken });
+
+          try {
+            await loadDriveFiles();
+          } catch (e) {
+            console.error(e);
+          }
+        } else if (localStorage.getItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY) === '1') {
+          try {
+            googleTokenClient.requestAccessToken({ prompt: '' });
+          } catch (error) {
+            console.error(error);
+          }
+        }
+
+        googleDriveReady = true;
+      } catch (error) {
+        console.error(error);
+        alert("Erreur lors de l'initialisation de Google Drive.");
+      }
+    }
+
+    function connectGoogleDrive() {
+      if (!googleTokenClient) {
+        alert("Google Drive n'est pas encore prêt.");
+        return;
+      }
+
+      googleTokenClient.requestAccessToken({ prompt: 'consent' });
+      localStorage.setItem(GOOGLE_DRIVE_WAS_CONNECTED_KEY, '1');
+    }
+
+    async function exportJsonToDrive() {
+      if (!googleAccessToken) {
+        alert('Connecte-toi d’abord à Google Drive.');
+        return;
+      }
+
+      try {
+        const fileName = getDriveFileName();
+        const content = JSON.stringify(data, null, 2);
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+
+        const metadata = {
+          name: fileName,
+          parents: ['appDataFolder']
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (files.length) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        await loadDriveFiles();
+        selectedDriveFileId = saved.id;
+        alert(`Export Google Drive réussi : ${saved.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec de l'export vers Google Drive.");
+      }
+    }
+
+    async function importJsonFromDrive() {
+      await loadDriveFiles();
+
+      if (!googleDriveFiles.length) {
+        alert('Aucune sauvegarde JSON trouvée sur Google Drive.');
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        selectedDriveFileId = googleDriveFiles[0].id;
+      }
+
+      render();
+    }
+
+    function renderGoogleDrive() {
+      const options = googleDriveFiles.map(file => `
+        <option value="${escapeAttr(file.id)}" ${selectedDriveFileId === file.id ? 'selected' : ''}>
+          ${escapeHtml(file.name)}${file.modifiedTime ? ' — ' + new Date(file.modifiedTime).toLocaleString('fr-BE') : ''}
+        </option>
+      `).join('');
+
+      return `
+        <section class="page ${activePage === 'gdrive' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Google Drive</h2>
+                <div class="hint">Sauvegarde et restauration de la comptabilité via Google Drive.</div>
+              </div>
+              <div class="inline-actions">
+                <button onclick="connectGoogleDrive()">Se connecter à Google</button>
+                <button onclick="disconnectGoogleDrive()">Déconnecter</button>
+                <button onclick="loadDriveFiles()">Actualiser la liste</button>
+                <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
+                <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="muted-box">
+                <strong>Nom qui sera utilisé pour le prochain export :</strong><br>
+                ${escapeHtml(getDriveFileName())}
+                <br><br>
+                Les sauvegardes sont créées sous forme de fichiers JSON distincts dans l’espace privé appDataFolder.
+              </div>
+
+              <div class="muted-box">
+                <strong>Conseil</strong><br>
+                Renseigne au minimum le nom de l’entreprise et la période avant export.<br>
+                Même nom de fichier = mise à jour du même JSON.<br>
+                Nouveau nom = nouveau fichier.
+              </div>
+            </div>
+
+            <div style="margin-top:16px;" class="card">
+              <div class="section-head">
+                <div>
+                  <h3>Sauvegarde à charger</h3>
+                  <div class="hint">Choisis une sauvegarde JSON présente sur ton Drive.</div>
+                </div>
+              </div>
+
+              <select onchange="selectedDriveFileId=this.value; render()">
+                <option value="">-- Sélectionner une sauvegarde --</option>
+                ${options}
+              </select>
+
+              <div class="inline-actions" style="margin-top:12px;">
+                <button onclick="importSelectedJsonFromDrive()">Charger</button>
+                <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function resetData() {
+      if (!confirm('Tout effacer et revenir à la base par défaut ?')) return;
+      data = structuredClone(defaultData);
+      saveData(false);
+      render();
+    }
+
+    function money(value) {
+      return new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(Number(value || 0));
+    }
+
+    function num(value, digits = 2) {
+      return Number(value || 0).toFixed(digits);
+    }
+
+    function toNumber(value) {
+      const n = parseFloat(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function rowNetFromTvac(tvac, rate) {
+      return toNumber(tvac) / (1 + toNumber(rate) / 100);
+    }
+
+    function rowVatFromTvac(tvac, rate) {
+      return toNumber(tvac) - rowNetFromTvac(tvac, rate);
+    }
+
+    function rowHtvaToVat(htva, rate) {
+      return toNumber(htva) * (toNumber(rate) / 100);
+    }
+
+    function rowHtvaToTvac(htva, rate) {
+      return toNumber(htva) + rowHtvaToVat(htva, rate);
+    }
+
+    function round2(value) {
+      return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function purchaseVatDisplay(index) {
+      const row = data.purchases[index];
+      if (!row || !row.deductible) return 0;
+
+      const key = [
+        row.supplier || '',
+        row.invoiceNumber || '',
+        toNumber(row.rate),
+        row.deductible ? '1' : '0'
+      ].join('||');
+
+      const groupIndexes = data.purchases
+        .map((item, i) => ({ item, i }))
+        .filter(({ item }) => {
+          const itemKey = [
+            item.supplier || '',
+            item.invoiceNumber || '',
+            toNumber(item.rate),
+            item.deductible ? '1' : '0'
+          ].join('||');
+          return itemKey === key;
+        })
+        .map(({ i }) => i);
+
+      // Une seule ligne ou pas de numéro de facture : TVA simple
+      if (groupIndexes.length <= 1 || !row.invoiceNumber) {
+        return round2(rowHtvaToVat(row.htva, row.rate));
+      }
+
+      // Total HTVA du groupe
+      const groupHtva = groupIndexes.reduce(
+        (sum, i) => sum + toNumber(data.purchases[i].htva),
+        0
+      );
+
+      const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
+
+      let allocatedBefore = 0;
+
+      for (let pos = 0; pos < groupIndexes.length; pos++) {
+        const i = groupIndexes[pos];
+        const lineHtva = toNumber(data.purchases[i].htva);
+
+        if (pos === groupIndexes.length - 1) {
+          const lastValue = round2(groupVat - allocatedBefore);
+          if (i === index) return lastValue;
+        } else {
+          const proportional = groupHtva === 0
+            ? 0
+            : round2(groupVat * (lineHtva / groupHtva));
+
+          if (i === index) return proportional;
+          allocatedBefore += proportional;
+        }
+      }
+
+      return 0;
+    }
+
+    function purchaseVatAllocated(index) {
+      const row = data.purchases[index];
+      if (!row || !row.deductible) return 0;
+
+      const key = [
+        row.supplier || '',
+        row.invoiceNumber || '',
+        toNumber(row.rate),
+        row.deductible ? '1' : '0'
+      ].join('||');
+
+      const groupIndexes = data.purchases
+        .map((item, i) => ({ item, i }))
+        .filter(({ item }) => {
+          const itemKey = [
+            item.supplier || '',
+            item.invoiceNumber || '',
+            toNumber(item.rate),
+            item.deductible ? '1' : '0'
+          ].join('||');
+          return itemKey === key;
+        })
+        .map(({ i }) => i);
+
+      if (groupIndexes.length <= 1 || !row.invoiceNumber) {
+        return round2(rowVatFromTvac(row.tvac, row.rate));
+      }
+
+      function purchaseVatAllocated(index) {
+        const row = data.purchases[index];
+        if (!row || !row.deductible) return 0;
+
+        const key = [
+          row.supplier || '',
+          row.invoiceNumber || '',
+          toNumber(row.rate),
+          row.deductible ? '1' : '0'
+        ].join('||');
+
+        const groupIndexes = data.purchases
+          .map((item, i) => ({ item, i }))
+          .filter(({ item }) => {
+            const itemKey = [
+              item.supplier || '',
+              item.invoiceNumber || '',
+              toNumber(item.rate),
+              item.deductible ? '1' : '0'
+            ].join('||');
+            return itemKey === key;
+          })
+          .map(({ i }) => i);
+
+        if (groupIndexes.length <= 1 || !row.invoiceNumber) {
+          return round2(rowHtvaToVat(row.htva, row.rate));
+        }
+
+        const groupHtva = groupIndexes.reduce((sum, i) => sum + toNumber(data.purchases[i].htva), 0);
+        const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
+
+        let allocatedBefore = 0;
+
+        for (let pos = 0; pos < groupIndexes.length; pos++) {
+          const i = groupIndexes[pos];
+          const lineHtva = toNumber(data.purchases[i].htva);
+
+          if (pos === groupIndexes.length - 1) {
+            const lastValue = round2(groupVat - allocatedBefore);
+            if (i === index) return lastValue;
+          } else {
+            const proportional = groupHtva === 0 ? 0 : round2(groupVat * (lineHtva / groupHtva));
+            if (i === index) return proportional;
+            allocatedBefore += proportional;
+          }
+        }
+
+        return 0;
+      }
+
+      return 0;
+    }
+
+    function computeAmortization(amount, startDate, durationMonths, currentYear) {
+      const safeAmount = toNumber(amount);
+      const safeDuration = Math.max(1, parseInt(durationMonths || 0, 10) || 1);
+      const monthlyAmort = safeAmount / safeDuration;
+      let amortYear = 0;
+      let amortTotal = 0;
+
+      if (!startDate) {
+        return {
+          amortYear: 0,
+          amortTotal: 0,
+          netValue: safeAmount,
+          monthlyAmort
+        };
+      }
+
+      const d = new Date(startDate + 'T00:00:00');
+      if (isNaN(d)) {
+        return {
+          amortYear: 0,
+          amortTotal: 0,
+          netValue: safeAmount,
+          monthlyAmort
+        };
+      }
+
+      const purchaseYear = d.getFullYear();
+      const purchaseMonth = d.getMonth() + 1;
+
+      const firstDeductionYear = purchaseMonth === 12 ? purchaseYear + 1 : purchaseYear;
+      const firstDeductionMonth = purchaseMonth === 12 ? 1 : purchaseMonth + 1;
+
+      if (currentYear >= firstDeductionYear) {
+        const monthsFromStartToEndOfCurrentYear =
+          (currentYear - firstDeductionYear) * 12 + (12 - firstDeductionMonth + 1);
+
+        const totalMonthsUsed = Math.max(
+          0,
+          Math.min(safeDuration, monthsFromStartToEndOfCurrentYear)
+        );
+
+        amortTotal = Math.min(safeAmount, monthlyAmort * totalMonthsUsed);
+
+        if (currentYear === firstDeductionYear) {
+          amortYear = Math.min(
+            safeAmount,
+            monthlyAmort * Math.min(safeDuration, 12 - firstDeductionMonth + 1)
+          );
+        } else {
+          const monthsBeforeCurrentYear = Math.max(
+            0,
+            Math.min(
+              safeDuration,
+              (currentYear - firstDeductionYear - 1) * 12 + (12 - firstDeductionMonth + 1)
+            )
+          );
+          const remainingAtStart = Math.max(0, safeDuration - monthsBeforeCurrentYear);
+          amortYear = Math.min(safeAmount, monthlyAmort * Math.min(12, remainingAtStart));
+        }
+      }
+
+      return {
+        amortYear,
+        amortTotal,
+        netValue: Math.max(0, safeAmount - amortTotal),
+        monthlyAmort
+      };
+    }
+
+    function totals() {
+      const salesNet = data.sales.reduce((sum, row) => sum + rowNetFromTvac(row.tvac, row.rate), 0);
+      const salesVat = data.sales.reduce((sum, row) => sum + rowVatFromTvac(row.tvac, row.rate), 0);
+      const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
+
+      const purchasesNet = data.purchases.reduce(
+        (sum, row) => sum + toNumber(row.htva),
+        0
+      );
+
+      const purchasesVat = (() => {
+        const groups = {};
+
+        data.purchases.forEach(row => {
+          if (!row.deductible) return;
+
+          const key = [
+            row.supplier || '',
+            row.invoiceNumber || '',
+            toNumber(row.rate)
+          ].join('||');
+
+          if (!groups[key]) {
+            groups[key] = {
+              htva: 0,
+              rate: toNumber(row.rate)
+            };
+          }
+
+          groups[key].htva += toNumber(row.htva);
+        });
+
+        return Object.values(groups).reduce((sum, g) => {
+          return sum + round2(rowHtvaToVat(g.htva, g.rate));
+        }, 0);
+      })();
+
+      const purchasesMerchandiseNet = data.purchases.reduce(
+        (sum, row) => sum + (row.category === 'marchandise' ? toNumber(row.htva) : 0),
+        0
+      );
+
+      const purchasesGeneralNet = data.purchases.reduce(
+        (sum, row) => sum + (row.category === 'frais_generaux' ? toNumber(row.htva) : 0),
+        0
+      );
+
+      const investmentComputed = data.investments.map((row) => {
+        const amount = toNumber(row.amount);
+        const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
+        const amort = computeAmortization(amount, row.date, durationMonths, currentYear);
+
+        return {
+          date: row.date || '',
+          supplier: row.supplier || '',
+          invoiceNumber: row.invoiceNumber || '',
+          description: row.description || '',
+          amount,
+          durationMonths,
+          amortYear: amort.amortYear,
+          amortTotal: amort.amortTotal,
+          netValue: amort.netValue
+        };
+      });
+
+      const assetsComputed = data.assets.map((row) => {
+        const amount = toNumber(row.amount);
+        const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
+        const amort = computeAmortization(amount, row.date, durationMonths, currentYear);
+
+        return {
+          date: row.date || '',
+          supplier: row.supplier || '',
+          invoiceNumber: row.invoiceNumber || '',
+          description: row.description || '',
+          label: row.label || '',
+          amount,
+          durationMonths,
+          amortYear: amort.amortYear,
+          amortTotal: amort.amortTotal,
+          netValue: amort.netValue
+        };
+      });
+
+      const assetsGross = assetsComputed.reduce((sum, row) => sum + row.amount, 0);
+
+      const yearlyAmort = investmentComputed.reduce((sum, row) => sum + row.amortYear, 0);
+
+      const totalAmortized =
+        assetsComputed.reduce((sum, row) => sum + row.amortTotal, 0);
+
+      const stockValue = data.stock.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
+      const lossesTotal = data.losses.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
+      const kmTotal = data.km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
+
+      const carryover = toNumber(data.settings.vatCarryover);
+
+      const totalCharges = purchasesNet + yearlyAmort + lossesTotal;
+      const estimatedProfit = salesNet - totalCharges;
+      const netVat = salesVat - purchasesVat - carryover;
+
+      const netFixedAssets = assetsGross - totalAmortized;
+      const liquidities = toNumber(data.settings.bankBalance) + toNumber(data.settings.cashBalance);
+      const receivableVat = netVat < 0 ? Math.abs(netVat) : 0;
+      const payableVat = netVat > 0 ? netVat : 0;
+      const resultRetained = estimatedProfit;
+
+      const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
+      const liabilitiesSide =
+        toNumber(data.settings.capitalStart) +
+        toNumber(data.settings.retainedEarnings) +
+        resultRetained +
+        payableVat;
+
+      return {
+        salesNet,
+        salesVat,
+        purchasesNet,
+        purchasesVat,
+        purchasesMerchandiseNet,
+        purchasesGeneralNet,
+        investmentComputed,
+        assetsComputed,
+        assetsGross,
+        yearlyAmort,
+        totalAmortized,
+        stockValue,
+        lossesTotal,
+        kmTotal,
+        totalCharges,
+        estimatedProfit,
+        netVat,
+        netFixedAssets,
+        liquidities,
+        receivableVat,
+        payableVat,
+        assetsSide,
+        liabilitiesSide
+      };
+    }
+
+    function setField(path, value) {
+      const keys = path.split('.');
+      let ref = data;
+      for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
+      ref[keys[keys.length - 1]] = value;
+      saveData(false);
+    }
+
+    function sortByDate(array) {
+      array.sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date) - new Date(a.date); // + récent en haut
+      });
+    }
+
+    function addRow(key, row) {
+      data[key].push(row);
+
+      // Tri automatique
+      if (key === 'purchases' || key === 'sales') {
+        sortByDate(data[key]);
+      }
+
+      saveData(false);
+    }
+
+    function deleteRow(key, index) {
+      if (!confirm('Supprimer cette ligne ?')) return;
+      data[key].splice(index, 1);
+      saveData(false);
+    }
+
+    function renderTabs() {
+      const tabs = document.getElementById('tabs');
+      tabs.innerHTML = pageDefs.map(page => `
+        <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
+      `).join('');
+    }
+
+    function renderPages() {
+      const wrap = document.getElementById('pages');
+      wrap.innerHTML = `
+        ${renderDashboard()}
+        ${renderSales()}
+        ${renderPurchases()}
+        ${renderInvestments()}
+        ${renderAssets()}
+        ${renderStock()}
+        ${renderLosses()}
+        ${renderKm()}
+        ${renderResult()}
+        ${renderBalance()}
+        ${renderGoogleDrive()}
+        ${renderSettings()}
+      `;
+    }
+
+    function renderDashboard() {
+      const t = totals();
+      return `
+        <section class="page two-cols ${activePage === 'dashboard' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Vue d'ensemble</h2>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="muted-box">
+                <strong>Société :</strong> ${escapeHtml(data.company.name || '—')}<br>
+                <strong>Période :</strong> ${escapeHtml(data.company.period)}<br>
+                <strong>Lignes achats :</strong> ${data.purchases.length}<br>
+                <strong>Lignes ventes :</strong> ${data.sales.length}<br>
+                <strong>Investissements :</strong> ${t.investmentComputed.length}<br>
+                <strong>Immobilisations manuelles :</strong> ${data.assets.length}<br>
+                <strong>Km encodés :</strong> ${num(t.kmTotal, 0)} km
+              </div>
+              <div class="muted-box">
+                <strong>TVA ventes :</strong> ${money(t.salesVat)}<br>
+                <strong>TVA achats récupérable :</strong> ${money(t.purchasesVat)}<br>
+                <strong>Report TVA :</strong> ${money(data.settings.vatCarryover)}<br>
+                <strong>Stock estimé :</strong> ${money(t.stockValue)}
+              </div>
+            </div>
+            <div class="footer-note">Les calculs ici sont simplifiés, mais la structure est prête pour devenir ton outil principal local.</div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h3>Contrôle rapide</h3></div>
+            <div class="kv"><span>TVA nette</span><span class="${t.netVat > 0 ? 'status-bad' : 'status-good'}">${money(t.netVat)}</span></div>
+            <div class="kv"><span>Actif simplifié</span><span>${money(t.assetsSide)}</span></div>
+            <div class="kv"><span>Passif simplifié</span><span>${money(t.liabilitiesSide)}</span></div>
+            <div class="kv"><span>Écart bilan</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
+            <div class="kv"><span>Résultat estimé</span><span class="${t.estimatedProfit >= 0 ? 'status-good' : 'status-bad'}">${money(t.estimatedProfit)}</span></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderSales() {
+      const t = totals();
+      return renderTablePage({
+        key: 'sales',
+        title: 'Journal des ventes',
+        hint: '',
+        addLabel: 'Ajouter une vente',
+        onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', description: '', rate: 21, tvac: 0 })`,
+        tableAttrs: `class="table-sales"`,
+        headers: ['Date', 'Client', 'N° Facture', 'Description', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', ''],
+        rows: data.sales.map((row, i) => `
+      <tr>
+        <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.sales[${i}].date=this.value; sortByDate(data.sales); saveData(false)"></td>
+        <td><input value="${escapeAttr(row.client)}" onchange="data.sales[${i}].client=this.value; saveData(false)"></td>
+        <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.sales[${i}].invoiceNumber=this.value; saveData(false)"></td>
+        <td><input value="${escapeAttr(row.description)}" onchange="data.sales[${i}].description=this.value; saveData(false)"></td>
+        <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.sales[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
+        <td><input type="number" step="0.01" value="${num(row.tvac)}" onchange="data.sales[${i}].tvac=parseFloat(this.value)||0; saveData(false)"></td>
+        <td>${money(rowNetFromTvac(row.tvac, row.rate))}</td>
+        <td>${money(rowVatFromTvac(row.tvac, row.rate))}</td>
+        <td><button class="danger" onclick="deleteRow('sales', ${i})">Suppr.</button></td>
+      </tr>
+    `).join(''),
+        footer: `
+      <div class="kv"><span>Total ventes HTVA</span><span>${money(t.salesNet)}</span></div>
+      <div class="kv"><span>Total TVA ventes</span><span>${money(t.salesVat)}</span></div>
+    `
+      });
+    }
+
+    function renderPurchases() {
+      const t = totals();
+      return `
+    <section class="page ${activePage === 'purchases' ? 'active' : ''}">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2>Journal des achats</h2>
+            <div class="hint">Chaque ligne garde le montant TVAC, le taux et le caractère déductible ou non de la TVA.</div>
+          </div>
+          <div class="inline-actions">
+            <button class="primary" onclick="addRow('purchases', { date: '', supplier: '', invoiceNumber: '', description: '', rate: 21, htva: 0, category: 'frais_generaux', deductible: true })">Ajouter un achat</button>
+          </div>
+        </div>
+
+        <div style="overflow:auto;">
+          <table class="table-purchases" style="table-layout:fixed; width:100%;">
+            <colgroup>
+              <col style="width: 115px;">
+              <col style="width: 140px;">
+              <col style="width: 135px;">
+              <col style="width: 200px;">
+              <col style="width: 60px;">
+              <col style="width: 80px;">
+              <col style="width: 95px;">
+              <col style="width: 75px;">
+              <col style="width: 75px;">
+              <col style="width: 75px;">
+              <col style="width: 75px;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Fournisseur</th>
+                <th>N° Facture</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th>Taux TVA</th>
+                <th>HTVA</th>
+                <th>Déductible TVA</th>
+                <th>TVA récup.</th>
+                <th>TVAC</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.purchases.map((row, i) => `
+                <tr>
+                  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.purchases[${i}].date=this.value; sortByDate(data.purchases); saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.supplier)}" onchange="data.purchases[${i}].supplier=this.value; saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.purchases[${i}].invoiceNumber=this.value; saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.description)}" onchange="data.purchases[${i}].description=this.value; saveData(false)"></td>
+                  <td>
+                    <select onchange="data.purchases[${i}].category=this.value; saveData(false)">
+                      <option value="marchandise" ${row.category === 'marchandise' ? 'selected' : ''}>Marchandise</option>
+                      <option value="frais_generaux" ${(row.category || 'frais_generaux') === 'frais_generaux' ? 'selected' : ''}>Frais généraux</option>
+                    </select>
+                  </td>
+                  <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.purchases[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.htva)}" onchange="data.purchases[${i}].htva=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td>
+                 <select onchange="data.purchases[${i}].deductible=this.value==='true'; saveData(false)">
+                  <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
+                  <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
+                 </select>
+                   </td>
+                   <td>${money(row.deductible ? purchaseVatDisplay(i) : 0)}</td>
+                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
+                  <td><button class="danger" onclick="deleteRow('purchases', ${i})">Suppr.</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <div class="kv"><span>Total achats en charges</span><span>${money(t.purchasesNet)}</span></div>
+          <div class="kv"><span>dont frais généraux</span><span>${money(t.purchasesGeneralNet)}</span></div>
+          <div class="kv"><span>dont marchandises</span><span>${money(t.purchasesMerchandiseNet)}</span></div>
+          <div class="kv"><span>Total TVA récupérable</span><span>${money(t.purchasesVat)}</span></div>
+        </div>
+      </div>
+    </section>
+  `;
+    }
+
+    function renderInvestments() {
+      const t = totals();
+      return renderTablePage({
+        key: 'investments',
+        title: 'Investissements',
+        hint: 'Les investissements sont encodés directement ici, sans passer par les achats.',
+        addLabel: 'Ajouter un investissement',
+        onAdd: `addRow('investments', { date: '', supplier: '', invoiceNumber: '', description: '', amount: 0, durationMonths: 60 })`,
+        tableAttrs: `style="table-layout:fixed; width:100%;"`,
+        colgroup: `
+    <colgroup>
+      <col style="width: 110px;">
+      <col style="width: 110px;">
+      <col style="width: 100px;">
+      <col style="width: 180px;">
+      <col style="width: 90px;">
+      <col style="width: 75px;">
+      <col style="width: 75px;">
+      <col style="width: 75px;">
+      <col style="width: 75px;">
+      <col style="width: 75px;">
+    </colgroup>
+  `,
+        headers: ['Date achat', 'Fournisseur', 'N° facture', 'Description', 'Montant HTVA', 'Durée (mois)', 'Amorti année', 'Amorti total', 'Valeur restante', ''],
+
+        rows: t.investmentComputed.map((row, i) => `
+      <tr>
+  <tr>
+  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.investments[${i}].date=this.value; saveData(false)"></td>
+
+  <td><input value="${escapeAttr(data.investments[i].supplier || '')}" onchange="data.investments[${i}].supplier=this.value; saveData(false)"></td>
+
+  <td><input value="${escapeAttr(data.investments[i].invoiceNumber || '')}" onchange="data.investments[${i}].invoiceNumber=this.value; saveData(false)"></td>
+
+  <td><input value="${escapeAttr(data.investments[i].description || '')}" onchange="data.investments[${i}].description=this.value; saveData(false)"></td>
+
+  <td><input type="number" step="0.01" value="${num(row.amount)}" onchange="data.investments[${i}].amount=parseFloat(this.value)||0; saveData(false)"></td>
+
+  <td><input type="number" min="1" step="1" value="${parseInt(row.durationMonths || 60, 10)}" onchange="data.investments[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"></td>
+
+  <td>${money(row.amortYear)}</td>
+  <td>${money(row.amortTotal)}</td>
+  <td>${money(row.netValue)}</td>
+
+  <td><button class="danger" onclick="deleteRow('investments', ${i})">Suppr.</button></td>
+</tr>
+</tr>
+    `).join('') || `<tr><td colspan="8">Aucun investissement encodé.</td></tr>`,
+        footer: `
+      <div class="kv"><span>Total investissements HTVA</span><span>${money(t.investmentComputed.reduce((sum, row) => sum + row.amount, 0))}</span></div>
+      <div class="kv"><span>Total amortissements investissements de l'année</span><span>${money(t.investmentComputed.reduce((sum, row) => sum + row.amortYear, 0))}</span></div>
+      <div class="kv"><span>Total amorti cumulé investissements</span><span>${money(t.investmentComputed.reduce((sum, row) => sum + row.amortTotal, 0))}</span></div>
+    `
+      });
+    }
+
+    function renderAssets() {
+      const t = totals();
+      return renderTablePage({
+        key: 'assets',
+        title: 'Immobilisations',
+        hint: 'Encodage direct des investissements et immobilisations.',
+        addLabel: 'Ajouter une immobilisation',
+        onAdd: `addRow('assets', { date: '', supplier: '', invoiceNumber: '', description: '', label: '', amount: 0, durationMonths: 60 })`,
+        headers: ['Date', 'Libellé', 'Fournisseur', 'Montant HTVA', 'Durée (mois)', 'Amorti année', 'Amorti total', 'Valeur nette', ''],
+        rows: t.assetsComputed.map((row, i) => `
+      <tr>
+        <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.assets[${i}].date=this.value; saveData(false)"></td>
+        <td><input value="${escapeAttr(row.label)}" onchange="data.assets[${i}].label=this.value; saveData(false)"></td>
+        <td><input value="${escapeAttr(data.assets[i].supplier || '')}" onchange="data.assets[${i}].supplier=this.value; saveData(false)"></td>
+        <td><input type="number" step="0.01" value="${num(row.amount)}" onchange="data.assets[${i}].amount=parseFloat(this.value)||0; saveData(false)"></td>
+        <td><input type="number" min="1" step="1" value="${parseInt(row.durationMonths || 60, 10)}" onchange="data.assets[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"></td>
+        <td>${money(row.amortYear)}</td>
+        <td>${money(row.amortTotal)}</td>
+        <td>${money(row.netValue)}</td>
+        <td><button class="danger" onclick="deleteRow('assets', ${i})">Suppr.</button></td>
+      </tr>
+    `).join('') || `<tr><td colspan="9">Aucune immobilisation encodée.</td></tr>`,
+        footer: `
+      <div class="kv"><span>Total immobilisations</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.amount, 0))}</span></div>
+<div class="kv"><span>Amortissement annuel</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.amortYear, 0))}</span></div>
+<div class="kv"><span>Amortissement cumulé</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.amortTotal, 0))}</span></div>
+<div class="kv"><span>Valeur nette</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.netValue, 0))}</span></div>
+    `
+      });
+    }
+
+    function renderStock() {
+      const t = totals();
+      return renderTablePage({
+        key: 'stock',
+        title: 'Stock matériaux',
+        hint: 'Le stock est valorisé en quantité x prix unitaire.',
+        addLabel: 'Ajouter une ligne de stock',
+        onAdd: `addRow('stock', { label: '', quantity: 0, unitPrice: 0 })`,
+        headers: ['Libellé', 'Quantité', 'Prix unitaire', 'Valeur', ''],
+        rows: data.stock.map((row, i) => `
+          <tr>
+            <td><input value="${escapeAttr(row.label)}" onchange="data.stock[${i}].label=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.stock[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.unitPrice, 4)}" onchange="data.stock[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
+            <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
+            <td><button class="danger" onclick="deleteRow('stock', ${i})">Suppr.</button></td>
+          </tr>
+        `).join(''),
+        footer: `<div class="kv"><span>Valeur totale du stock</span><span>${money(t.stockValue)}</span></div>`
+      });
+    }
+
+    function renderLosses() {
+      const t = totals();
+      return renderTablePage({
+        key: 'losses',
+        title: 'Pertes et charges diverses',
+        hint: 'Pour les charges non reprises dans les achats classiques : cotisations sociales, pertes ou autres frais spécifiques.',
+        addLabel: 'Ajouter une charge',
+        onAdd: `addRow('losses', { date: '', label: '', quantity: 1, unitPrice: 0 })`,
+        headers: ['Date', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
+        rows: data.losses.map((row, i) => `
+          <tr>
+            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.losses[${i}].date=this.value; saveData(false)"></td>
+            <td><input value="${escapeAttr(row.label)}" onchange="data.losses[${i}].label=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.losses[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.losses[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
+            <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
+            <td><button class="danger" onclick="deleteRow('losses', ${i})">Suppr.</button></td>
+          </tr>
+        `).join(''),
+        footer: `<div class="kv"><span>Total pertes / charges diverses</span><span>${money(t.lossesTotal)}</span></div>`
+      });
+    }
+
+    function renderKm() {
+      const t = totals();
+      return renderTablePage({
+        key: 'km',
+        title: 'Kilomètres',
+        hint: 'Version simple pour encoder les déplacements sans les erreurs de formules du fichier Excel.',
+        addLabel: 'Ajouter un déplacement',
+        onAdd: `addRow('km', { date: '', person: '', route: '', km: 0, trips: 1 })`,
+        headers: ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux', ''],
+        rows: data.km.map((row, i) => `
+          <tr>
+            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.km[${i}].date=this.value; saveData(false)"></td>
+            <td><input value="${escapeAttr(row.person)}" onchange="data.km[${i}].person=this.value; saveData(false)"></td>
+            <td><input value="${escapeAttr(row.route)}" onchange="data.km[${i}].route=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.km)}" onchange="data.km[${i}].km=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.trips)}" onchange="data.km[${i}].trips=parseFloat(this.value)||0; saveData(false)"></td>
+            <td>${num(toNumber(row.km) * toNumber(row.trips), 2)} km</td>
+            <td><button class="danger" onclick="deleteRow('km', ${i})">Suppr.</button></td>
+          </tr>
+        `).join(''),
+        footer: `<div class="kv"><span>Total kilomètres</span><span>${num(t.kmTotal, 2)} km</span></div>`
+      });
+    }
+
+    function renderResult() {
+      const t = totals();
+      const taxAndSocial = t.lossesTotal;
+      const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
+      const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
+      const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
+      const isExemptSocial = t.estimatedProfit <= exemptionThreshold;
+      const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
+      const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
+      const socialTotalContribution = socialBaseContribution + socialFeeContribution;
+      const taxableBase = isExemptSocial
+        ? t.estimatedProfit + taxAndSocial
+        : t.estimatedProfit - socialTotalContribution;
+      const socialStatusLabel = isExemptSocial
+        ? `Exonéré de cotisations sociales (≤ ${money(exemptionThreshold)})`
+        : `Non exonéré de cotisations sociales (> ${money(exemptionThreshold)})`;
+      const socialDetailLabel = isExemptSocial
+        ? 'Cotisations sociales récupérées'
+        : `Cotisations sociales (${num(contributionRate, 1)}%) + frais caisse (${num(contributionFeeRate, 1)}%)`;
+
+      return `
+        <section class="page ${activePage === 'result' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Compte de résultat</h2>
+                <div class="hint">Présentation inspirée de ton tableau Excel, avec une mise en page plus propre et des calculs automatiques.</div>
+              </div>
+            </div>
+
+            <div style="overflow:auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:40%; text-align:center;">Recette des ventes</th>
+                    <th style="width:42%; text-align:center;">Dépenses &amp; Frais</th>
+                    <th style="width:18%; text-align:center;">Valeurs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                   <td style="background:#dcfce7; font-weight:700; font-size:22px;">${money(t.salesNet)}</td>
+                   <td>60 – Marchandises</td>
+                   <td style="text-align:right;">${money(t.purchasesMerchandiseNet)}</td>
+                  </tr>
+
+                  <tr>
+                    <td rowspan="6" style="background:#f8fafc;"></td>
+                    <td>61 – Frais de fonctionnement / Frais généraux</td>
+                    <td style="text-align:right;">${money(t.purchasesGeneralNet)}</td>
+                  </tr>
+                  <tr>
+                    <td>62 – Rémunérations</td>
+                    <td style="text-align:right;">${money(0)}</td>
+                  </tr>
+                  <tr>
+                    <td>63 – Amortissements</td>
+                    <td style="text-align:right;">${money(t.yearlyAmort)}</td>
+                  </tr>
+                  <tr>
+                    <td>64 – Taxes **</td>
+                    <td style="text-align:right;">${money(0)}</td>
+                  </tr>
+                  <tr>
+                    <td>65 – Frais financier</td>
+                    <td style="text-align:right;">${money(0)}</td>
+                  </tr>
+                  <tr>
+                    <td>66 – Charges exceptionnel</td>
+                    <td style="text-align:right;">${money(0)}</td>
+                  </tr>
+                  <tr style="background:#f1f5f9; font-weight:700;">
+                    <td style="text-align:right;">Total :</td>
+                    <td style="text-align:right;">${money(
+        t.purchasesMerchandiseNet + t.purchasesGeneralNet + t.yearlyAmort
+      )}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="max-width:560px; margin:18px 0 0 auto; display:grid; gap:10px;">
+              <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
+                <div style="padding:10px 12px; background:#e2e8f0; font-weight:700; text-align:right;">TOTAUX :</div>
+                <div style="padding:10px 12px; background:#fef08a; font-weight:700; text-align:right;">${money(t.estimatedProfit)}</div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
+                <div style="padding:10px 12px; text-align:center;">
+                  ${socialStatusLabel}<br>
+                  <span style="color:var(--muted); font-size:13px;">${socialDetailLabel}</span>
+                </div>
+                <div style="padding:10px 12px; text-align:right;">
+                  ${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
+                <div style="padding:10px 12px; background:#e2e8f0; font-weight:700; text-align:right;">Solde imposable :</div>
+                <div style="padding:10px 12px; background:#fef08a; font-weight:700; text-align:right;">${money(taxableBase)}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderBalance() {
+      const t = totals();
+      return `
+        <section class="page two-cols ${activePage === 'balance' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head"><h2>Bilan simplifié</h2></div>
+            <div class="kv"><span>Immobilisations nettes</span><span>${money(t.netFixedAssets)}</span></div>
+            <div class="kv"><span>Stock</span><span>${money(t.stockValue)}</span></div>
+            <div class="kv"><span>TVA à recevoir</span><span>${money(t.receivableVat)}</span></div>
+            <div class="kv"><span>Banque + caisse</span><span>${money(t.liquidities)}</span></div>
+            <div class="kv"><span><strong>Total actif</strong></span><span><strong>${money(t.assetsSide)}</strong></span></div>
+          </div>
+          <div class="card">
+            <div class="section-head"><h3>Passif simplifié</h3></div>
+            <div class="kv"><span>Capital de départ</span><span>${money(data.settings.capitalStart)}</span></div>
+            <div class="kv"><span>Résultat reporté</span><span>${money(data.settings.retainedEarnings)}</span></div>
+            <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.estimatedProfit)}</span></div>
+            <div class="kv"><span>TVA à payer</span><span>${money(t.payableVat)}</span></div>
+            <div class="kv"><span><strong>Total passif</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
+            <div class="kv"><span>Écart</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderSettings() {
+      return `
+        <section class="page two-cols ${activePage === 'settings' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Paramètres</h2>
+                <div class="hint">Uniquement les réglages encore utiles au calcul.</div>
+              </div>
+            </div>
+            <table>
+              <tbody>
+                <tr><td>Nom de l'entreprise</td><td><input value="${escapeAttr(data.company.name)}" onchange="setField('company.name', this.value)"></td></tr>
+                <tr><td>Période</td><td><input value="${escapeAttr(data.company.period)}" onchange="setField('company.period', this.value)"></td></tr>
+                <tr><td>Report TVA</td><td><input type="number" step="0.01" value="${num(data.settings.vatCarryover)}" onchange="setField('settings.vatCarryover', parseFloat(this.value)||0)"></td></tr>
+                <tr><td>Seuil exonération cotisations sociales</td><td><input type="number" step="0.01" value="${num(data.settings.socialExemptionThreshold)}" onchange="setField('settings.socialExemptionThreshold', parseFloat(this.value)||1881.76)"></td></tr>
+                <tr><td>Taux cotisations sociales (%)</td><td><input type="number" step="0.01" value="${num(data.settings.socialContributionRate)}" onchange="setField('settings.socialContributionRate', parseFloat(this.value)||20.5)"></td></tr>
+                <tr><td>Frais caisse sociale (%)</td><td><input type="number" step="0.01" value="${num(data.settings.socialContributionFeeRate)}" onchange="setField('settings.socialContributionFeeRate', parseFloat(this.value)||3.5)"></td></tr>
+                <tr><td>Banque</td><td><input type="number" step="0.01" value="${num(data.settings.bankBalance)}" onchange="setField('settings.bankBalance', parseFloat(this.value)||0)"></td></tr>
+                <tr><td>Caisse</td><td><input type="number" step="0.01" value="${num(data.settings.cashBalance)}" onchange="setField('settings.cashBalance', parseFloat(this.value)||0)"></td></tr>
+                <tr><td>Capital de départ</td><td><input type="number" step="0.01" value="${num(data.settings.capitalStart)}" onchange="setField('settings.capitalStart', parseFloat(this.value)||0)"></td></tr>
+                <tr><td>Résultat reporté</td><td><input type="number" step="0.01" value="${num(data.settings.retainedEarnings)}" onchange="setField('settings.retainedEarnings', parseFloat(this.value)||0)"></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="section-head"><h3>Notes internes</h3></div>
+            <textarea onchange="setField('company.notes', this.value)">${escapeHtml(data.company.notes || '')}</textarea>
+            <div class="footer-note">Tu peux t'en servir pour noter des rappels comptables ou des points à vérifier.</div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderTablePage({ key, title, hint, addLabel, onAdd, headers, rows, footer, tableAttrs = '', colgroup = '' }) {
+      const hasHint = Boolean(hint && hint.trim());
+      const hasButton = Boolean(addLabel && addLabel.trim() && onAdd && onAdd.trim());
+
+      return `
+    <section class="page ${activePage === key ? 'active' : ''}">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h2>${title}</h2>
+            ${hasHint ? `<div class="hint">${hint}</div>` : ``}
+          </div>
+          ${hasButton ? `
+            <div class="inline-actions">
+              <button class="primary" onclick="${onAdd}">${addLabel}</button>
+            </div>
+          ` : ``}
+        </div>
+        <div style="overflow:auto;">
+          <table ${tableAttrs}>
+            ${colgroup}
+            <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>${rows || `<tr><td colspan="${headers.length}">Aucune ligne.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div style="margin-top: 14px;">${footer || ''}</div>
+      </div>
+    </section>
+  `;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/`/g, '&#096;');
+    }
+
+
+    function printableDate(value) {
+      if (!value) return '—';
+      const d = new Date(value + 'T00:00:00');
+      if (Number.isNaN(d.getTime())) return escapeHtml(value);
+      return new Intl.DateTimeFormat('fr-BE').format(d);
+    }
+
+    function reportTable(headers, rows, options = {}) {
+      const cls = options.compact ? 'report-table compact' : 'report-table';
+      return `
+        <div class="table-wrap">
+          <table class="${cls}">
+            <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+            <tbody>${rows.length ? rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" class="empty-row">Aucune donnée</td></tr>`}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function reportKv(items) {
+      return `<div class="report-kv">${items.map(([label, value]) => `
+        <div class="report-kv-row">
+          <span>${label}</span>
+          <strong>${value}</strong>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    function buildPrintReportHtml() {
+      const t = totals();
+      const year = parseInt(data.company.period, 10) || new Date().getFullYear();
+      const taxAndSocial = t.lossesTotal;
+      const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
+      const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
+      const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
+      const isExemptSocial = t.estimatedProfit <= exemptionThreshold;
+      const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
+      const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
+      const socialTotalContribution = socialBaseContribution + socialFeeContribution;
+      const taxableBase = isExemptSocial ? t.estimatedProfit + taxAndSocial : t.estimatedProfit - socialTotalContribution;
+
+      const salesRows = data.sales.map(row => [
+        printableDate(row.date),
+        escapeHtml(row.client || '—'),
+        escapeHtml(row.invoiceNumber || '—'),
+        escapeHtml(row.description || '—'),
+        `${num(row.rate)} %`,
+        money(rowNetFromTvac(row.tvac, row.rate)),
+        money(rowVatFromTvac(row.tvac, row.rate)),
+        money(row.tvac)
+      ]);
+
+      const purchaseRows = data.purchases.map((row, i) => [
+        printableDate(row.date),
+        escapeHtml(row.supplier || '—'),
+        escapeHtml(row.invoiceNumber || '—'),
+        escapeHtml(row.description || '—'),
+        escapeHtml(row.category === 'marchandise' ? 'Marchandise' : 'Frais généraux'),
+        `${num(row.rate)} %`,
+        money(row.htva),
+        row.deductible ? 'Oui' : 'Non',
+        money(row.deductible ? purchaseVatDisplay(i) : 0),
+        money(rowHtvaToTvac(row.htva, row.rate))
+      ]);
+
+      const investmentRows = t.investmentComputed.map(row => [
+        printableDate(row.date),
+        escapeHtml(row.supplier || '—'),
+        escapeHtml(row.invoiceNumber || '—'),
+        escapeHtml(row.description || row.label || '—'),
+        money(row.amount),
+        `${parseInt(row.durationMonths || 0, 10)} mois`,
+        money(row.amortYear),
+        money(row.amortTotal),
+        money(row.netValue)
+      ]);
+
+      const assetRows = t.assetsComputed.map(row => [
+        printableDate(row.date),
+        escapeHtml(row.label || '—'),
+        escapeHtml(row.supplier || '—'),
+        money(row.amount),
+        `${parseInt(row.durationMonths || 0, 10)} mois`,
+        money(row.amortYear),
+        money(row.amortTotal),
+        money(row.netValue)
+      ]);
+
+      const stockRows = data.stock.map(row => [
+        escapeHtml(row.label || '—'),
+        num(row.quantity),
+        money(row.unitPrice),
+        money(toNumber(row.quantity) * toNumber(row.unitPrice))
+      ]);
+
+      const lossRows = data.losses.map(row => [
+        printableDate(row.date),
+        escapeHtml(row.label || '—'),
+        num(row.quantity),
+        money(row.unitPrice),
+        money(toNumber(row.quantity) * toNumber(row.unitPrice))
+      ]);
+
+      const kmRows = data.km.map(row => [
+        printableDate(row.date),
+        escapeHtml(row.person || '—'),
+        escapeHtml(row.route || '—'),
+        `${num(row.km)} km`,
+        num(row.trips),
+        `${num(toNumber(row.km) * toNumber(row.trips))} km`
+      ]);
+
+      return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Export comptabilité ${escapeHtml(data.company.period || '')}</title>
+<style>
+  :root {
+    --ink: #172033;
+    --muted: #5c667a;
+    --line: #d7deea;
+    --soft: #f6f8fc;
+    --soft-2: #edf2fb;
+    --accent: #1d4ed8;
+    --good: #166534;
+    --bad: #b91c1c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #eef3f9; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+  body { padding: 24px; }
+  .report { max-width: 1180px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 20px; box-shadow: 0 18px 50px rgba(15,23,42,0.08); }
+  .report-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid var(--soft-2); margin-bottom: 20px; }
+  .report-header h1 { margin: 0 0 6px; font-size: 30px; }
+  .report-subtitle { color: var(--muted); line-height: 1.5; }
+  .report-meta { min-width: 270px; background: var(--soft); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin: 22px 0 26px; }
+  .metric { border: 1px solid var(--line); background: var(--soft); border-radius: 16px; padding: 16px; }
+  .metric span { display:block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .metric strong { font-size: 24px; }
+  .section { margin-top: 22px; page-break-inside: avoid; }
+  .section-title { font-size: 21px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--soft-2); }
+  .section-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
+  .panel { border:1px solid var(--line); border-radius:16px; background: #fff; overflow:hidden; }
+  .panel.soft { background: var(--soft); }
+  .panel-body { padding: 16px; }
+  .table-wrap { overflow: hidden; border:1px solid var(--line); border-radius: 16px; }
+  table.report-table { width:100%; border-collapse: collapse; font-size: 12.5px; }
+  .report-table th { background: var(--soft-2); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; font-size: 11px; padding: 10px 8px; text-align: center; border-bottom:1px solid var(--line); }
+  .report-table td { border-bottom:1px solid var(--line); padding: 8px; vertical-align: top; }
+  .report-table tbody tr:nth-child(even) td { background: #fbfcfe; }
+  .report-table td:nth-child(1), .report-table td:nth-last-child(1) { white-space: nowrap; }
+  .report-table.compact td, .report-table.compact th { padding: 7px 8px; }
+  .empty-row { text-align:center; color: var(--muted); padding: 14px; }
+  .report-kv { border:1px solid var(--line); border-radius: 16px; overflow:hidden; }
+  .report-kv-row { display:grid; grid-template-columns: 1fr auto; gap: 16px; padding: 11px 14px; border-bottom:1px solid var(--line); }
+  .report-kv-row:last-child { border-bottom:none; }
+  .totals-grid { display:grid; grid-template-columns: 1.2fr .8fr; gap: 16px; }
+  .result-card { border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .result-card .row { display:grid; grid-template-columns: 1fr 220px; }
+  .result-card .row > div { padding: 12px 14px; border-bottom:1px solid var(--line); }
+  .result-card .row > div:last-child { text-align:right; font-weight:700; border-left:1px solid var(--line); }
+  .result-card .row.total > div { background: #fff7bf; font-size: 18px; }
+  .muted { color: var(--muted); }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  .footer-note { margin-top: 20px; color: var(--muted); font-size: 12px; text-align: center; }
+  .print-toolbar { position: sticky; top: 0; z-index: 20; display:flex; justify-content:flex-end; gap:10px; margin-bottom: 18px; }
+  .print-toolbar button { border: none; background: var(--accent); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+  .print-toolbar button.secondary { background: #e5e7eb; color: #111827; }
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print {
+    html, body { background: #fff; }
+    body { padding: 0; }
+    .print-toolbar { display:none; }
+    .report { box-shadow:none; border-radius:0; max-width:none; padding: 0; }
+    .section { break-inside: avoid; page-break-inside: avoid; }
+    .table-wrap { overflow: visible; }
+    table.report-table { font-size: 10.5px; }
+    .report-table th, .report-table td { padding: 6px 5px; }
+    .report-table thead { display: table-header-group; }
+    .report-table tr { break-inside: avoid; }
+    .metrics { gap: 8px; }
+    .metric { padding: 10px; }
+    .metric strong { font-size: 18px; }
+  }
+  @media (max-width: 980px) {
+    .metrics, .section-grid, .totals-grid { grid-template-columns: 1fr; }
+    .report-header { flex-direction: column; }
+    .report-meta { min-width: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+  <div class="print-toolbar">
+    <button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
+    <button class="secondary" onclick="window.close()">Fermer</button>
+  </div>
+  <div class="report">
+    <div class="report-header">
+      <div>
+        <h1>Comptabilité – ${escapeHtml(data.company.name || 'Entreprise')}</h1>
+        <div class="report-subtitle">Export complet de tous les onglets, optimisé pour une impression propre en A4 paysage.</div>
+      </div>
+      <div class="report-meta">
+        <div><strong>Période :</strong> ${escapeHtml(data.company.period || '—')}</div>
+        <div><strong>Date d’export :</strong> ${new Intl.DateTimeFormat('fr-BE', { dateStyle: 'full', timeStyle: 'short' }).format(new Date())}</div>
+        <div><strong>Lignes achats :</strong> ${data.purchases.length}</div>
+        <div><strong>Lignes ventes :</strong> ${data.sales.length}</div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><span>Ventes HTVA</span><strong>${money(t.salesNet)}</strong></div>
+      <div class="metric"><span>Achats HTVA</span><strong>${money(t.purchasesNet)}</strong></div>
+      <div class="metric"><span>TVA nette</span><strong>${money(t.netVat)}</strong></div>
+      <div class="metric"><span>Résultat estimé</span><strong>${money(t.estimatedProfit)}</strong></div>
+    </div>
+
+    <section class="section">
+      <h2 class="section-title">Vue d'ensemble</h2>
+      <div class="section-grid">
+        <div class="panel soft"><div class="panel-body">${reportKv([
+        ['Société', escapeHtml(data.company.name || '—')],
+        ['Période', escapeHtml(data.company.period || '—')],
+        ['Investissements', String(t.investmentComputed.length)],
+        ['Immobilisations', String(data.assets.length)],
+        ['Km encodés', `${num(t.kmTotal, 0)} km`],
+        ['Stock estimé', money(t.stockValue)]
+      ])}</div></div>
+        <div class="panel soft"><div class="panel-body">${reportKv([
+        ['TVA ventes', money(t.salesVat)],
+        ['TVA achats récupérable', money(t.purchasesVat)],
+        ['Report TVA', money(data.settings.vatCarryover)],
+        ['Actif simplifié', money(t.assetsSide)],
+        ['Passif simplifié', money(t.liabilitiesSide)],
+        ['Écart bilan', money(t.assetsSide - t.liabilitiesSide)]
+      ])}</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Ventes</h2>
+      ${reportTable(['Date', 'Client', 'N° facture', 'Description', 'Taux TVA', 'HTVA', 'TVA', 'TVAC'], salesRows)}
+      <div style="margin-top:12px;">${reportKv([
+        ['Total ventes HTVA', money(t.salesNet)],
+        ['Total TVA ventes', money(t.salesVat)]
+      ])}</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Achats</h2>
+      ${reportTable(['Date', 'Fournisseur', 'N° facture', 'Description', 'Type', 'Taux TVA', 'HTVA', 'TVA déductible', 'TVA récup.', 'TVAC'], purchaseRows, { compact: true })}
+      <div style="margin-top:12px;">${reportKv([
+        ['Total achats en charges', money(t.purchasesNet)],
+        ['Dont frais généraux', money(t.purchasesGeneralNet)],
+        ['Dont marchandises', money(t.purchasesMerchandiseNet)],
+        ['Total TVA récupérable', money(t.purchasesVat)]
+      ])}</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Investissements</h2>
+      ${reportTable(['Date achat', 'Fournisseur', 'N° facture', 'Description', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur restante'], investmentRows, { compact: true })}
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Immobilisations</h2>
+      ${reportTable(['Date', 'Libellé', 'Fournisseur', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur nette'], assetRows, { compact: true })}
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Stock matériaux</h2>
+      ${reportTable(['Libellé', 'Quantité', 'Prix unitaire', 'Valeur'], stockRows)}
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Pertes et charges diverses</h2>
+      ${reportTable(['Date', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Kilomètres</h2>
+      ${reportTable(['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux'], kmRows)}
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Compte de résultat</h2>
+      <div class="totals-grid">
+        <div class="result-card">
+          <div class="row"><div>Recettes des ventes</div><div>${money(t.salesNet)}</div></div>
+          <div class="row"><div>60 – Marchandises</div><div>${money(t.purchasesMerchandiseNet)}</div></div>
+          <div class="row"><div>61 – Frais généraux</div><div>${money(t.purchasesGeneralNet)}</div></div>
+          <div class="row"><div>63 – Amortissements</div><div>${money(t.yearlyAmort)}</div></div>
+          <div class="row"><div>Autres charges diverses</div><div>${money(t.lossesTotal)}</div></div>
+          <div class="row total"><div>Résultat estimé</div><div>${money(t.estimatedProfit)}</div></div>
+        </div>
+        <div class="panel soft"><div class="panel-body">${reportKv([
+        ['Exercice', String(year)],
+        ['Seuil exonération sociale', money(exemptionThreshold)],
+        ['Cotisations sociales estimées', money(socialTotalContribution)],
+        ['Statut social', escapeHtml(isExemptSocial ? 'Exonéré' : 'Non exonéré')],
+        ['Solde imposable', money(taxableBase)]
+      ])}</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Bilan simplifié</h2>
+      <div class="section-grid">
+        <div class="panel"><div class="panel-body">${reportKv([
+        ['Immobilisations nettes', money(t.netFixedAssets)],
+        ['Stock', money(t.stockValue)],
+        ['TVA à recevoir', money(t.receivableVat)],
+        ['Banque + caisse', money(t.liquidities)],
+        ['Total actif', money(t.assetsSide)]
+      ])}</div></div>
+        <div class="panel"><div class="panel-body">${reportKv([
+        ['Capital de départ', money(data.settings.capitalStart)],
+        ['Résultat reporté', money(data.settings.retainedEarnings)],
+        ['Résultat de l’exercice', money(t.estimatedProfit)],
+        ['TVA à payer', money(t.payableVat)],
+        ['Total passif', money(t.liabilitiesSide)]
+      ])}</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Paramètres</h2>
+      <div class="section-grid">
+        <div class="panel"><div class="panel-body">${reportKv([
+        ['Nom de l’entreprise', escapeHtml(data.company.name || '—')],
+        ['Période', escapeHtml(data.company.period || '—')],
+        ['Report TVA', money(data.settings.vatCarryover)],
+        ['Banque', money(data.settings.bankBalance)],
+        ['Caisse', money(data.settings.cashBalance)],
+        ['Capital de départ', money(data.settings.capitalStart)],
+        ['Résultat reporté', money(data.settings.retainedEarnings)]
+      ])}</div></div>
+        <div class="panel"><div class="panel-body">${reportKv([
+        ['Seuil exonération cotisations sociales', money(data.settings.socialExemptionThreshold)],
+        ['Taux cotisations sociales', `${num(data.settings.socialContributionRate)} %`],
+        ['Frais caisse sociale', `${num(data.settings.socialContributionFeeRate)} %`],
+        ['Notes', escapeHtml((data.company.notes || '').trim() || '—')]
+      ])}</div></div>
+      </div>
+    </section>
+
+    <div class="footer-note">Export généré depuis l’application locale Bast Aménagement.</div>
+  </div>
+</body>
+</html>`;
+    }
+
+    function openPrintReport() {
+      saveData(false);
+      const reportWindow = window.open('', '_blank');
+      if (!reportWindow) {
+        alert('Le navigateur a bloqué l’ouverture de la fenêtre d’impression. Autorise les pop-ups puis réessaie.');
+        return;
+      }
+      reportWindow.document.open();
+      reportWindow.document.write(buildPrintReportHtml());
+      reportWindow.document.close();
+      reportWindow.focus();
+    }
+
+    function render() {
+      sortByDate(data.purchases);
+      sortByDate(data.sales);
+
+      const t = totals();
+      document.getElementById('metricSales').textContent = money(t.salesNet);
+      document.getElementById('metricPurchases').textContent = money(t.purchasesNet);
+      document.getElementById('metricVat').textContent = money(t.netVat);
+      document.getElementById('metricProfit').textContent = money(t.estimatedProfit);
+      renderTabs();
+      renderPages();
+    }
+
+    window.addEventListener('load', async () => {
+      render();
+      await initGoogleDrive();
+    });
+  </script>
+</body>
+
+</html>
