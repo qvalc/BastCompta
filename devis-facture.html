@@ -822,10 +822,13 @@
             <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
             <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
             <div class="dropdown-sep"></div>
-            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
+              Drive</button>
             <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
-            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
-            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers Google Drive</button>
+            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive
+              vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers
+              Google Drive</button>
           </div>
         </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
@@ -1368,9 +1371,16 @@ Cordialement,
     }
 
     function resetData() {
-      if (!confirm('Tout effacer et revenir à une base vide ?')) return;
+      if (!confirm('Tout effacer et revenir à une base locale vide ?')) return;
+
       data = structuredClone(defaultData);
-      saveData(false);
+
+      // 🔒 sauvegarde UNIQUEMENT en local
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+      alert('Données locales réinitialisées. Aucune modification sur Google Drive.');
+
+      render();
     }
 
     function pickLocalJsonForDrive() {
