@@ -61,6 +61,53 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown-toggle {
+      min-width: 150px;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 320px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+      padding: 6px;
+      z-index: 50;
+      display: none;
+    }
+
+    .dropdown.open .dropdown-menu {
+      display: block;
+    }
+
+    .dropdown-menu button {
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-weight: 700;
+    }
+
+    .dropdown-menu button:hover {
+      background: #f3f4f6;
+    }
+
+    .dropdown-sep {
+      height: 1px;
+      background: var(--line);
+      margin: 6px 0;
     }
 
     button,
@@ -730,15 +777,27 @@
       </div>
       <div class="actions">
         <button class="primary" onclick="saveData()">Sauvegarder</button>
-        <button onclick="exportData()">Exporter JSON</button>
+        <div class="dropdown">
+          <button type="button" class="dropdown-toggle" onclick="toggleFileMenu(event)">Fichier ▼</button>
+          <div class="dropdown-menu" id="fileMenu">
+            <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
+            <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
+            <div class="dropdown-sep"></div>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
+            <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
+            <button type="button" onclick="downloadSelectedJsonFromDrive(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers Google Drive</button>
+          </div>
+        </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
-        <button onclick="importData()">Importer JSON</button>
         <button class="danger" onclick="resetData()">Réinitialiser</button>
       </div>
     </div>
 
     <div class="tabs" id="tabs"></div>
     <div id="pages"></div>
+    <input id="localJsonImportInput" type="file" accept="application/json" style="display:none"
+      onchange="handleLocalJsonImport(event)">
     <input id="localJsonToDriveInput" type="file" accept="application/json" style="display:none"
       onchange="uploadLocalJsonToDrive(event)">
   </div>
@@ -855,12 +914,62 @@
       render();
     }
 
-    function exportData() {
-      exportJsonToDrive();
+    function toggleFileMenu(event) {
+      event.stopPropagation();
+      const dropdown = event.currentTarget.closest('.dropdown');
+      if (!dropdown) return;
+      document.querySelectorAll('.dropdown.open').forEach(el => {
+        if (el !== dropdown) el.classList.remove('open');
+      });
+      dropdown.classList.toggle('open');
     }
 
-    function importData() {
-      importJsonFromDrive();
+    function closeFileMenu() {
+      document.querySelectorAll('.dropdown.open').forEach(el => el.classList.remove('open'));
+    }
+
+    function exportDataLocal() {
+      syncCommunicationFromInvoice(false);
+      const fileName = getDriveFileName();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function importDataLocal() {
+      const input = document.getElementById('localJsonImportInput');
+      if (!input) return;
+      input.value = '';
+      input.click();
+    }
+
+    async function handleLocalJsonImport(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        const content = await file.text();
+        const parsed = JSON.parse(content);
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        syncCommunicationFromInvoice(false);
+        saveData(false);
+        alert(`Import réussi : ${file.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Le fichier sélectionné n'est pas un JSON valide.");
+      }
+    }
+
+    async function importDataFromDriveMenu() {
+      activePage = 'gdrive';
+      render();
+      await importJsonFromDrive();
     }
 
     function renderGoogleDrive() {
@@ -874,19 +983,19 @@
     <section class="page ${activePage === 'gdrive' ? 'active' : ''}" data-page="gdrive">
       <div class="sheet">
         <div class="toolbar no-print">
-          <div class="hint">Sauvegarde et restauration avec Google Drive</div>
+          <div class="hint">Google Drive sert de gestionnaire de sauvegardes.</div>
           <div class="inline-actions">
-  <button onclick="loadDriveFiles()">Actualiser la liste</button>
-  <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
-  <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
-</div>
+            <button onclick="loadDriveFiles()">Actualiser la liste</button>
+            <button class="primary" onclick="exportJsonToDrive()">Exporter le document actuel vers Drive</button>
+          </div>
         </div>
 
         <div class="comm-panel">
           <h2>Google Drive</h2>
 
-          <div class="simple-box" style="margin-bottom:16px;">
-  La connexion Google Drive se fait depuis le portail principal BastCompta.
+          <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
+  La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
+  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.
 </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -908,7 +1017,9 @@
   </select>
 
   <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-    <button onclick="importSelectedJsonFromDrive()">Charger</button>
+    <button onclick="importSelectedJsonFromDrive()">Charger dans l’application</button>
+    <button onclick="downloadSelectedJsonFromDrive()">Télécharger vers ce PC</button>
+    <button onclick="pickLocalJsonForDrive()">Importer un fichier du PC vers Drive</button>
     <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
   </div>
 </div>
@@ -1004,6 +1115,49 @@
         alert("Échec de l'import depuis Google Drive.");
       }
     }
+
+    async function downloadSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return;
+      }
+
+      if (!selectedDriveFileId) {
+        activePage = 'gdrive';
+        render();
+        alert('Sélectionne d’abord une sauvegarde Google Drive.');
+        return;
+      }
+
+      try {
+        const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const content = await res.text();
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file?.name || 'sauvegarde-drive.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error(error);
+        alert("Échec du téléchargement depuis Google Drive.");
+      }
+    }
+
 
     async function deleteSelectedJsonFromDrive() {
       if (!googleAccessToken) {
@@ -1762,7 +1916,6 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
           <div class="comm-panel">
             <h2>Communication structurée</h2>
             <div class="footer-note" style="margin-top:0; margin-bottom:16px;">
-              Génération simple, dans le même esprit que tes factures.
             </div>
 
             <div class="comm-grid">
@@ -1916,6 +2069,12 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
         document.querySelectorAll('textarea').forEach(autoResize);
       }, 0);
     }
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.dropdown')) {
+        closeFileMenu();
+      }
+    });
 
     window.addEventListener('load', async () => {
       render();
