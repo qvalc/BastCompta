@@ -1684,10 +1684,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         });
 
         const files = existing.result.files || [];
-        const metadata = {
-          name: fileName,
-          parents: ['appDataFolder']
-        };
+        const isUpdate = files.length > 0;
+        const metadata = isUpdate
+          ? { name: fileName }
+          : { name: fileName, parents: ['appDataFolder'] };
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -1696,7 +1696,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
         let method = 'POST';
 
-        if (files.length) {
+        if (isUpdate) {
           url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
           method = 'PATCH';
         }
@@ -1710,7 +1710,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         });
 
         if (!res.ok) {
-          throw new Error(await res.text());
+          const errorText = await res.text();
+          throw new Error(errorText);
         }
 
         return true;
