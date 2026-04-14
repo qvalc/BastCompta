@@ -822,13 +822,10 @@
             <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
             <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
             <div class="dropdown-sep"></div>
-            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
-              Drive</button>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
             <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
-            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive
-              vers ce PC</button>
-            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers
-              Google Drive</button>
+            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers Google Drive</button>
           </div>
         </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
@@ -979,25 +976,12 @@ Cordialement,
       syncCommunicationFromInvoice(false);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-      let crmSynced = false;
-      let currentDocExported = false;
-
-      if (googleAccessToken) {
-        crmSynced = await saveSyncToDrive(showAlert);
-
-        if (activePage === 'quote' || activePage === 'invoice') {
-          const exported = await exportJsonToDrive(false);
-          currentDocExported = !!exported;
-        }
-      }
-
       if (showAlert) {
-        if (!googleAccessToken) {
-          alert('Données sauvegardées localement.');
-        } else if ((activePage === 'quote' || activePage === 'invoice') && currentDocExported) {
-          alert('Données sauvegardées localement, CRM synchronisé et document courant exporté sur Google Drive.');
-        } else if (crmSynced) {
-          alert('Données sauvegardées localement et CRM synchronisé sur Google Drive.');
+        if (googleAccessToken) {
+          const synced = await saveSyncToDrive(true);
+          alert(synced
+            ? 'Données sauvegardées localement et sur Google Drive.'
+            : 'Données sauvegardées localement.');
         } else {
           alert('Données sauvegardées localement.');
         }
@@ -1371,16 +1355,9 @@ Cordialement,
     }
 
     function resetData() {
-      if (!confirm('Tout effacer et revenir à une base locale vide ?')) return;
-
+      if (!confirm('Tout effacer et revenir à une base vide ?')) return;
       data = structuredClone(defaultData);
-
-      // 🔒 sauvegarde UNIQUEMENT en local
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-      alert('Données locales réinitialisées. Aucune modification sur Google Drive.');
-
-      render();
+      saveData(false);
     }
 
     function pickLocalJsonForDrive() {
@@ -1689,6 +1666,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       try {
         const fileName = getSyncDriveFileName();
         const syncPayload = {
+          company: mergeDeep(structuredClone(defaultData.company), data.company || {}),
           clients: Array.isArray(data.clients) ? data.clients : [],
           mail: {
             recentEmails: Array.isArray(data.mail?.recentEmails) ? data.mail.recentEmails : [],
@@ -1774,6 +1752,9 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         }
 
         const parsed = await res.json();
+        if (parsed.company && typeof parsed.company === 'object') {
+          data.company = mergeDeep(structuredClone(defaultData.company), parsed.company);
+        }
         if (Array.isArray(parsed.clients)) {
           data.clients = parsed.clients.map(normalizeClient).filter(client => client.name);
         }
@@ -2183,12 +2164,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
     }
 
-    async function exportJsonToDrive(showAlert = true) {
+    async function exportJsonToDrive() {
       if (!googleAccessToken) {
-        if (showAlert) {
-          alert("Connecte Google Drive depuis le portail BastCompta.");
-        }
-        return null;
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return;
       }
 
       try {
@@ -2204,10 +2183,11 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         });
 
         const files = existing.result.files || [];
-        const isUpdate = files.length > 0;
-        const metadata = isUpdate
-          ? { name: fileName }
-          : { name: fileName, parents: ['appDataFolder'] };
+
+        const metadata = {
+          name: fileName,
+          parents: ['appDataFolder']
+        };
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -2216,7 +2196,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
         let method = 'POST';
 
-        if (isUpdate) {
+        if (files.length) {
           url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
           method = 'PATCH';
         }
@@ -2236,18 +2216,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         const saved = await res.json();
         await loadDriveFiles();
         selectedDriveFileId = saved.id;
-
-        if (showAlert) {
-          alert(`Export Google Drive réussi : ${saved.name}`);
-        }
-
-        return saved;
+        alert(`Export Google Drive réussi : ${saved.name}`);
       } catch (error) {
         console.error(error);
-        if (showAlert) {
-          alert("Échec de l'export vers Google Drive.");
-        }
-        return null;
+        alert("Échec de l'export vers Google Drive.");
       }
     }
 
