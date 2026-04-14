@@ -845,6 +845,7 @@
 
   <script>
     const STORAGE_KEY = 'devis-facture-style-vrai-document';
+    const DRIVE_SYNC_FILE_NAME = 'bastcompta-devis-facture-sync.json';
 
     let googleAccessToken = null;
     let googleDriveFiles = [];
@@ -880,6 +881,7 @@
         documentNumber: '',
         clientNumber: '',
         clientVat: '',
+        clientId: '',
         clientName: '',
         clientEmail: '',
         address: '',
@@ -895,6 +897,7 @@
         documentNumber: '',
         clientNumber: '',
         clientVat: '',
+        clientId: '',
         clientName: '',
         clientEmail: '',
         address: '',
@@ -914,6 +917,7 @@
         controlNumber: '',
         formatted: ''
       },
+      clients: [],
       mail: {
         recentEmails: [],
         quoteSubject: 'Votre devis {documentNumber}',
@@ -938,6 +942,7 @@ Cordialement,
       { key: 'invoice', label: 'Facture' },
       { key: 'communication', label: 'Communication structurée' },
       { key: 'peppol', label: 'Peppol / Doccle' },
+      { key: 'crm', label: 'Carnet d\'adresses' },
       { key: 'gdrive', label: 'Google Drive' },
       { key: 'settings', label: 'Paramètres' }
     ];
@@ -966,10 +971,21 @@ Cordialement,
       return target;
     }
 
-    function saveData(showAlert = true) {
+    async function saveData(showAlert = true) {
       syncCommunicationFromInvoice(false);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      if (showAlert) alert('Données sauvegardées localement.');
+
+      if (showAlert) {
+        if (googleAccessToken) {
+          const synced = await saveSyncToDrive(true);
+          alert(synced
+            ? 'Données sauvegardées localement et sur Google Drive.'
+            : 'Données sauvegardées localement.');
+        } else {
+          alert('Données sauvegardées localement.');
+        }
+      }
+
       render();
     }
 
@@ -1107,7 +1123,7 @@ Cordialement,
 
           <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
   La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
-  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.
+  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.<br>La sauvegarde automatique CRM + devis + facture utilise toujours le même fichier : <strong>${escapeHtml(getSyncDriveFileName())}</strong>.
 </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -1541,9 +1557,11 @@ Cordialement,
     function copyQuoteToInvoice() {
       if (!confirm('Reprendre les données du devis dans la facture ? Cela remplacera les données actuelles de la facture.')) return;
 
+      data.invoice.clientId = data.quote.clientId || '';
       data.invoice.clientNumber = data.quote.clientNumber;
       data.invoice.clientVat = data.quote.clientVat;
       data.invoice.clientName = data.quote.clientName;
+      data.invoice.clientEmail = data.quote.clientEmail || '';
       data.invoice.address = data.quote.address;
       data.invoice.siteName = data.quote.siteName;
       data.invoice.notes = data.quote.notes;
@@ -1632,6 +1650,342 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return result;
     }
 
+
+
+    function getSyncDriveFileName() {
+      return DRIVE_SYNC_FILE_NAME;
+    }
+
+    async function saveSyncToDrive(showErrorAlert = false) {
+      if (!googleAccessToken) return false;
+
+      try {
+        syncCommunicationFromInvoice(false);
+        const fileName = getSyncDriveFileName();
+        const content = JSON.stringify(data, null, 2);
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+        const metadata = {
+          name: fileName,
+          parents: ['appDataFolder']
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (files.length) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        return true;
+      } catch (error) {
+        console.error(error);
+        if (showErrorAlert) {
+          alert('La sauvegarde Google Drive automatique a échoué.');
+        }
+        return false;
+      }
+    }
+
+    async function loadSyncDataFromDriveIfAvailable() {
+      if (!googleAccessToken) return false;
+
+      try {
+        const fileName = getSyncDriveFileName();
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        const file = (list.result.files || [])[0];
+        if (!file) return false;
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        syncCommunicationFromInvoice(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        return true;
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
+    }
+
+    function createEmptyClient() {
+      return {
+        id: `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: '',
+        email: '',
+        address: '',
+        clientNumber: '',
+        vat: '',
+        phone: '',
+        contact: '',
+        notes: '',
+        favorite: false,
+        createdAt: new Date().toISOString()
+      };
+    }
+
+    function normalizeClient(client = {}) {
+      const base = createEmptyClient();
+      return {
+        ...base,
+        ...client,
+        name: String(client.name || '').trim(),
+        email: sanitizeEmail(client.email || ''),
+        address: String(client.address || '').trim(),
+        clientNumber: String(client.clientNumber || '').trim(),
+        vat: String(client.vat || '').trim(),
+        phone: String(client.phone || '').trim(),
+        contact: String(client.contact || '').trim(),
+        notes: String(client.notes || '').trim(),
+        favorite: !!client.favorite,
+        createdAt: client.createdAt || base.createdAt,
+        id: client.id || base.id
+      };
+    }
+
+    function getClients() {
+      const clients = Array.isArray(data.clients) ? data.clients : [];
+      return clients
+        .map(normalizeClient)
+        .sort((a, b) => {
+          if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+          return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+        });
+    }
+
+    function clientLabel(client) {
+      const parts = [client.name || 'Client sans nom'];
+      if (client.email) parts.push(client.email);
+      if (client.clientNumber) parts.push(`N° ${client.clientNumber}`);
+      return parts.join(' — ');
+    }
+
+    function saveClientRecord(client, shouldAlert = true) {
+      const normalized = normalizeClient(client);
+      if (!normalized.name) {
+        alert('Renseigne au minimum le nom du client.');
+        return;
+      }
+
+      const list = Array.isArray(data.clients) ? [...data.clients] : [];
+      const index = list.findIndex(item => item.id === normalized.id);
+
+      if (index >= 0) {
+        list[index] = normalized;
+      } else {
+        list.push(normalized);
+      }
+
+      data.clients = list;
+      if (normalized.email) rememberClientEmail(normalized.email);
+      saveData(false);
+      if (shouldAlert) alert('Client enregistré dans le carnet d\'adresses.');
+    }
+
+    function saveCurrentClientFromDoc(docKey) {
+      const doc = data[docKey] || {};
+      saveClientRecord({
+        id: doc.clientId || '',
+        name: doc.clientName || '',
+        email: doc.clientEmail || '',
+        address: doc.address || '',
+        clientNumber: doc.clientNumber || '',
+        vat: doc.clientVat || '',
+        phone: '',
+        contact: '',
+        notes: ''
+      });
+    }
+
+    function applyClientToDocument(docKey, clientId) {
+      const client = getClients().find(item => item.id === clientId);
+      if (!client) return;
+
+      data[docKey].clientId = client.id;
+      data[docKey].clientName = client.name || '';
+      data[docKey].clientEmail = client.email || '';
+      data[docKey].address = client.address || '';
+      data[docKey].clientNumber = client.clientNumber || '';
+      data[docKey].clientVat = client.vat || '';
+      if (client.email) rememberClientEmail(client.email);
+      saveData(false);
+    }
+
+    function deleteClient(clientId) {
+      const client = getClients().find(item => item.id === clientId);
+      if (!client) return;
+      if (!confirm(`Supprimer le client ${client.name || 'sans nom'} ?`)) return;
+      data.clients = (data.clients || []).filter(item => item.id !== clientId);
+      ['quote', 'invoice'].forEach(docKey => {
+        if (data[docKey].clientId === clientId) {
+          data[docKey].clientId = '';
+        }
+      });
+      saveData(false);
+    }
+
+    function duplicateClient(clientId) {
+      const client = getClients().find(item => item.id === clientId);
+      if (!client) return;
+      saveClientRecord({
+        ...client,
+        id: '',
+        name: `${client.name} (copie)`,
+        favorite: false,
+        createdAt: new Date().toISOString()
+      }, false);
+      alert('Client dupliqué.');
+    }
+
+    function createNewClient() {
+      saveClientRecord(createEmptyClient(), false);
+      render();
+    }
+
+    function getClientStats(clientId) {
+      const quoteCount = data.quote?.clientId === clientId ? 1 : 0;
+      const invoiceCount = data.invoice?.clientId === clientId ? 1 : 0;
+      const invoiceTotal = data.invoice?.clientId === clientId ? totalsFor('invoice').tvac : 0;
+      return { quoteCount, invoiceCount, invoiceTotal };
+    }
+
+    function renderClientOptions(selectedId = '') {
+      const options = getClients().map(client => `
+        <option value="${escapeAttr(client.id)}" ${selectedId === client.id ? 'selected' : ''}>${escapeHtml(clientLabel(client))}</option>
+      `).join('');
+      return `<option value="">-- Choisir un client enregistré --</option>${options}`;
+    }
+
+    function renderCRM() {
+      const clients = getClients();
+      const cards = clients.map((client, index) => {
+        const stats = getClientStats(client.id);
+        return `
+          <div class="simple-box" style="margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+              <strong>${escapeHtml(client.name || `Client ${index + 1}`)}</strong>
+              <div class="inline-actions no-print">
+                <button type="button" onclick="duplicateClient('${escapeAttr(client.id)}')">Dupliquer</button>
+                <button type="button" class="danger" onclick="deleteClient('${escapeAttr(client.id)}')">Supprimer</button>
+              </div>
+            </div>
+            <div class="settings-grid">
+              <div class="stack">
+                <div class="field">
+                  <label>Nom / société</label>
+                  <input value="${escapeAttr(client.name)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), name: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>Email</label>
+                  <input type="email" value="${escapeAttr(client.email)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), email: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>Adresse</label>
+                  <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), address: this.value }, false)">${escapeHtml(client.address)}</textarea>
+                </div>
+                <div class="field">
+                  <label>Notes</label>
+                  <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), notes: this.value }, false)">${escapeHtml(client.notes)}</textarea>
+                </div>
+              </div>
+              <div class="stack">
+                <div class="field">
+                  <label>N° client</label>
+                  <input value="${escapeAttr(client.clientNumber)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), clientNumber: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>N° TVA</label>
+                  <input value="${escapeAttr(client.vat)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), vat: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>Téléphone</label>
+                  <input value="${escapeAttr(client.phone)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), phone: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>Personne de contact</label>
+                  <input value="${escapeAttr(client.contact)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), contact: this.value }, false)">
+                </div>
+                <div class="field">
+                  <label>Favori</label>
+                  <select onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), favorite: this.value === 'true' }, false)">
+                    <option value="false" ${!client.favorite ? 'selected' : ''}>Non</option>
+                    <option value="true" ${client.favorite ? 'selected' : ''}>Oui</option>
+                  </select>
+                </div>
+                <div class="simple-box" style="line-height:1.7;">
+                  <strong>Historique local</strong><br>
+                  Devis liés : ${stats.quoteCount}<br>
+                  Factures liées : ${stats.invoiceCount}<br>
+                  Total facture lié : ${escapeHtml(money(stats.invoiceTotal))}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <section class="page ${activePage === 'crm' ? 'active' : ''}" data-page="crm">
+          <div class="sheet">
+            <div class="toolbar no-print">
+              <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
+              <div class="inline-actions">
+                <button class="primary" onclick="createNewClient()">Nouveau client</button>
+                <button onclick="saveData()">Sauvegarder</button>
+              </div>
+            </div>
+
+            <div class="comm-panel">
+              <h2>Carnet d'adresses / CRM</h2>
+              <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
+                Le bouton <strong>Sauvegarder</strong> met à jour la sauvegarde automatique sur Google Drive sans créer de doublon quand la connexion Drive est active.
+                À la reconnexion, cette sauvegarde est rechargée automatiquement, CRM compris.
+              </div>
+              ${cards || '<div class="simple-box">Aucun client enregistré pour le moment.</div>'}
+            </div>
+          </div>
+        </section>
+      `;
+    }
 
     function sanitizeEmail(email) {
       return String(email || '').trim().replace(/[;,\s]+$/g, '');
@@ -1728,6 +2082,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         if (googleAccessToken && window.gapi?.client) {
           try {
             gapi.client.setToken({ access_token: googleAccessToken });
+            await loadSyncDataFromDriveIfAvailable();
             await loadDriveFiles();
           } catch (error) {
             console.error(error);
@@ -2058,6 +2413,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="inline-actions">
               ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
               <button onclick="sendDocumentEmail('${docKey}')">${isQuote ? 'Envoyer devis' : 'Envoyer facture'}</button>
+              <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer ce client</button>
               <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
               ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
             </div>
@@ -2073,6 +2429,9 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     <div class="client-box">
       <div class="box-title">Client</div>
       <div class="stack">
+        <select onchange="applyClientToDocument('${docKey}', this.value)">
+          ${renderClientOptions(doc.clientId || '')}
+        </select>
         <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
         <input type="email" list="client-email-suggestions" placeholder="Email client" value="${escapeAttr(doc.clientEmail || '')}" onchange="setClientEmail('${docKey}', this.value)">
         <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveData(false)">${escapeHtml(doc.address || '')}</textarea>
@@ -2308,6 +2667,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
     ${renderInvoice()}
     ${renderCommunication()}
     ${renderPeppol()}
+    ${renderCRM()}
     ${renderGoogleDrive()}
     ${renderSettings()}
     ${renderEmailDatalist()}
