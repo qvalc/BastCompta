@@ -881,6 +881,7 @@
         clientNumber: '',
         clientVat: '',
         clientName: '',
+        clientEmail: '',
         address: '',
         date: '',
         validity: '',
@@ -895,6 +896,7 @@
         clientNumber: '',
         clientVat: '',
         clientName: '',
+        clientEmail: '',
         address: '',
         date: '',
         dueDate: '',
@@ -911,6 +913,23 @@
         invoiceNumber: '',
         controlNumber: '',
         formatted: ''
+      },
+      mail: {
+        recentEmails: [],
+        quoteSubject: 'Votre devis {documentNumber}',
+        quoteBody: `Bonjour {clientName},
+
+Veuillez trouver ci-joint votre devis {documentNumber}.
+
+Cordialement,
+{companyName}`,
+        invoiceSubject: 'Votre facture {documentNumber}',
+        invoiceBody: `Bonjour {clientName},
+
+Veuillez trouver ci-joint votre facture {documentNumber} d'un montant de {totalTTC}.
+
+Cordialement,
+{companyName}`
       }
     };
 
@@ -1078,6 +1097,8 @@
           <div class="hint">Google Drive sert de gestionnaire de sauvegardes.</div>
           <div class="inline-actions">
             <button onclick="loadDriveFiles()">Actualiser la liste</button>
+            <button class="primary" onclick="exportJsonToDrive()">Exporter le document actuel vers Drive</button>
+            <button onclick="pickLocalJsonForDrive()">Envoyer des fichiers du PC vers Drive</button>
           </div>
         </div>
 
@@ -1611,6 +1632,76 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return result;
     }
 
+
+    function sanitizeEmail(email) {
+      return String(email || '').trim().replace(/[;,\s]+$/g, '');
+    }
+
+    function rememberClientEmail(email) {
+      const clean = sanitizeEmail(email).toLowerCase();
+      if (!clean || !clean.includes('@')) return;
+
+      const current = Array.isArray(data.mail?.recentEmails) ? data.mail.recentEmails : [];
+      const next = [clean, ...current.filter(item => String(item || '').toLowerCase() !== clean)].slice(0, 20);
+      data.mail.recentEmails = next;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function getEmailSuggestions() {
+      const recent = Array.isArray(data.mail?.recentEmails) ? data.mail.recentEmails : [];
+      const live = [data.quote?.clientEmail, data.invoice?.clientEmail].filter(Boolean);
+      return [...new Set([...live, ...recent].map(sanitizeEmail).filter(Boolean))];
+    }
+
+    function renderEmailDatalist() {
+      const options = getEmailSuggestions().map(email => `<option value="${escapeAttr(email)}"></option>`).join('');
+      return `<datalist id="client-email-suggestions">${options}</datalist>`;
+    }
+
+    function setClientEmail(docKey, value) {
+      data[docKey].clientEmail = value;
+      rememberClientEmail(value);
+      saveData(false);
+    }
+
+    function formatMailTemplate(template, docKey) {
+      const doc = data[docKey] || {};
+      const totals = totalsFor(docKey);
+      const replacements = {
+        clientName: doc.clientName || '',
+        clientEmail: doc.clientEmail || '',
+        documentNumber: doc.documentNumber || '',
+        companyName: data.company.name || '',
+        totalHTVA: money(totals.htva),
+        totalTVA: money(totals.vat),
+        totalTTC: money(totals.tvac),
+        date: doc.date || '',
+        dueDate: doc.dueDate || '',
+        validity: doc.validity || ''
+      };
+
+      return String(template || '').replace(/\{(clientName|clientEmail|documentNumber|companyName|totalHTVA|totalTVA|totalTTC|date|dueDate|validity)\}/g, (_, key) => replacements[key] || '');
+    }
+
+    function sendDocumentEmail(docKey) {
+      const doc = data[docKey] || {};
+      const email = sanitizeEmail(doc.clientEmail || '');
+      if (!email) {
+        alert("Renseigne d'abord l'adresse email du client.");
+        return;
+      }
+
+      rememberClientEmail(email);
+
+      const isQuote = docKey === 'quote';
+      const subjectTemplate = isQuote ? data.mail?.quoteSubject : data.mail?.invoiceSubject;
+      const bodyTemplate = isQuote ? data.mail?.quoteBody : data.mail?.invoiceBody;
+      const subject = formatMailTemplate(subjectTemplate, docKey);
+      const body = formatMailTemplate(bodyTemplate, docKey);
+      const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = url;
+    }
+
     function copyCommunication() {
       syncCommunicationFromInvoice(false);
       navigator.clipboard.writeText(data.communication.formatted || '');
@@ -1966,6 +2057,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="hint"></div>
             <div class="inline-actions">
               ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
+              <button onclick="sendDocumentEmail('${docKey}')">${isQuote ? 'Envoyer devis' : 'Envoyer facture'}</button>
               <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
               ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
             </div>
@@ -1982,6 +2074,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       <div class="box-title">Client</div>
       <div class="stack">
         <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
+        <input type="email" list="client-email-suggestions" placeholder="Email client" value="${escapeAttr(doc.clientEmail || '')}" onchange="setClientEmail('${docKey}', this.value)">
         <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveData(false)">${escapeHtml(doc.address || '')}</textarea>
       </div>
     </div>
@@ -2172,8 +2265,34 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
                 </div>
 
                 <div class="field">
+                  <label>Objet email devis</label>
+                  <input value="${escapeAttr(data.mail.quoteSubject || '')}" onchange="setField('mail.quoteSubject', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Message email devis</label>
+                  <textarea oninput="autoResize(this); data.mail.quoteBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.quoteBody || '')}</textarea>
+                </div>
+
+                <div class="field">
+                  <label>Objet email facture</label>
+                  <input value="${escapeAttr(data.mail.invoiceSubject || '')}" onchange="setField('mail.invoiceSubject', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Message email facture</label>
+                  <textarea oninput="autoResize(this); data.mail.invoiceBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.invoiceBody || '')}</textarea>
+                </div>
+
+                <div class="field">
                   <label>Conditions</label>
                   <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveData(false)">${escapeHtml(data.company.conditions || '')}</textarea>
+                </div>
+
+                <div class="simple-box" style="line-height:1.7;">
+                  Variables disponibles :<br>
+                  {clientName} · {clientEmail} · {documentNumber} · {companyName}<br>
+                  {totalHTVA} · {totalTVA} · {totalTTC} · {date} · {dueDate} · {validity}
                 </div>
               </div>
             </div>
@@ -2191,6 +2310,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
     ${renderPeppol()}
     ${renderGoogleDrive()}
     ${renderSettings()}
+    ${renderEmailDatalist()}
   `;
     }
 
