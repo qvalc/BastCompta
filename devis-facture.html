@@ -845,7 +845,7 @@
 
   <script>
     const STORAGE_KEY = 'devis-facture-style-vrai-document';
-    const DRIVE_SYNC_FILE_NAME = 'bastcompta-devis-facture-sync.json';
+    const DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
 
     let googleAccessToken = null;
     let googleDriveFiles = [];
@@ -949,6 +949,7 @@ Cordialement,
 
     let data = loadData();
     let activePage = 'quote';
+    let crmExpandedClientId = '';
 
     function loadData() {
       try {
@@ -1123,7 +1124,7 @@ Cordialement,
 
           <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
   La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
-  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.<br>La sauvegarde automatique CRM + devis + facture utilise toujours le même fichier : <strong>${escapeHtml(getSyncDriveFileName())}</strong>.
+  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.<br>La sauvegarde automatique du CRM reste masquée dans cette liste pour éviter toute suppression accidentelle.
 </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -1203,7 +1204,10 @@ Cordialement,
           fields: 'files(id, name, modifiedTime)'
         });
 
-        googleDriveFiles = list.result.files || [];
+        googleDriveFiles = (list.result.files || []).filter(file => {
+          const hiddenSyncNames = ['bastcompta-devis-facture-sync.json', DRIVE_SYNC_FILE_NAME];
+          return !hiddenSyncNames.includes(String(file.name || ''));
+        });
         const validIds = new Set(googleDriveFiles.map(file => file.id));
         selectedDriveFileIds = selectedDriveFileIds.filter(id => validIds.has(id));
 
@@ -1660,9 +1664,18 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       if (!googleAccessToken) return false;
 
       try {
-        syncCommunicationFromInvoice(false);
         const fileName = getSyncDriveFileName();
-        const content = JSON.stringify(data, null, 2);
+        const syncPayload = {
+          clients: Array.isArray(data.clients) ? data.clients : [],
+          mail: {
+            recentEmails: Array.isArray(data.mail?.recentEmails) ? data.mail.recentEmails : [],
+            quoteSubject: data.mail?.quoteSubject || defaultData.mail.quoteSubject,
+            quoteBody: data.mail?.quoteBody || defaultData.mail.quoteBody,
+            invoiceSubject: data.mail?.invoiceSubject || defaultData.mail.invoiceSubject,
+            invoiceBody: data.mail?.invoiceBody || defaultData.mail.invoiceBody
+          }
+        };
+        const content = JSON.stringify(syncPayload, null, 2);
 
         const existing = await gapi.client.drive.files.list({
           spaces: 'appDataFolder',
@@ -1737,8 +1750,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         }
 
         const parsed = await res.json();
-        data = mergeDeep(structuredClone(defaultData), parsed);
-        syncCommunicationFromInvoice(false);
+        if (Array.isArray(parsed.clients)) {
+          data.clients = parsed.clients.map(normalizeClient).filter(client => client.name);
+        }
+        if (parsed.mail && typeof parsed.mail === 'object') {
+          data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         return true;
       } catch (error) {
@@ -1801,8 +1818,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function saveClientRecord(client, shouldAlert = true) {
       const normalized = normalizeClient(client);
-      if (!normalized.name && shouldAlert) {
-        alert('Renseigne au minimum le nom du client.');
+      if (!normalized.name) {
+        if (shouldAlert) {
+          alert('Renseigne au minimum le nom du client.');
+        }
         return;
       }
 
@@ -1815,7 +1834,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         list.push(normalized);
       }
 
-      data.clients = list;
+      data.clients = list.filter(item => String(item?.name || '').trim());
+      crmExpandedClientId = normalized.id;
       if (normalized.email) rememberClientEmail(normalized.email);
       saveData(false);
       if (shouldAlert) alert('Client enregistré dans le carnet d\'adresses.');
@@ -1877,8 +1897,17 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     }
 
     function createNewClient() {
-      saveClientRecord(createEmptyClient(), false);
-      activePage = 'crm';
+      const client = normalizeClient({
+        name: `Nouveau client ${(Array.isArray(data.clients) ? data.clients.length : 0) + 1}`,
+        createdAt: new Date().toISOString()
+      });
+      data.clients = [...(Array.isArray(data.clients) ? data.clients : []), client];
+      crmExpandedClientId = client.id;
+      saveData(false);
+    }
+
+    function toggleClientExpanded(clientId) {
+      crmExpandedClientId = crmExpandedClientId === clientId ? '' : clientId;
       render();
     }
 
@@ -1891,7 +1920,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function renderClientOptions(selectedId = '') {
       const options = getClients().map(client => `
-        <option value="${escapeAttr(client.id)}" ${selectedId === client.id ? 'selected' : ''}>${escapeHtml(clientLabel(client))}</option>
+        <option value="${escapeAttr(client.id)}" ${selectedId === client.id ? 'selected' : ''}>${escapeHtml(client.name || 'Client sans nom')}</option>
       `).join('');
       return `<option value="">-- Choisir un client enregistré --</option>${options}`;
     }
@@ -1900,66 +1929,71 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       const clients = getClients();
       const cards = clients.map((client, index) => {
         const stats = getClientStats(client.id);
+        const isExpanded = crmExpandedClientId === client.id;
         return `
           <div class="simple-box" style="margin-bottom:14px;">
-            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-              <strong>${escapeHtml(client.name || `Client ${index + 1}`)}</strong>
+            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+              <button type="button" style="flex:1; text-align:left; box-shadow:none;" onclick="toggleClientExpanded('${escapeAttr(client.id)}')">
+                ${escapeHtml(client.name || `Client ${index + 1}`)} ${client.favorite ? '★' : ''}
+              </button>
               <div class="inline-actions no-print">
                 <button type="button" onclick="duplicateClient('${escapeAttr(client.id)}')">Dupliquer</button>
                 <button type="button" class="danger" onclick="deleteClient('${escapeAttr(client.id)}')">Supprimer</button>
               </div>
             </div>
-            <div class="settings-grid">
-              <div class="stack">
-                <div class="field">
-                  <label>Nom / société</label>
-                  <input value="${escapeAttr(client.name)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), name: this.value }, false)">
+            ${isExpanded ? `
+              <div style="margin-top:12px;" class="settings-grid">
+                <div class="stack">
+                  <div class="field">
+                    <label>Nom / société</label>
+                    <input value="${escapeAttr(client.name)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), name: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>Email</label>
+                    <input type="email" value="${escapeAttr(client.email)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), email: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>Adresse</label>
+                    <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), address: this.value }, false)">${escapeHtml(client.address)}</textarea>
+                  </div>
+                  <div class="field">
+                    <label>Notes</label>
+                    <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), notes: this.value }, false)">${escapeHtml(client.notes)}</textarea>
+                  </div>
                 </div>
-                <div class="field">
-                  <label>Email</label>
-                  <input type="email" value="${escapeAttr(client.email)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), email: this.value }, false)">
-                </div>
-                <div class="field">
-                  <label>Adresse</label>
-                  <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), address: this.value }, false)">${escapeHtml(client.address)}</textarea>
-                </div>
-                <div class="field">
-                  <label>Notes</label>
-                  <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), notes: this.value }, false)">${escapeHtml(client.notes)}</textarea>
+                <div class="stack">
+                  <div class="field">
+                    <label>N° client</label>
+                    <input value="${escapeAttr(client.clientNumber)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), clientNumber: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>N° TVA</label>
+                    <input value="${escapeAttr(client.vat)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), vat: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>Téléphone</label>
+                    <input value="${escapeAttr(client.phone)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), phone: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>Personne de contact</label>
+                    <input value="${escapeAttr(client.contact)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), contact: this.value }, false)">
+                  </div>
+                  <div class="field">
+                    <label>Favori</label>
+                    <select onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), favorite: this.value === 'true' }, false)">
+                      <option value="false" ${!client.favorite ? 'selected' : ''}>Non</option>
+                      <option value="true" ${client.favorite ? 'selected' : ''}>Oui</option>
+                    </select>
+                  </div>
+                  <div class="simple-box" style="line-height:1.7;">
+                    <strong>Historique local</strong><br>
+                    Devis liés : ${stats.quoteCount}<br>
+                    Factures liées : ${stats.invoiceCount}<br>
+                    Total facture lié : ${escapeHtml(money(stats.invoiceTotal))}
+                  </div>
                 </div>
               </div>
-              <div class="stack">
-                <div class="field">
-                  <label>N° client</label>
-                  <input value="${escapeAttr(client.clientNumber)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), clientNumber: this.value }, false)">
-                </div>
-                <div class="field">
-                  <label>N° TVA</label>
-                  <input value="${escapeAttr(client.vat)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), vat: this.value }, false)">
-                </div>
-                <div class="field">
-                  <label>Téléphone</label>
-                  <input value="${escapeAttr(client.phone)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), phone: this.value }, false)">
-                </div>
-                <div class="field">
-                  <label>Personne de contact</label>
-                  <input value="${escapeAttr(client.contact)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), contact: this.value }, false)">
-                </div>
-                <div class="field">
-                  <label>Favori</label>
-                  <select onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), favorite: this.value === 'true' }, false)">
-                    <option value="false" ${!client.favorite ? 'selected' : ''}>Non</option>
-                    <option value="true" ${client.favorite ? 'selected' : ''}>Oui</option>
-                  </select>
-                </div>
-                <div class="simple-box" style="line-height:1.7;">
-                  <strong>Historique local</strong><br>
-                  Devis liés : ${stats.quoteCount}<br>
-                  Factures liées : ${stats.invoiceCount}<br>
-                  Total facture lié : ${escapeHtml(money(stats.invoiceTotal))}
-                </div>
-              </div>
-            </div>
+            ` : ''}
           </div>
         `;
       }).join('');
@@ -1978,8 +2012,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="comm-panel">
               <h2>Carnet d'adresses / CRM</h2>
               <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
-                Le bouton <strong>Sauvegarder</strong> met à jour la sauvegarde automatique sur Google Drive sans créer de doublon quand la connexion Drive est active.
-                À la reconnexion, cette sauvegarde est rechargée automatiquement, CRM compris.
+                Le bouton <strong>Sauvegarder</strong> met à jour automatiquement le CRM sur Google Drive sans créer de doublon quand la connexion Drive est active.
+                À la reconnexion, le CRM est rechargé automatiquement.
               </div>
               ${cards || '<div class="simple-box">Aucun client enregistré pour le moment.</div>'}
             </div>
