@@ -61,6 +61,54 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .dropdown {
+      position: relative;
+    }
+
+    .dropdown-toggle {
+      min-width: 150px;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 320px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 6px;
+      z-index: 50;
+      display: none;
+    }
+
+    .dropdown.open .dropdown-menu {
+      display: block;
+    }
+
+    .dropdown-menu button {
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-weight: 700;
+      box-shadow: none;
+    }
+
+    .dropdown-menu button:hover {
+      background: #f8fafc;
+    }
+
+    .dropdown-sep {
+      height: 1px;
+      background: var(--line);
+      margin: 6px 0;
     }
 
     button,
@@ -313,6 +361,45 @@
       color: var(--muted);
     }
 
+    .drive-file-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .drive-file-item {
+      display: grid;
+      grid-template-columns: 22px 22px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+      background: #fff;
+      border-radius: 14px;
+    }
+
+    .drive-file-item.active {
+      border-color: #bfd7ff;
+      background: #f8fbff;
+    }
+
+    .drive-file-item input[type="radio"],
+    .drive-file-item input[type="checkbox"] {
+      width: auto;
+      margin: 0;
+    }
+
+    .drive-file-name {
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .drive-file-date {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
     @media (max-width: 1100px) {
       .summary-grid {
         grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -355,11 +442,19 @@
       </div>
       <div class="actions">
         <button class="primary" onclick="saveData()">Sauvegarder</button>
-        <button onclick="exportData()">Exporter JSON</button>
+        <div class="dropdown">
+          <button type="button" class="dropdown-toggle" onclick="toggleFileMenu(event)">Fichier ▼</button>
+          <div class="dropdown-menu" id="fileMenu">
+            <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
+            <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
+            <div class="dropdown-sep"></div>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
+            <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
+            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer des fichiers du PC vers Drive</button>
+          </div>
+        </div>
         <button onclick="openPrintReport()">Export PDF / Imprimer</button>
-        <label class="file-label">Importer JSON
-          <input type="file" accept="application/json" onchange="importData(event)">
-        </label>
         <button class="danger" onclick="resetData()">Réinitialiser</button>
       </div>
     </div>
@@ -385,7 +480,9 @@
 
     <div class="tabs" id="tabs"></div>
     <div id="pages"></div>
-    <input id="localJsonToDriveInput" type="file" accept="application/json" style="display:none"
+    <input id="localJsonImportInput" type="file" accept="application/json" style="display:none"
+      onchange="handleLocalJsonImport(event)">
+    <input id="localJsonToDriveInput" type="file" accept="application/json" multiple style="display:none"
       onchange="uploadLocalJsonToDrive(event)">
   </div>
 
@@ -395,6 +492,7 @@
     let googleAccessToken = null;
     let googleDriveFiles = [];
     let selectedDriveFileId = '';
+    let selectedDriveFileIds = [];
 
 
     const defaultData = {
@@ -467,33 +565,96 @@
       render();
     }
 
-    function exportData() {
-      exportJsonToDrive();
+    function toggleFileMenu(event) {
+      event.stopPropagation();
+      const dropdown = event.currentTarget.closest('.dropdown');
+      if (!dropdown) return;
+      document.querySelectorAll('.dropdown.open').forEach(el => {
+        if (el !== dropdown) el.classList.remove('open');
+      });
+      dropdown.classList.toggle('open');
     }
 
-    function importData(event) {
-      if (event?.target?.files?.length) {
-        importDataLocal(event);
-        return;
-      }
-      importJsonFromDrive();
+    function closeFileMenu() {
+      document.querySelectorAll('.dropdown.open').forEach(el => el.classList.remove('open'));
     }
 
-    function importDataLocal(event) {
+    function exportDataLocal() {
+      const fileName = getDriveFileName();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function importDataLocal() {
+      const input = document.getElementById('localJsonImportInput');
+      if (!input) return;
+      input.value = '';
+      input.click();
+    }
+
+    async function handleLocalJsonImport(event) {
       const file = event.target.files?.[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(reader.result);
-          data = mergeDeep(structuredClone(defaultData), parsed);
-          saveData(false);
-          alert('Import JSON réussi.');
-        } catch {
-          alert('Le fichier importé n\'est pas un JSON valide.');
+
+      try {
+        const content = await file.text();
+        const parsed = JSON.parse(content);
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        saveData(false);
+        alert(`Import réussi : ${file.name}`);
+      } catch (error) {
+        console.error(error);
+        alert("Le fichier sélectionné n'est pas un JSON valide.");
+      }
+    }
+
+    async function importDataFromDriveMenu() {
+      activePage = 'gdrive';
+      render();
+      await importJsonFromDrive();
+    }
+
+    async function openDriveDownloadManager() {
+      activePage = 'gdrive';
+      render();
+      await loadDriveFiles();
+    }
+
+    function isDriveFileChecked(fileId) {
+      return selectedDriveFileIds.includes(fileId);
+    }
+
+    function toggleDriveFileSelection(fileId, checked) {
+      if (checked) {
+        if (!selectedDriveFileIds.includes(fileId)) {
+          selectedDriveFileIds.push(fileId);
         }
-      };
-      reader.readAsText(file);
+      } else {
+        selectedDriveFileIds = selectedDriveFileIds.filter(id => id !== fileId);
+      }
+      render();
+    }
+
+    function selectDriveFileForImport(fileId) {
+      selectedDriveFileId = fileId || '';
+      render();
+    }
+
+    function selectAllDriveFiles() {
+      selectedDriveFileIds = googleDriveFiles.map(file => file.id);
+      render();
+    }
+
+    function clearDriveFileSelection() {
+      selectedDriveFileIds = [];
+      render();
     }
 
     window.addEventListener('message', async (event) => {
@@ -579,6 +740,12 @@
         });
 
         googleDriveFiles = list.result.files || [];
+        const validIds = new Set(googleDriveFiles.map(file => file.id));
+        selectedDriveFileIds = selectedDriveFileIds.filter(id => validIds.has(id));
+
+        if (selectedDriveFileId && !validIds.has(selectedDriveFileId)) {
+          selectedDriveFileId = '';
+        }
 
         if (!selectedDriveFileId && googleDriveFiles.length) {
           selectedDriveFileId = googleDriveFiles[0].id;
@@ -626,30 +793,90 @@
       }
     }
 
+    async function downloadSelectedJsonFromDrive() {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return;
+      }
+
+      const fileIds = selectedDriveFileIds.length ? [...selectedDriveFileIds] : (selectedDriveFileId ? [selectedDriveFileId] : []);
+
+      if (!fileIds.length) {
+        activePage = 'gdrive';
+        render();
+        alert('Choisis au moins une sauvegarde Google Drive.');
+        return;
+      }
+
+      try {
+        for (const fileId of fileIds) {
+          const file = googleDriveFiles.find(f => f.id === fileId);
+
+          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+            headers: {
+              Authorization: `Bearer ${googleAccessToken}`
+            }
+          });
+
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+
+          const content = await res.text();
+          const blob = new Blob([content], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file?.name || 'sauvegarde-drive.json';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        alert(fileIds.length === 1
+          ? 'Téléchargement terminé.'
+          : `${fileIds.length} fichiers ont été téléchargés vers ce PC.`);
+      } catch (error) {
+        console.error(error);
+        alert("Échec du téléchargement depuis Google Drive.");
+      }
+    }
+
     async function deleteSelectedJsonFromDrive() {
       if (!googleAccessToken) {
         alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
-      if (!selectedDriveFileId) {
-        alert('Sélectionne une sauvegarde à supprimer.');
+      const fileIds = selectedDriveFileIds.length ? [...selectedDriveFileIds] : (selectedDriveFileId ? [selectedDriveFileId] : []);
+
+      if (!fileIds.length) {
+        alert('Coche au moins une sauvegarde à supprimer.');
         return;
       }
 
-      if (!confirm('Supprimer cette sauvegarde définitivement ?')) return;
+      if (!confirm(fileIds.length === 1
+        ? 'Supprimer cette sauvegarde définitivement ?'
+        : `Supprimer définitivement ces ${fileIds.length} sauvegardes ?`)) return;
 
       try {
-        await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          }
-        });
+        for (const fileId of fileIds) {
+          await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${googleAccessToken}`
+            }
+          });
+        }
 
-        selectedDriveFileId = '';
+        selectedDriveFileIds = [];
+        if (fileIds.includes(selectedDriveFileId)) {
+          selectedDriveFileId = '';
+        }
+
         await loadDriveFiles();
-        alert('Sauvegarde supprimée.');
+        alert(fileIds.length === 1 ? 'Sauvegarde supprimée.' : `${fileIds.length} sauvegardes supprimées.`);
       } catch (error) {
         console.error(error);
         alert('Erreur lors de la suppression.');
@@ -675,62 +902,70 @@
         return;
       }
 
-      const file = event.target.files?.[0];
-      if (!file) return;
+      const pickedFiles = Array.from(event.target.files || []);
+      if (!pickedFiles.length) return;
 
       try {
-        const content = await file.text();
+        let importedCount = 0;
 
-        let parsed;
-        try {
-          parsed = JSON.parse(content);
-        } catch {
-          alert("Le fichier sélectionné n'est pas un JSON valide.");
-          return;
+        for (const file of pickedFiles) {
+          const content = await file.text();
+
+          let parsed;
+          try {
+            parsed = JSON.parse(content);
+          } catch {
+            alert(`Le fichier ${file.name} n'est pas un JSON valide.`);
+            continue;
+          }
+
+          const metadata = {
+            name: file.name,
+            parents: ['appDataFolder']
+          };
+
+          const existing = await gapi.client.drive.files.list({
+            spaces: 'appDataFolder',
+            q: `name='${file.name.replace(/'/g, "\'")}' and trashed=false`,
+            fields: 'files(id, name)'
+          });
+
+          const files = existing.result.files || [];
+
+          const form = new FormData();
+          form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          form.append('file', new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' }));
+
+          let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+          let method = 'POST';
+
+          if (files.length) {
+            url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+            method = 'PATCH';
+          }
+
+          const res = await fetch(url, {
+            method,
+            headers: {
+              Authorization: `Bearer ${googleAccessToken}`
+            },
+            body: form
+          });
+
+          if (!res.ok) {
+            throw new Error(await res.text());
+          }
+
+          const saved = await res.json();
+          selectedDriveFileId = saved.id;
+          importedCount += 1;
         }
 
-        const metadata = {
-          name: file.name,
-          parents: ['appDataFolder']
-        };
-
-        const existing = await gapi.client.drive.files.list({
-          spaces: 'appDataFolder',
-          q: `name='${file.name.replace(/'/g, "\\'")}' and trashed=false`,
-          fields: 'files(id, name)'
-        });
-
-        const files = existing.result.files || [];
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([JSON.stringify(parsed, null, 2)], { type: 'application/json' }));
-
-        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-        let method = 'POST';
-
-        if (files.length) {
-          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
-          method = 'PATCH';
-        }
-
-        const res = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          },
-          body: form
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const saved = await res.json();
-        selectedDriveFileId = saved.id;
         await loadDriveFiles();
 
-        alert(`Fichier local envoyé vers Google Drive : ${saved.name}`);
+        alert(importedCount <= 1
+          ? 'Fichier local envoyé vers Google Drive.'
+          : `${importedCount} fichiers locaux ont été envoyés vers Google Drive.`);
       } catch (error) {
         console.error(error);
         alert("Échec de l'envoi du fichier local vers Google Drive.");
@@ -810,11 +1045,27 @@
     }
 
     function renderGoogleDrive() {
-      const options = googleDriveFiles.map(file => `
-        <option value="${escapeAttr(file.id)}" ${selectedDriveFileId === file.id ? 'selected' : ''}>
-          ${escapeHtml(file.name)}${file.modifiedTime ? ' — ' + new Date(file.modifiedTime).toLocaleString('fr-BE') : ''}
-        </option>
-      `).join('');
+      const fileItems = googleDriveFiles.map(file => {
+        const isImportSelected = selectedDriveFileId === file.id;
+        const isChecked = isDriveFileChecked(file.id);
+        const dateLabel = file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('fr-BE') : 'Date inconnue';
+
+        return `
+          <div class="drive-file-item ${isImportSelected ? 'active' : ''}">
+            <input type="radio" name="driveImportFile" ${isImportSelected ? 'checked' : ''} onchange="selectDriveFileForImport('${escapeAttr(file.id)}')"
+              title="Choisir ce fichier pour le charger dans l’application">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDriveFileSelection('${escapeAttr(file.id)}', this.checked)"
+              title="Ajouter ce fichier à la sélection pour téléchargement ou suppression">
+            <div>
+              <div class="drive-file-name">${escapeHtml(file.name)}</div>
+              <div class="hint">Radio = charger dans l’application. Case = télécharger ou supprimer un ou plusieurs fichiers.</div>
+            </div>
+            <div class="drive-file-date">${escapeHtml(dateLabel)}</div>
+          </div>
+        `;
+      }).join('');
+
+      const checkedCount = selectedDriveFileIds.length;
 
       return `
         <section class="page ${activePage === 'gdrive' ? 'active' : ''}">
@@ -822,23 +1073,20 @@
             <div class="section-head">
               <div>
                 <h2>Google Drive</h2>
-
-<div class="muted-box" style="margin-bottom:16px;">
-  La connexion Google Drive se fait depuis le portail principal BastCompta.
-</div>
-
-<div class="hint">Sauvegarde et restauration de la comptabilité via Google Drive.</div>
               </div>
               <div class="inline-actions">
-  <button onclick="loadDriveFiles()">Actualiser la liste</button>
-  <button onclick="pickLocalJsonForDrive()">Envoyer un JSON local vers Drive</button>
-  <button class="primary" onclick="exportJsonToDrive()">Exporter JSON vers Drive</button>
-</div>
+                <button onclick="loadDriveFiles()">Actualiser la liste</button>
+              </div>
+            </div>
+
+            <div class="muted-box" style="margin-bottom:16px; line-height:1.7;">
+              La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
+              Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.
             </div>
 
             <div class="grid-2">
               <div class="muted-box">
-                <strong>Nom qui sera utilisé pour le prochain export :</strong><br>
+                <strong>Nom qui sera utilisé pour le prochain export du document actuel :</strong><br>
                 ${escapeHtml(getDriveFileName())}
                 <br><br>
                 Les sauvegardes sont créées sous forme de fichiers JSON distincts dans l’espace privé appDataFolder.
@@ -855,19 +1103,24 @@
             <div style="margin-top:16px;" class="card">
               <div class="section-head">
                 <div>
-                  <h3>Sauvegarde à charger</h3>
-                  <div class="hint">Choisis une sauvegarde JSON présente sur ton Drive.</div>
+                  <h3>Fichiers disponibles sur Google Drive</h3>
+                  <div class="hint">Choisis un fichier à charger dans l’application, et coche un ou plusieurs fichiers pour les rapatrier vers ce PC ou les supprimer.</div>
+                </div>
+                <div class="inline-actions">
+                  <button onclick="selectAllDriveFiles()">Tout cocher</button>
+                  <button onclick="clearDriveFileSelection()">Tout décocher</button>
                 </div>
               </div>
 
-              <select onchange="selectedDriveFileId=this.value; render()">
-                <option value="">-- Sélectionner une sauvegarde --</option>
-                ${options}
-              </select>
-
               <div class="inline-actions" style="margin-top:12px;">
-                <button onclick="importSelectedJsonFromDrive()">Charger</button>
-                <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer</button>
+                <button onclick="importSelectedJsonFromDrive()">Charger dans l’application</button>
+                <button onclick="downloadSelectedJsonFromDrive()">Télécharger vers ce PC${checkedCount ? ` (${checkedCount})` : ''}</button>
+                <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
+                <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer${checkedCount ? ` (${checkedCount})` : ''}</button>
+              </div>
+
+              <div class="drive-file-list">
+                ${fileItems || '<div class="muted-box">Aucune sauvegarde JSON trouvée sur Google Drive.</div>'}
               </div>
             </div>
           </div>
@@ -1350,7 +1603,6 @@
                 <strong>Stock estimé :</strong> ${money(t.stockValue)}
               </div>
             </div>
-            <div class="footer-note">Les calculs ici sont simplifiés, mais la structure est prête pour devenir ton outil principal local.</div>
           </div>
           <div class="card">
             <div class="section-head"><h3>Contrôle rapide</h3></div>
@@ -1616,7 +1868,6 @@
       return renderTablePage({
         key: 'km',
         title: 'Kilomètres',
-        hint: 'Version simple pour encoder les déplacements sans les erreurs de formules du fichier Excel.',
         addLabel: 'Ajouter un déplacement',
         onAdd: `addRow('km', { date: '', person: '', route: '', km: 0, trips: 1 })`,
         headers: ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux', ''],
@@ -1661,7 +1912,6 @@
             <div class="section-head">
               <div>
                 <h2>Compte de résultat</h2>
-                <div class="hint">Présentation inspirée de ton tableau Excel, avec une mise en page plus propre et des calculs automatiques.</div>
               </div>
             </div>
 
@@ -2228,6 +2478,12 @@
       if (metricVat) metricVat.textContent = money(t.netVat);
       if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
     }
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.dropdown')) {
+        closeFileMenu();
+      }
+    });
 
     window.addEventListener('load', async () => {
       render();
