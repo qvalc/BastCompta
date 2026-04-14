@@ -1801,7 +1801,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function saveClientRecord(client, shouldAlert = true) {
       const normalized = normalizeClient(client);
-      if (!normalized.name) {
+      if (!normalized.name && shouldAlert) {
         alert('Renseigne au minimum le nom du client.');
         return;
       }
@@ -1878,6 +1878,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function createNewClient() {
       saveClientRecord(createEmptyClient(), false);
+      activePage = 'crm';
       render();
     }
 
@@ -2429,7 +2430,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     <div class="client-box">
       <div class="box-title">Client</div>
       <div class="stack">
-        <select onchange="applyClientToDocument('${docKey}', this.value)">
+        <select class="no-print" onchange="applyClientToDocument('${docKey}', this.value)">
           ${renderClientOptions(doc.clientId || '')}
         </select>
         <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
