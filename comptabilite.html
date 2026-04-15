@@ -488,6 +488,7 @@
 
   <script>
     const STORAGE_KEY = 'comptabilite-local-v1';
+    const DRIVE_SYNC_FILE_NAME = 'bastcompta-comptabilite-sync.json';
 
     let googleAccessToken = null;
     let googleDriveFiles = [];
@@ -508,6 +509,9 @@
       stock: [],
       losses: [],
       km: [],
+      vat: {
+        declarations: []
+      },
       settings: {
         vatCarryover: 0,
         bankBalance: 0,
@@ -524,6 +528,7 @@
       { key: 'dashboard', label: 'Tableau de bord' },
       { key: 'sales', label: 'Ventes' },
       { key: 'purchases', label: 'Achats' },
+      { key: 'vat', label: 'TVA' },
       { key: 'investments', label: 'Investissements' },
       { key: 'assets', label: 'Immobilisations' },
       { key: 'stock', label: 'Stock' },
@@ -559,9 +564,117 @@
       return target;
     }
 
-    function saveData(showAlert = true) {
+    function getSyncDriveFileName() {
+      return DRIVE_SYNC_FILE_NAME;
+    }
+
+    async function saveSyncToDrive(showErrorAlert = false) {
+      if (!googleAccessToken) return false;
+
+      try {
+        const fileName = getSyncDriveFileName();
+        const syncPayload = mergeDeep(structuredClone(defaultData), data || {});
+        const content = JSON.stringify(syncPayload, null, 2);
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+        const isUpdate = files.length > 0;
+        const metadata = isUpdate
+          ? { name: fileName }
+          : { name: fileName, parents: ['appDataFolder'] };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (isUpdate) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText);
+        }
+
+        return true;
+      } catch (error) {
+        console.error(error);
+        if (showErrorAlert) {
+          alert('La sauvegarde Google Drive automatique a échoué.');
+        }
+        return false;
+      }
+    }
+
+    async function loadSyncDataFromDriveIfAvailable() {
+      if (!googleAccessToken) return false;
+
+      try {
+        const fileName = getSyncDriveFileName();
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        const file = (list.result.files || [])[0];
+        if (!file) return false;
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed || {});
+        ensureVatStructures();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        return true;
+      } catch (error) {
+        console.error(error);
+        return false;
+      }
+    }
+
+    async function saveData(showAlert = true) {
+      ensureVatStructures();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      if (showAlert) alert('Données sauvegardées localement.');
+
+      if (showAlert) {
+        if (googleAccessToken) {
+          const synced = await saveSyncToDrive(true);
+          alert(synced
+            ? 'Données sauvegardées localement et sur Google Drive.'
+            : 'Données sauvegardées localement.');
+        } else {
+          alert('Données sauvegardées localement.');
+        }
+      }
+
       render();
     }
 
@@ -668,6 +781,7 @@
         if (googleAccessToken && window.gapi?.client) {
           try {
             gapi.client.setToken({ access_token: googleAccessToken });
+            await loadSyncDataFromDriveIfAvailable();
             await loadDriveFiles();
           } catch (error) {
             console.error(error);
@@ -681,6 +795,7 @@
         googleAccessToken = null;
         googleDriveFiles = [];
         selectedDriveFileId = '';
+        selectedDriveFileIds = [];
 
         if (window.gapi?.client) {
           gapi.client.setToken(null);
@@ -739,7 +854,10 @@
           fields: 'files(id, name, modifiedTime)'
         });
 
-        googleDriveFiles = list.result.files || [];
+        googleDriveFiles = (list.result.files || []).filter(file => {
+          const hiddenSyncNames = [DRIVE_SYNC_FILE_NAME, 'bastcompta-comptabilite-sync.json'];
+          return !hiddenSyncNames.includes(String(file.name || ''));
+        });
         const validIds = new Set(googleDriveFiles.map(file => file.id));
         selectedDriveFileIds = selectedDriveFileIds.filter(id => validIds.has(id));
 
@@ -785,6 +903,7 @@
 
         const parsed = await res.json();
         data = mergeDeep(structuredClone(defaultData), parsed);
+        ensureVatStructures();
         saveData(false);
         alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
       } catch (error) {
@@ -1090,6 +1209,7 @@
                 ${escapeHtml(getDriveFileName())}
                 <br><br>
                 Les sauvegardes sont créées sous forme de fichiers JSON distincts dans l’espace privé appDataFolder.
+              <br>La sauvegarde automatique interne de la comptabilité/TVA reste masquée dans cette liste pour éviter toute suppression accidentelle.
               </div>
 
               <div class="muted-box">
@@ -1377,6 +1497,234 @@
       };
     }
 
+
+    function getQuarterBounds(year, quarter) {
+      const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
+      const y = parseInt(year || new Date().getFullYear(), 10) || new Date().getFullYear();
+      const startMonth = (q - 1) * 3;
+      const start = new Date(y, startMonth, 1);
+      const end = new Date(y, startMonth + 3, 0);
+      return {
+        start: start.toISOString().slice(0, 10),
+        end: end.toISOString().slice(0, 10)
+      };
+    }
+
+    function nextBusinessDay(dateObj) {
+      const d = new Date(dateObj.getTime());
+      while (d.getDay() === 0 || d.getDay() === 6) {
+        d.setDate(d.getDate() + 1);
+      }
+      return d;
+    }
+
+    function defaultQuarterDueDate(year, quarter) {
+      const y = parseInt(year || new Date().getFullYear(), 10) || new Date().getFullYear();
+      const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
+      const targetMonth = q * 3;
+      const base = new Date(y, targetMonth, 25);
+      return nextBusinessDay(base).toISOString().slice(0, 10);
+    }
+
+    function quarterLabel(year, quarter) {
+      return `T${quarter || 1} ${year || ''}`.trim();
+    }
+
+    function vatDeclarationTemplate() {
+      const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
+      const quarter = 1;
+      const bounds = getQuarterBounds(currentYear, quarter);
+      return {
+        id: `vat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        regime: 'quarterly',
+        year: currentYear,
+        quarter,
+        dueDate: defaultQuarterDueDate(currentYear, quarter),
+        startDate: bounds.start,
+        endDate: bounds.end,
+        filed: false,
+        filedDate: '',
+        paid: false,
+        paidDate: '',
+        paymentAmount: 0,
+        reimbursementRequested: false,
+        notes: '',
+        manualBoxes: {
+          '44': 0,
+          '46': 0,
+          '47': 0,
+          '48': 0,
+          '49': 0,
+          '55': 0,
+          '56': 0,
+          '57': 0,
+          '61': 0,
+          '62': 0,
+          '63': 0,
+          '83': 0,
+          '91': 0
+        }
+      };
+    }
+
+    function ensureVatStructures() {
+      if (!data.vat || typeof data.vat !== 'object') data.vat = { declarations: [] };
+      if (!Array.isArray(data.vat.declarations)) data.vat.declarations = [];
+      data.vat.declarations.forEach(dec => {
+        if (!dec.manualBoxes || typeof dec.manualBoxes !== 'object') {
+          dec.manualBoxes = {};
+        }
+        ['44','46','47','48','49','55','56','57','61','62','63','83','91'].forEach(code => {
+          if (typeof dec.manualBoxes[code] === 'undefined') dec.manualBoxes[code] = 0;
+        });
+      });
+    }
+
+    function addVatDeclaration() {
+      ensureVatStructures();
+      data.vat.declarations.push(vatDeclarationTemplate());
+      sortVatDeclarations();
+      saveData(false);
+    }
+
+    function sortVatDeclarations() {
+      ensureVatStructures();
+      data.vat.declarations.sort((a, b) => {
+        const aDate = `${a.startDate || ''}`;
+        const bDate = `${b.startDate || ''}`;
+        return aDate.localeCompare(bDate);
+      });
+    }
+
+    function syncVatDeclarationPeriod(index) {
+      const row = data.vat.declarations[index];
+      if (!row) return;
+      const bounds = getQuarterBounds(row.year, row.quarter);
+      row.startDate = bounds.start;
+      row.endDate = bounds.end;
+      if (!row.dueDate) row.dueDate = defaultQuarterDueDate(row.year, row.quarter);
+      sortVatDeclarations();
+      saveData(false);
+    }
+
+    function deleteVatDeclaration(index) {
+      if (!confirm('Supprimer cette déclaration TVA ?')) return;
+      data.vat.declarations.splice(index, 1);
+      saveData(false);
+    }
+
+    function isDateInRange(value, startDate, endDate) {
+      if (!value) return false;
+      return value >= startDate && value <= endDate;
+    }
+
+    function getPeriodSales(startDate, endDate) {
+      return data.sales.filter(row => isDateInRange(row.date, startDate, endDate));
+    }
+
+    function getPeriodPurchases(startDate, endDate) {
+      return data.purchases.filter(row => isDateInRange(row.date, startDate, endDate));
+    }
+
+    function computeVatDeclaration(dec, previousCredit = 0) {
+      const startDate = dec.startDate || getQuarterBounds(dec.year, dec.quarter).start;
+      const endDate = dec.endDate || getQuarterBounds(dec.year, dec.quarter).end;
+      const salesRows = getPeriodSales(startDate, endDate);
+      const purchaseRows = getPeriodPurchases(startDate, endDate);
+
+      const baseByRate = { '01': 0, '02': 0, '03': 0 };
+      const vatByRate = { '54': 0 };
+
+      salesRows.forEach(row => {
+        const rate = round2(row.rate);
+        const base = round2(rowNetFromTvac(row.tvac, row.rate));
+        const vat = round2(rowVatFromTvac(row.tvac, row.rate));
+        if (rate === 6) baseByRate['01'] += base;
+        else if (rate === 12) baseByRate['02'] += base;
+        else if (rate === 21) baseByRate['03'] += base;
+        vatByRate['54'] += vat;
+      });
+
+      const purchases81 = purchaseRows.reduce((sum, row) => sum + (row.category === 'marchandise' ? toNumber(row.htva) : 0), 0);
+      const purchases82 = purchaseRows.reduce((sum, row) => sum + ((row.category || 'frais_generaux') !== 'marchandise' ? toNumber(row.htva) : 0), 0);
+      const deductibleVat = data.purchases
+        .map((row, i) => ({ row, i }))
+        .filter(({ row }) => isDateInRange(row.date, startDate, endDate) && row.deductible)
+        .reduce((sum, { i }) => sum + purchaseVatDisplay(i), 0);
+
+      const boxes = {
+        '01': round2(baseByRate['01']),
+        '02': round2(baseByRate['02']),
+        '03': round2(baseByRate['03']),
+        '44': round2(dec.manualBoxes?.['44']),
+        '46': round2(dec.manualBoxes?.['46']),
+        '47': round2(dec.manualBoxes?.['47']),
+        '48': round2(dec.manualBoxes?.['48']),
+        '49': round2(dec.manualBoxes?.['49']),
+        '54': round2(vatByRate['54']),
+        '55': round2(dec.manualBoxes?.['55']),
+        '56': round2(dec.manualBoxes?.['56']),
+        '57': round2(dec.manualBoxes?.['57']),
+        '59': round2(deductibleVat),
+        '61': round2(dec.manualBoxes?.['61']),
+        '62': round2(dec.manualBoxes?.['62']),
+        '63': round2(dec.manualBoxes?.['63']),
+        '71': 0,
+        '72': 0,
+        '81': round2(purchases81),
+        '82': round2(purchases82),
+        '83': round2(dec.manualBoxes?.['83']),
+        '91': round2(dec.manualBoxes?.['91'])
+      };
+
+      const taxDue = boxes['54'] + boxes['55'] + boxes['56'] + boxes['57'] + boxes['61'];
+      const deductibleTotal = boxes['59'] + boxes['62'] + boxes['63'] + previousCredit;
+      const net = round2(taxDue - deductibleTotal);
+      boxes['71'] = net > 0 ? net : 0;
+      boxes['72'] = net < 0 ? Math.abs(net) : 0;
+
+      return {
+        startDate,
+        endDate,
+        previousCredit: round2(previousCredit),
+        boxes,
+        salesCount: salesRows.length,
+        purchaseCount: purchaseRows.length,
+        salesVat: round2(vatByRate['54']),
+        deductibleVat: round2(deductibleVat),
+        dueAmount: boxes['71'],
+        creditAmount: boxes['72']
+      };
+    }
+
+    function computeVatLedger() {
+      ensureVatStructures();
+      sortVatDeclarations();
+      let carryCredit = toNumber(data.settings.vatCarryover);
+      const rows = data.vat.declarations.map(dec => {
+        const computed = computeVatDeclaration(dec, carryCredit);
+        carryCredit = computed.creditAmount;
+        const paymentAmount = round2(dec.paymentAmount);
+        const outstanding = computed.dueAmount > 0 ? round2(Math.max(0, computed.dueAmount - paymentAmount)) : 0;
+        return {
+          declaration: dec,
+          computed,
+          outstanding
+        };
+      });
+
+      const unfiled = rows.filter(row => !row.declaration.filed);
+      const filedUnpaid = rows.filter(row => row.declaration.filed && row.outstanding > 0.009);
+
+      return {
+        rows,
+        totalDueOpen: round2(rows.reduce((sum, row) => sum + row.outstanding, 0)),
+        totalUnfiledDue: round2(unfiled.reduce((sum, row) => sum + row.computed.dueAmount, 0)),
+        totalUnfiledCredit: round2(unfiled.reduce((sum, row) => sum + row.computed.creditAmount, 0)),
+        totalFiledUnpaid: round2(filedUnpaid.reduce((sum, row) => sum + row.outstanding, 0))
+      };
+    }
+
     function totals() {
       const salesNet = data.sales.reduce((sum, row) => sum + rowNetFromTvac(row.tvac, row.rate), 0);
       const salesVat = data.sales.reduce((sum, row) => sum + rowVatFromTvac(row.tvac, row.rate), 0);
@@ -1564,6 +1912,7 @@
         ${renderDashboard()}
         ${renderSales()}
         ${renderPurchases()}
+        ${renderVat()}
         ${renderInvestments()}
         ${renderAssets()}
         ${renderStock()}
@@ -2015,6 +2364,140 @@
       `;
     }
 
+
+    function renderVat() {
+      ensureVatStructures();
+      const vatLedger = computeVatLedger();
+
+      return `
+        <section class="page ${activePage === 'vat' ? 'active' : ''}">
+          <div class="card">
+            <div class="section-head">
+              <div>
+                <h2>Suivi TVA</h2>
+                <div class="hint">Cet onglet isole chaque période TVA. Une déclaration marquée comme déposée n’entre plus dans le suivi “à déclarer”. Les paiements servent au suivi du solde restant à payer. Les grilles Intervat les plus courantes sont préremplies automatiquement à partir des ventes et achats encodés.</div>
+              </div>
+              <div class="inline-actions">
+                <button class="primary" onclick="addVatDeclaration()">Ajouter une période TVA</button>
+              </div>
+            </div>
+
+            <div class="summary-grid" style="margin-bottom:16px;">
+              <div class="card"><div class="metric-label">Report initial TVA</div><div class="metric-value">${money(data.settings.vatCarryover)}</div></div>
+              <div class="card"><div class="metric-label">TVA non déclarée</div><div class="metric-value">${money(vatLedger.totalUnfiledDue - vatLedger.totalUnfiledCredit)}</div></div>
+              <div class="card"><div class="metric-label">Déclarée mais non payée</div><div class="metric-value">${money(vatLedger.totalFiledUnpaid)}</div></div>
+              <div class="card"><div class="metric-label">Solde TVA ouvert</div><div class="metric-value">${money(vatLedger.totalDueOpen)}</div></div>
+            </div>
+
+            <div class="muted-box" style="margin-bottom:16px;">
+              <strong>Repères Intervat intégrés :</strong><br>
+              01/02/03 = base des ventes à 6 % / 12 % / 21 % ; 54 = TVA due sur ventes ; 59 = TVA déductible ; 71 = TVA à payer ; 72 = crédit à reporter ; 81 = achats de marchandises ; 82 = services et frais généraux ; 83 = biens d’investissement (à compléter manuellement si nécessaire).<br>
+              Les grilles 44, 46, 47, 48, 49, 55, 56, 57, 61, 62, 63 et 91 restent disponibles en saisie manuelle pour les cas particuliers.
+            </div>
+
+            ${vatLedger.rows.map((row, i) => {
+              const dec = row.declaration;
+              const c = row.computed;
+              const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
+              const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
+              return `
+                <div class="card" style="margin-top:16px; border:1px solid var(--line);">
+                  <div class="section-head">
+                    <div>
+                      <h3>${escapeHtml(quarterLabel(dec.year, dec.quarter))}</h3>
+                      <div class="hint">Période couverte : ${printableDate(c.startDate)} au ${printableDate(c.endDate)} · Échéance : ${dueDateLabel} · ${netLabel}</div>
+                    </div>
+                    <div class="inline-actions">
+                      <button class="danger" onclick="deleteVatDeclaration(${i})">Suppr.</button>
+                    </div>
+                  </div>
+
+                  <div class="grid-2">
+                    <div>
+                      <table>
+                        <tbody>
+                          <tr><td>Année</td><td><input type="number" step="1" value="${escapeAttr(dec.year)}" onchange="data.vat.declarations[${i}].year=parseInt(this.value,10)||new Date().getFullYear(); syncVatDeclarationPeriod(${i})"></td></tr>
+                          <tr><td>Trimestre</td><td><select onchange="data.vat.declarations[${i}].quarter=parseInt(this.value,10)||1; syncVatDeclarationPeriod(${i})">
+                            <option value="1" ${parseInt(dec.quarter,10)===1?'selected':''}>T1 (janvier à mars)</option>
+                            <option value="2" ${parseInt(dec.quarter,10)===2?'selected':''}>T2 (avril à juin)</option>
+                            <option value="3" ${parseInt(dec.quarter,10)===3?'selected':''}>T3 (juillet à septembre)</option>
+                            <option value="4" ${parseInt(dec.quarter,10)===4?'selected':''}>T4 (octobre à décembre)</option>
+                          </select></td></tr>
+                          <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" onchange="data.vat.declarations[${i}].dueDate=this.value; saveData(false)"></td></tr>
+                          <tr><td>Déclaration déposée</td><td><select onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed?'selected':''}>Non</option><option value="true" ${dec.filed?'selected':''}>Oui</option></select></td></tr>
+                          <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" onchange="data.vat.declarations[${i}].filedDate=this.value; saveData(false)"></td></tr>
+                          <tr><td>Paiement effectué</td><td><select onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid?'selected':''}>Non</option><option value="true" ${dec.paid?'selected':''}>Oui</option></select></td></tr>
+                          <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
+                          <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                          <tr><td>Demande de remboursement</td><td><select onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested?'selected':''}>Non</option><option value="true" ${dec.reimbursementRequested?'selected':''}>Oui</option></select></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div>
+                      <table>
+                        <tbody>
+                          <tr><td>TVA ventes</td><td>${money(c.salesVat)}</td></tr>
+                          <tr><td>TVA achats déductible</td><td>${money(c.deductibleVat)}</td></tr>
+                          <tr><td>Crédit reporté période précédente</td><td>${money(c.previousCredit)}</td></tr>
+                          <tr><td>Solde déclaration (grille 71)</td><td>${money(c.boxes['71'])}</td></tr>
+                          <tr><td>Crédit à reporter (grille 72)</td><td>${money(c.boxes['72'])}</td></tr>
+                          <tr><td>Reste à payer</td><td class="${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${money(row.outstanding)}</td></tr>
+                          <tr><td>Lignes ventes prises en compte</td><td>${c.salesCount}</td></tr>
+                          <tr><td>Lignes achats prises en compte</td><td>${c.purchaseCount}</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div style="overflow:auto; margin-top:16px;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Grille</th>
+                          <th>Libellé</th>
+                          <th>Montant</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr><td>01</td><td>Opérations à 6 %</td><td>${money(c.boxes['01'])}</td></tr>
+                        <tr><td>02</td><td>Opérations à 12 %</td><td>${money(c.boxes['02'])}</td></tr>
+                        <tr><td>03</td><td>Opérations à 21 %</td><td>${money(c.boxes['03'])}</td></tr>
+                        <tr><td>44</td><td>Prestations/services particuliers</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['44'])}" onchange="data.vat.declarations[${i}].manualBoxes['44']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>46</td><td>Livraisons intracom / opérations assimilées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['46'])}" onchange="data.vat.declarations[${i}].manualBoxes['46']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>47</td><td>Autres opérations exemptées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['47'])}" onchange="data.vat.declarations[${i}].manualBoxes['47']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>48</td><td>Notes de crédit sur opérations antérieures</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['48'])}" onchange="data.vat.declarations[${i}].manualBoxes['48']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>49</td><td>Autres opérations sans TVA belge</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['49'])}" onchange="data.vat.declarations[${i}].manualBoxes['49']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>54</td><td>TVA due sur ventes encodées</td><td>${money(c.boxes['54'])}</td></tr>
+                        <tr><td>55</td><td>TVA due acquisitions intracom / autoliquidation</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['55'])}" onchange="data.vat.declarations[${i}].manualBoxes['55']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>56</td><td>TVA due opérations cocontractant</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['56'])}" onchange="data.vat.declarations[${i}].manualBoxes['56']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>57</td><td>TVA importations / autres régularisations dues</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['57'])}" onchange="data.vat.declarations[${i}].manualBoxes['57']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>59</td><td>TVA déductible sur achats</td><td>${money(c.boxes['59'])}</td></tr>
+                        <tr><td>61</td><td>Régularisations TVA en faveur de l’État</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['61'])}" onchange="data.vat.declarations[${i}].manualBoxes['61']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>62</td><td>Régularisations TVA en votre faveur</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['62'])}" onchange="data.vat.declarations[${i}].manualBoxes['62']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>63</td><td>Crédit antérieur / autres TVA déductibles</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['63'])}" onchange="data.vat.declarations[${i}].manualBoxes['63']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>71</td><td>TVA à payer</td><td>${money(c.boxes['71'])}</td></tr>
+                        <tr><td>72</td><td>Crédit TVA à reporter</td><td>${money(c.boxes['72'])}</td></tr>
+                        <tr><td>81</td><td>Achats marchandises / matières</td><td>${money(c.boxes['81'])}</td></tr>
+                        <tr><td>82</td><td>Services, biens divers et autres</td><td>${money(c.boxes['82'])}</td></tr>
+                        <tr><td>83</td><td>Biens d’investissement</td><td><input type="number" step="0.01" value="${num(c.boxes['83'])}" onchange="data.vat.declarations[${i}].manualBoxes['83']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                        <tr><td>91</td><td>Acompte de décembre (si applicable)</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['91'])}" onchange="data.vat.declarations[${i}].manualBoxes['91']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style="margin-top:16px;">
+                    <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
+                    <textarea onchange="data.vat.declarations[${i}].notes=this.value; saveData(false)">${escapeHtml(dec.notes || '')}</textarea>
+                  </div>
+                </div>
+              `;
+            }).join('') || `<div class="muted-box">Aucune période TVA. Clique sur <strong>Ajouter une période TVA</strong> puis choisis T1, T2, T3 ou T4. Exemple : pour janvier à mars 2026, crée T1 2026, coche “déclaration déposée” si c’est déjà fait et encode le paiement si tu l’as déjà versé.</div>`}
+          </div>
+        </section>
+      `;
+    }
+
     function renderSettings() {
       return `
         <section class="page two-cols ${activePage === 'settings' ? 'active' : ''}">
@@ -2134,6 +2617,16 @@
       const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
       const socialTotalContribution = socialBaseContribution + socialFeeContribution;
       const taxableBase = isExemptSocial ? t.estimatedProfit + taxAndSocial : t.estimatedProfit - socialTotalContribution;
+      const vatLedger = computeVatLedger();
+      const vatReportRows = vatLedger.rows.flatMap(row => [
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – période`, `${printableDate(row.computed.startDate)} au ${printableDate(row.computed.endDate)}`],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – échéance`, printableDate(row.declaration.dueDate || '')],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 54`, money(row.computed.boxes['54'])],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 59`, money(row.computed.boxes['59'])],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 71`, money(row.computed.boxes['71'])],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 72`, money(row.computed.boxes['72'])],
+        [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – reste à payer`, money(row.outstanding)]
+      ]);
 
       const salesRows = data.sales.map(row => [
         printableDate(row.date),
@@ -2423,6 +2916,19 @@
     </section>
 
     <section class="section">
+      <h2 class="section-title">Suivi TVA</h2>
+      <div class="section-grid">
+        <div class="panel"><div class="panel-body">${reportKv(vatReportRows.length ? vatReportRows : [['Aucune période TVA', '—']])}</div></div>
+        <div class="panel"><div class="panel-body">${reportKv([
+          ['Report TVA initial', money(data.settings.vatCarryover)],
+          ['TVA déclarée non payée', money(vatLedger.totalFiledUnpaid)],
+          ['TVA non déclarée nette', money(vatLedger.totalUnfiledDue - vatLedger.totalUnfiledCredit)],
+          ['Solde TVA ouvert', money(vatLedger.totalDueOpen)]
+        ])}</div></div>
+      </div>
+    </section>
+
+    <section class="section">
       <h2 class="section-title">Paramètres</h2>
       <div class="section-grid">
         <div class="panel"><div class="panel-body">${reportKv([
@@ -2463,6 +2969,7 @@
     }
 
     function render() {
+      ensureVatStructures();
       const t = totals();
 
       renderTabs();
@@ -2486,8 +2993,19 @@
     });
 
     window.addEventListener('load', async () => {
+      ensureVatStructures();
       render();
       await initDriveClientOnly();
+
+      if (googleAccessToken && window.gapi?.client) {
+        try {
+          await loadSyncDataFromDriveIfAvailable();
+          await loadDriveFiles();
+          render();
+        } catch (error) {
+          console.error(error);
+        }
+      }
     });
 
   </script>
