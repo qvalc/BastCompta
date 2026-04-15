@@ -656,55 +656,55 @@
     }
 
     .crm-card-header {
-      display:flex;
-      justify-content:space-between;
-      gap:12px;
-      flex-wrap:wrap;
-      align-items:center;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     .crm-drive-grid {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:16px;
-      margin-top:16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
     }
 
     .crm-drive-column {
-      border:1px solid var(--line);
-      padding:12px;
-      background:#fafafa;
+      border: 1px solid var(--line);
+      padding: 12px;
+      background: #fafafa;
     }
 
     .crm-drive-doc-list {
-      display:grid;
-      gap:10px;
-      margin-top:10px;
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
     }
 
     .crm-drive-doc-item {
-      border:1px solid var(--line);
-      background:#fff;
-      padding:10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 10px;
     }
 
     .crm-drive-doc-title {
-      font-weight:700;
-      margin-bottom:4px;
-      word-break:break-word;
+      font-weight: 700;
+      margin-bottom: 4px;
+      word-break: break-word;
     }
 
     .crm-drive-doc-meta {
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.5;
-      margin-bottom:8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 8px;
     }
 
     .crm-drive-empty {
-      color:var(--muted);
-      font-size:12px;
-      padding:8px 0;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 8px 0;
     }
 
 
@@ -878,10 +878,13 @@
             <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
             <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
             <div class="dropdown-sep"></div>
-            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
+              Drive</button>
             <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
-            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
-            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers Google Drive</button>
+            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive
+              vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers
+              Google Drive</button>
           </div>
         </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
@@ -1877,6 +1880,13 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         .map(normalizeClient)
         .sort((a, b) => {
           if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+
+          const aNum = String(a.clientNumber || '999999');
+          const bNum = String(b.clientNumber || '999999');
+
+          const byNumber = aNum.localeCompare(bNum, 'fr', { numeric: true, sensitivity: 'base' });
+          if (byNumber !== 0) return byNumber;
+
           return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
         });
     }
@@ -2000,7 +2010,29 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function setCrmSearchTerm(value) {
       crmSearchTerm = String(value || '');
-      render();
+
+      const crmPage = document.querySelector('.page[data-page="crm"]');
+      if (!crmPage) return;
+
+      const oldPanel = crmPage.querySelector('.comm-panel');
+      if (!oldPanel) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = renderCRMInner();
+      const newPanel = wrapper.firstElementChild;
+
+      if (newPanel) {
+        oldPanel.replaceWith(newPanel);
+      }
+
+      const searchInput = document.getElementById('crmSearchInput');
+      if (searchInput) {
+        searchInput.focus();
+        const len = searchInput.value.length;
+        try {
+          searchInput.setSelectionRange(len, len);
+        } catch (e) { }
+      }
     }
 
     function normalizeClientNumberForMatch(value) {
@@ -2315,126 +2347,141 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       `).join('')}</div>`;
     }
 
-    function renderCRM() {
+    function renderCRMInner() {
       const clients = getClients().filter(clientMatchesSearch);
       const cards = clients.map((client, index) => {
         const stats = getClientStats(client.id);
         const isExpanded = crmExpandedClientId === client.id;
         const linkedDocs = getIndexedDriveDocsForClient(client);
+
         return `
-          <div class="simple-box" style="margin-bottom:14px;">
-            <div class="crm-card-header">
-              <button type="button" style="flex:1; text-align:left; box-shadow:none;" onclick="toggleClientExpanded('${escapeAttr(client.id)}')">
-                ${escapeHtml(client.name || `Client ${index + 1}`)} ${client.favorite ? '★' : ''}${client.clientNumber ? ` — N° ${escapeHtml(client.clientNumber)}` : ''}
-              </button>
-              <div class="inline-actions no-print">
-                <button type="button" onclick="duplicateClient('${escapeAttr(client.id)}')">Dupliquer</button>
-                <button type="button" class="danger" onclick="deleteClient('${escapeAttr(client.id)}')">Supprimer</button>
+      <div class="simple-box" style="margin-bottom:14px;">
+        <div class="crm-card-header">
+          <button type="button" style="flex:1; text-align:left; box-shadow:none;" onclick="toggleClientExpanded('${escapeAttr(client.id)}')">
+            ${escapeHtml(client.name || `Client ${index + 1}`)} ${client.favorite ? '★' : ''}${client.clientNumber ? ` — N° ${escapeHtml(client.clientNumber)}` : ''}
+          </button>
+          <div class="inline-actions no-print">
+            <button type="button" onclick="duplicateClient('${escapeAttr(client.id)}')">Dupliquer</button>
+            <button type="button" class="danger" onclick="deleteClient('${escapeAttr(client.id)}')">Supprimer</button>
+          </div>
+        </div>
+        ${isExpanded ? `
+          <div style="margin-top:12px;" class="settings-grid">
+            <div class="stack">
+              <div class="field">
+                <label>Nom / société</label>
+                <input value="${escapeAttr(client.name)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), name: this.value }, false)">
+              </div>
+              <div class="field">
+                <label>Email</label>
+                <input type="email" value="${escapeAttr(client.email)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), email: this.value }, false)">
+              </div>
+              <div class="field">
+                <label>Adresse</label>
+                <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), address: this.value }, false)">${escapeHtml(client.address)}</textarea>
+              </div>
+              <div class="field">
+                <label>Notes</label>
+                <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), notes: this.value }, false)">${escapeHtml(client.notes)}</textarea>
               </div>
             </div>
-            ${isExpanded ? `
-              <div style="margin-top:12px;" class="settings-grid">
-                <div class="stack">
-                  <div class="field">
-                    <label>Nom / société</label>
-                    <input value="${escapeAttr(client.name)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), name: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>Email</label>
-                    <input type="email" value="${escapeAttr(client.email)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), email: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>Adresse</label>
-                    <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), address: this.value }, false)">${escapeHtml(client.address)}</textarea>
-                  </div>
-                  <div class="field">
-                    <label>Notes</label>
-                    <textarea oninput="autoResize(this)" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), notes: this.value }, false)">${escapeHtml(client.notes)}</textarea>
-                  </div>
-                </div>
-                <div class="stack">
-                  <div class="field">
-                    <label>N° client</label>
-                    <input value="${escapeAttr(client.clientNumber)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), clientNumber: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>N° TVA</label>
-                    <input value="${escapeAttr(client.vat)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), vat: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>Téléphone</label>
-                    <input value="${escapeAttr(client.phone)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), phone: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>Personne de contact</label>
-                    <input value="${escapeAttr(client.contact)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), contact: this.value }, false)">
-                  </div>
-                  <div class="field">
-                    <label>Favori</label>
-                    <select onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), favorite: this.value === 'true' }, false)">
-                      <option value="false" ${!client.favorite ? 'selected' : ''}>Non</option>
-                      <option value="true" ${client.favorite ? 'selected' : ''}>Oui</option>
-                    </select>
-                  </div>
-                  <div class="simple-box" style="line-height:1.7;">
-                    <strong>Historique local</strong><br>
-                    Devis liés : ${stats.quoteCount}<br>
-                    Factures liées : ${stats.invoiceCount}<br>
-                    Total facture lié : ${escapeHtml(money(stats.invoiceTotal))}
-                  </div>
-                </div>
+            <div class="stack">
+              <div class="field">
+                <label>N° client</label>
+                <input value="${escapeAttr(client.clientNumber)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), clientNumber: this.value }, false)">
               </div>
-
-              <div class="crm-drive-grid">
-                <div class="crm-drive-column">
-                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
-                    <strong>Drive · Devis</strong>
-                    <div class="inline-actions no-print">
-                      <button type="button" onclick="exportDocTypeToDrive('quote')">Exporter le devis courant</button>
-                      <button type="button" onclick="pickLocalJsonForDrive()">Importer depuis le PC</button>
-                    </div>
-                  </div>
-                  ${renderCrmDriveDocList(linkedDocs.quotes, 'Aucun devis lié à ce n° client sur Google Drive.')}
-                </div>
-                <div class="crm-drive-column">
-                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
-                    <strong>Drive · Factures</strong>
-                    <div class="inline-actions no-print">
-                      <button type="button" onclick="exportDocTypeToDrive('invoice')">Exporter la facture courante</button>
-                      <button type="button" onclick="pickLocalJsonForDrive()">Importer depuis le PC</button>
-                    </div>
-                  </div>
-                  ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce n° client sur Google Drive.')}
-                </div>
+              <div class="field">
+                <label>N° TVA</label>
+                <input value="${escapeAttr(client.vat)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), vat: this.value }, false)">
               </div>
-            ` : ''}
+              <div class="field">
+                <label>Téléphone</label>
+                <input value="${escapeAttr(client.phone)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), phone: this.value }, false)">
+              </div>
+              <div class="field">
+                <label>Personne de contact</label>
+                <input value="${escapeAttr(client.contact)}" onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), contact: this.value }, false)">
+              </div>
+              <div class="field">
+                <label>Favori</label>
+                <select onchange="saveClientRecord({ ...(getClients().find(c => c.id === '${escapeAttr(client.id)}') || {}), favorite: this.value === 'true' }, false)">
+                  <option value="false" ${!client.favorite ? 'selected' : ''}>Non</option>
+                  <option value="true" ${client.favorite ? 'selected' : ''}>Oui</option>
+                </select>
+              </div>
+              <div class="simple-box" style="line-height:1.7;">
+                <strong>Historique local</strong><br>
+                Devis liés : ${stats.quoteCount}<br>
+                Factures liées : ${stats.invoiceCount}<br>
+                Total facture lié : ${escapeHtml(money(stats.invoiceTotal))}
+              </div>
+            </div>
           </div>
-        `;
+
+          <div class="crm-drive-grid">
+            <div class="crm-drive-column">
+              <strong>Devis</strong>
+              <div class="inline-actions no-print" style="margin-top:10px;">
+                <button type="button" onclick="exportDocTypeToDrive('quote')">Exporter le devis courant</button>
+              </div>
+              ${renderCrmDriveDocList(linkedDocs.quotes, 'Aucun devis lié à ce client.')}
+            </div>
+
+            <div class="crm-drive-column">
+              <strong>Factures</strong>
+              <div class="inline-actions no-print" style="margin-top:10px;">
+                <button type="button" onclick="exportDocTypeToDrive('invoice')">Exporter la facture courante</button>
+              </div>
+              ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce client.')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
       }).join('');
 
       return `
-        <section class="page ${activePage === 'crm' ? 'active' : ''}" data-page="crm">
-          <div class="sheet">
-            <div class="toolbar no-print">
-              <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
-              <div class="inline-actions">
-                <input class="crm-search-input" type="search" placeholder="Rechercher par nom, n° client, n° devis ou n° facture" value="${escapeAttr(crmSearchTerm)}" oninput="setCrmSearchTerm(this.value)">
-                <button class="primary" onclick="createNewClient()">Nouveau client</button>
-                <button onclick="saveData()">Sauvegarder</button>
-              </div>
-            </div>
+    <div class="comm-panel">
+      <h2>Carnet d'adresses / CRM</h2>
 
-            <div class="comm-panel">
-              <h2>Carnet d'adresses / CRM</h2>
-              <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
-                Le carnet reste trié par nom. La recherche trouve aussi les documents Drive liés par n° client.
-                À l’ouverture d’une fiche, les colonnes <strong>Devis</strong> et <strong>Factures</strong> affichent les fichiers dont le n° client correspond.
-              </div>
-              ${cards || '<div class="simple-box">Aucun client ne correspond à la recherche.</div>'}
-            </div>
+      <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
+        Le bouton <strong>Sauvegarder</strong> met à jour automatiquement le CRM sur Google Drive sans créer de doublon quand la connexion Drive est active.
+        À la reconnexion, le CRM est rechargé automatiquement.
+      </div>
+
+      <div class="simple-box" style="margin-bottom:16px;">
+        <label for="crmSearchInput"><strong>Recherche</strong></label>
+        <input
+          id="crmSearchInput"
+          class="crm-search-input"
+          type="text"
+          placeholder="Chercher par nom, n° client, n° devis ou n° facture"
+          value="${escapeAttr(crmSearchTerm)}"
+          oninput="setCrmSearchTerm(this.value)"
+        >
+      </div>
+
+      ${cards || '<div class="simple-box">Aucun client enregistré pour le moment.</div>'}
+    </div>
+  `;
+    }
+
+    function renderCRM() {
+      return `
+    <section class="page ${activePage === 'crm' ? 'active' : ''}" data-page="crm">
+      <div class="sheet">
+        <div class="toolbar no-print">
+          <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
+          <div class="inline-actions">
+            <button class="primary" onclick="createNewClient()">Nouveau client</button>
+            <button onclick="saveData()">Sauvegarder</button>
           </div>
-        </section>
-      `;
+        </div>
+
+        ${renderCRMInner()}
+      </div>
+    </section>
+  `;
     }
 
     function sanitizeEmail(email) {
