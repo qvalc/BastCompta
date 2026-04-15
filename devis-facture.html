@@ -651,6 +651,62 @@
       white-space: nowrap;
     }
 
+    .crm-search-input {
+      max-width: 420px;
+    }
+
+    .crm-card-header {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .crm-drive-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+      margin-top:16px;
+    }
+
+    .crm-drive-column {
+      border:1px solid var(--line);
+      padding:12px;
+      background:#fafafa;
+    }
+
+    .crm-drive-doc-list {
+      display:grid;
+      gap:10px;
+      margin-top:10px;
+    }
+
+    .crm-drive-doc-item {
+      border:1px solid var(--line);
+      background:#fff;
+      padding:10px;
+    }
+
+    .crm-drive-doc-title {
+      font-weight:700;
+      margin-bottom:4px;
+      word-break:break-word;
+    }
+
+    .crm-drive-doc-meta {
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.5;
+      margin-bottom:8px;
+    }
+
+    .crm-drive-empty {
+      color:var(--muted);
+      font-size:12px;
+      padding:8px 0;
+    }
+
 
     @media (max-width: 1100px) {
 
@@ -950,6 +1006,8 @@ Cordialement,
     let data = loadData();
     let activePage = 'quote';
     let crmExpandedClientId = '';
+    let crmSearchTerm = '';
+    let driveFileIndex = {};
 
     function loadData() {
       try {
@@ -1219,7 +1277,14 @@ Cordialement,
           selectedDriveFileId = googleDriveFiles[0].id;
         }
 
+        driveFileIndex = Object.fromEntries(
+          Object.entries(driveFileIndex).filter(([id]) => validIds.has(id))
+        );
+
         render();
+        ensureDriveFileIndex(false).then(() => {
+          if (activePage === 'crm') render();
+        });
 
       } catch (error) {
         console.error(error);
@@ -1355,9 +1420,11 @@ Cordialement,
     }
 
     function resetData() {
-      if (!confirm('Tout effacer et revenir à une base vide ?')) return;
+      if (!confirm('Tout effacer et revenir à une base locale vide ?')) return;
       data = structuredClone(defaultData);
-      saveData(false);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      alert('Données locales réinitialisées. Aucune modification sur Google Drive.');
+      render();
     }
 
     function pickLocalJsonForDrive() {
@@ -1930,16 +1997,335 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return `<option value="">-- Choisir un client enregistré --</option>${options}`;
     }
 
+
+    function setCrmSearchTerm(value) {
+      crmSearchTerm = String(value || '');
+      render();
+    }
+
+    function normalizeClientNumberForMatch(value) {
+      const digits = String(value || '').replace(/\D/g, '');
+      return digits || String(value || '').trim().toLowerCase();
+    }
+
+    function normalizeDocTypeFromName(fileName) {
+      const lower = String(fileName || '').toLowerCase();
+      if (lower.startsWith('devis-')) return 'quote';
+      if (lower.startsWith('facture-')) return 'invoice';
+      return '';
+    }
+
+    function getDriveDocMetaFromParsed(parsed, fileName, modifiedTime = '') {
+      const type = normalizeDocTypeFromName(fileName);
+      const source = type === 'invoice' ? (parsed.invoice || {}) : (parsed.quote || {});
+      return {
+        type,
+        documentNumber: String(source.documentNumber || '').trim(),
+        clientNumber: String(source.clientNumber || '').trim(),
+        clientName: String(source.clientName || '').trim(),
+        modifiedTime: modifiedTime || ''
+      };
+    }
+
+    async function fetchDriveFileParsed(fileId) {
+      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: {
+          Authorization: `Bearer ${googleAccessToken}`
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      return res.json();
+    }
+
+    async function ensureDriveFileIndex(force = false) {
+      if (!googleAccessToken) return [];
+      if (!googleDriveFiles.length) return [];
+
+      const filesToRead = force
+        ? googleDriveFiles
+        : googleDriveFiles.filter(file => !driveFileIndex[file.id]);
+
+      if (filesToRead.length) {
+        const summaries = await Promise.all(filesToRead.map(async (file) => {
+          try {
+            const parsed = await fetchDriveFileParsed(file.id);
+            return [file.id, {
+              id: file.id,
+              name: file.name,
+              modifiedTime: file.modifiedTime || '',
+              ...getDriveDocMetaFromParsed(parsed, file.name, file.modifiedTime || '')
+            }];
+          } catch (error) {
+            console.error(error);
+            return [file.id, {
+              id: file.id,
+              name: file.name,
+              modifiedTime: file.modifiedTime || '',
+              type: normalizeDocTypeFromName(file.name),
+              documentNumber: '',
+              clientNumber: '',
+              clientName: ''
+            }];
+          }
+        }));
+        for (const [id, summary] of summaries) {
+          driveFileIndex[id] = summary;
+        }
+      }
+
+      return googleDriveFiles.map(file => driveFileIndex[file.id]).filter(Boolean);
+    }
+
+    function getIndexedDriveDocsForClient(client) {
+      const clientKey = normalizeClientNumberForMatch(client.clientNumber);
+      const docs = Object.values(driveFileIndex).filter(doc => normalizeClientNumberForMatch(doc.clientNumber) === clientKey);
+
+      const sortDocs = (a, b) => {
+        const aNum = String(a.documentNumber || '');
+        const bNum = String(b.documentNumber || '');
+        return aNum.localeCompare(bNum, 'fr', { numeric: true, sensitivity: 'base' });
+      };
+
+      return {
+        quotes: docs.filter(doc => doc.type === 'quote').sort(sortDocs),
+        invoices: docs.filter(doc => doc.type === 'invoice').sort(sortDocs)
+      };
+    }
+
+    function clientMatchesSearch(client) {
+      const term = crmSearchTerm.trim().toLowerCase();
+      if (!term) return true;
+
+      const baseFields = [
+        client.name,
+        client.clientNumber,
+        client.email,
+        client.vat
+      ].map(value => String(value || '').toLowerCase());
+
+      if (baseFields.some(value => value.includes(term))) return true;
+
+      const linked = getIndexedDriveDocsForClient(client);
+      const docs = [...linked.quotes, ...linked.invoices];
+      return docs.some(doc => [
+        doc.documentNumber,
+        doc.clientNumber,
+        doc.clientName,
+        doc.name
+      ].some(value => String(value || '').toLowerCase().includes(term)));
+    }
+
+    async function loadDriveJsonFileById(fileId, showAlert = true) {
+      if (!googleAccessToken) {
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
+        return null;
+      }
+
+      try {
+        const file = googleDriveFiles.find(item => item.id === fileId);
+        const parsed = await fetchDriveFileParsed(fileId);
+        data = mergeDeep(structuredClone(defaultData), parsed);
+        syncCommunicationFromInvoice(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        selectedDriveFileId = fileId;
+        render();
+
+        if (showAlert) {
+          alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
+        }
+
+        return parsed;
+      } catch (error) {
+        console.error(error);
+        if (showAlert) {
+          alert("Échec de l'import depuis Google Drive.");
+        }
+        return null;
+      }
+    }
+
+    async function downloadDriveFileById(fileId, showAlert = true) {
+      if (!googleAccessToken) {
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
+        return false;
+      }
+
+      try {
+        const file = googleDriveFiles.find(item => item.id === fileId);
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const content = await res.text();
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file?.name || 'sauvegarde-drive.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        if (showAlert) {
+          alert('Téléchargement terminé.');
+        }
+        return true;
+      } catch (error) {
+        console.error(error);
+        if (showAlert) {
+          alert("Échec du téléchargement depuis Google Drive.");
+        }
+        return false;
+      }
+    }
+
+    async function deleteDriveFileById(fileId, showAlert = true) {
+      if (!googleAccessToken) {
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
+        return false;
+      }
+
+      const file = googleDriveFiles.find(item => item.id === fileId);
+      if (!confirm(`Supprimer définitivement ${file?.name || 'cette sauvegarde'} ?`)) return false;
+
+      try {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        delete driveFileIndex[fileId];
+        googleDriveFiles = googleDriveFiles.filter(item => item.id !== fileId);
+        selectedDriveFileIds = selectedDriveFileIds.filter(id => id !== fileId);
+        if (selectedDriveFileId === fileId) {
+          selectedDriveFileId = googleDriveFiles[0]?.id || '';
+        }
+        render();
+
+        if (showAlert) {
+          alert('Sauvegarde supprimée.');
+        }
+        return true;
+      } catch (error) {
+        console.error(error);
+        if (showAlert) {
+          alert('Erreur lors de la suppression.');
+        }
+        return false;
+      }
+    }
+
+    async function exportDocTypeToDrive(docKey, showAlert = true) {
+      if (!googleAccessToken) {
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
+        return null;
+      }
+
+      try {
+        const doc = data[docKey] || {};
+        const prefix = docKey === 'invoice' ? 'facture' : 'devis';
+        const docNumber = String(doc.documentNumber || '').trim();
+        const fileName = docNumber ? `${prefix}-${docNumber}.json` : `${prefix}-sans-numero.json`;
+        const content = JSON.stringify(data, null, 2);
+
+        const existing = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
+          fields: 'files(id, name)'
+        });
+
+        const files = existing.result.files || [];
+        const isUpdate = files.length > 0;
+        const metadata = isUpdate
+          ? { name: fileName }
+          : { name: fileName, parents: ['appDataFolder'] };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (isUpdate) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        await loadDriveFiles();
+        selectedDriveFileId = saved.id;
+
+        if (showAlert) {
+          alert(`Export Google Drive réussi : ${saved.name}`);
+        }
+        return saved;
+      } catch (error) {
+        console.error(error);
+        if (showAlert) {
+          alert("Échec de l'export vers Google Drive.");
+        }
+        return null;
+      }
+    }
+
+    function renderCrmDriveDocList(docs, emptyLabel) {
+      if (!docs.length) {
+        return `<div class="crm-drive-empty">${escapeHtml(emptyLabel)}</div>`;
+      }
+
+      return `<div class="crm-drive-doc-list">${docs.map(doc => `
+        <div class="crm-drive-doc-item">
+          <div class="crm-drive-doc-title">${escapeHtml(doc.documentNumber || doc.name || 'Document')}</div>
+          <div class="crm-drive-doc-meta">
+            ${escapeHtml(doc.name || '')}<br>
+            ${doc.modifiedTime ? `Modifié le ${escapeHtml(new Date(doc.modifiedTime).toLocaleString('fr-BE'))}` : 'Date inconnue'}
+          </div>
+          <div class="inline-actions no-print">
+            <button type="button" onclick="loadDriveJsonFileById('${escapeAttr(doc.id)}')">Charger</button>
+            <button type="button" onclick="downloadDriveFileById('${escapeAttr(doc.id)}')">Télécharger</button>
+            <button type="button" class="danger" onclick="deleteDriveFileById('${escapeAttr(doc.id)}')">Supprimer</button>
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
     function renderCRM() {
-      const clients = getClients();
+      const clients = getClients().filter(clientMatchesSearch);
       const cards = clients.map((client, index) => {
         const stats = getClientStats(client.id);
         const isExpanded = crmExpandedClientId === client.id;
+        const linkedDocs = getIndexedDriveDocsForClient(client);
         return `
           <div class="simple-box" style="margin-bottom:14px;">
-            <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center;">
+            <div class="crm-card-header">
               <button type="button" style="flex:1; text-align:left; box-shadow:none;" onclick="toggleClientExpanded('${escapeAttr(client.id)}')">
-                ${escapeHtml(client.name || `Client ${index + 1}`)} ${client.favorite ? '★' : ''}
+                ${escapeHtml(client.name || `Client ${index + 1}`)} ${client.favorite ? '★' : ''}${client.clientNumber ? ` — N° ${escapeHtml(client.clientNumber)}` : ''}
               </button>
               <div class="inline-actions no-print">
                 <button type="button" onclick="duplicateClient('${escapeAttr(client.id)}')">Dupliquer</button>
@@ -1998,6 +2384,29 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
                   </div>
                 </div>
               </div>
+
+              <div class="crm-drive-grid">
+                <div class="crm-drive-column">
+                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
+                    <strong>Drive · Devis</strong>
+                    <div class="inline-actions no-print">
+                      <button type="button" onclick="exportDocTypeToDrive('quote')">Exporter le devis courant</button>
+                      <button type="button" onclick="pickLocalJsonForDrive()">Importer depuis le PC</button>
+                    </div>
+                  </div>
+                  ${renderCrmDriveDocList(linkedDocs.quotes, 'Aucun devis lié à ce n° client sur Google Drive.')}
+                </div>
+                <div class="crm-drive-column">
+                  <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:center;">
+                    <strong>Drive · Factures</strong>
+                    <div class="inline-actions no-print">
+                      <button type="button" onclick="exportDocTypeToDrive('invoice')">Exporter la facture courante</button>
+                      <button type="button" onclick="pickLocalJsonForDrive()">Importer depuis le PC</button>
+                    </div>
+                  </div>
+                  ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce n° client sur Google Drive.')}
+                </div>
+              </div>
             ` : ''}
           </div>
         `;
@@ -2009,6 +2418,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="toolbar no-print">
               <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
               <div class="inline-actions">
+                <input class="crm-search-input" type="search" placeholder="Rechercher par nom, n° client, n° devis ou n° facture" value="${escapeAttr(crmSearchTerm)}" oninput="setCrmSearchTerm(this.value)">
                 <button class="primary" onclick="createNewClient()">Nouveau client</button>
                 <button onclick="saveData()">Sauvegarder</button>
               </div>
@@ -2017,10 +2427,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="comm-panel">
               <h2>Carnet d'adresses / CRM</h2>
               <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
-                Le bouton <strong>Sauvegarder</strong> met à jour automatiquement le CRM sur Google Drive sans créer de doublon quand la connexion Drive est active.
-                À la reconnexion, le CRM est rechargé automatiquement.
+                Le carnet reste trié par nom. La recherche trouve aussi les documents Drive liés par n° client.
+                À l’ouverture d’une fiche, les colonnes <strong>Devis</strong> et <strong>Factures</strong> affichent les fichiers dont le n° client correspond.
               </div>
-              ${cards || '<div class="simple-box">Aucun client enregistré pour le moment.</div>'}
+              ${cards || '<div class="simple-box">Aucun client ne correspond à la recherche.</div>'}
             </div>
           </div>
         </section>
@@ -2124,6 +2534,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             gapi.client.setToken({ access_token: googleAccessToken });
             await loadSyncDataFromDriveIfAvailable();
             await loadDriveFiles();
+            await ensureDriveFileIndex(true);
           } catch (error) {
             console.error(error);
           }
