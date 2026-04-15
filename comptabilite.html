@@ -400,6 +400,153 @@
       white-space: nowrap;
     }
 
+
+
+    .vat-declaration-card {
+      margin-top: 16px;
+      border: 1px solid var(--line);
+    }
+
+    .vat-declaration-card.compact {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .vat-summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 18px;
+      cursor: pointer;
+      flex-wrap: wrap;
+    }
+
+    .vat-summary-main {
+      display: grid;
+      gap: 6px;
+    }
+
+    .vat-summary-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .vat-summary-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .vat-pill {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eef2ff;
+      color: var(--primary);
+      border: 1px solid #c7d2fe;
+    }
+
+    .vat-pill.success {
+      background: #ecfdf5;
+      color: var(--success);
+      border-color: #bbf7d0;
+    }
+
+    .vat-pill.danger {
+      background: #fef2f2;
+      color: var(--danger);
+      border-color: #fecaca;
+    }
+
+    .vat-pill.muted {
+      background: #f8fafc;
+      color: var(--muted);
+      border-color: #cbd5e1;
+    }
+
+    .vat-summary-amount {
+      font-size: 22px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .vat-summary-details {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 0 18px 18px;
+    }
+
+    .vat-mini-box {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .vat-mini-label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .vat-mini-value {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .vat-expanded-panel {
+      border-top: 1px solid var(--line);
+      padding: 18px;
+      background: #fcfdff;
+    }
+
+    .vat-code-table td:first-child,
+    .vat-code-table th:first-child {
+      width: 70px;
+      text-align: center;
+      font-weight: 700;
+    }
+
+    .vat-primary-codes,
+    .vat-extra-codes {
+      margin-top: 16px;
+    }
+
+    .vat-extra-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-weight: 700;
+      box-shadow: none;
+      cursor: pointer;
+    }
+
+    .vat-extra-body {
+      display: none;
+      margin-top: 10px;
+    }
+
+    .vat-extra-body.open {
+      display: block;
+    }
+
+    .lock-note {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
     @media (max-width: 1100px) {
       .summary-grid {
         grid-template-columns: repeat(2, minmax(180px, 1fr));
@@ -407,6 +554,10 @@
 
       .page.two-cols {
         grid-template-columns: 1fr;
+      }
+
+      .vat-summary-details {
+        grid-template-columns: repeat(2, minmax(180px, 1fr));
       }
     }
 
@@ -416,7 +567,8 @@
       }
 
       .summary-grid,
-      .grid-2 {
+      .grid-2,
+      .vat-summary-details {
         grid-template-columns: 1fr;
       }
 
@@ -542,6 +694,7 @@
 
     let data = loadData();
     let activePage = 'dashboard';
+    let expandedVatDeclarationId = '';
 
     function loadData() {
       try {
@@ -1498,6 +1651,14 @@
     }
 
 
+    function formatDateLocal(dateObj) {
+      const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
     function getQuarterBounds(year, quarter) {
       const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
       const y = parseInt(year || new Date().getFullYear(), 10) || new Date().getFullYear();
@@ -1505,13 +1666,13 @@
       const start = new Date(y, startMonth, 1);
       const end = new Date(y, startMonth + 3, 0);
       return {
-        start: start.toISOString().slice(0, 10),
-        end: end.toISOString().slice(0, 10)
+        start: formatDateLocal(start),
+        end: formatDateLocal(end)
       };
     }
 
     function nextBusinessDay(dateObj) {
-      const d = new Date(dateObj.getTime());
+      const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
       while (d.getDay() === 0 || d.getDay() === 6) {
         d.setDate(d.getDate() + 1);
       }
@@ -1523,23 +1684,23 @@
       const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
       const targetMonth = q * 3;
       const base = new Date(y, targetMonth, 25);
-      return nextBusinessDay(base).toISOString().slice(0, 10);
+      return formatDateLocal(nextBusinessDay(base));
     }
 
     function quarterLabel(year, quarter) {
       return `T${quarter || 1} ${year || ''}`.trim();
     }
 
-    function vatDeclarationTemplate() {
-      const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
-      const quarter = 1;
-      const bounds = getQuarterBounds(currentYear, quarter);
+    function vatDeclarationTemplate(year = null, quarter = 1) {
+      const currentYear = parseInt(year || data.company.period, 10) || new Date().getFullYear();
+      const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
+      const bounds = getQuarterBounds(currentYear, q);
       return {
         id: `vat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         regime: 'quarterly',
         year: currentYear,
-        quarter,
-        dueDate: defaultQuarterDueDate(currentYear, quarter),
+        quarter: q,
+        dueDate: defaultQuarterDueDate(currentYear, q),
         startDate: bounds.start,
         endDate: bounds.end,
         filed: false,
@@ -1548,6 +1709,7 @@
         paidDate: '',
         paymentAmount: 0,
         reimbursementRequested: false,
+        closed: false,
         notes: '',
         manualBoxes: {
           '44': 0,
@@ -1567,9 +1729,21 @@
       };
     }
 
+    function ensureDefaultVatQuarters(year) {
+      if (!data.vat || !Array.isArray(data.vat.declarations)) return;
+      const targetYear = parseInt(year || data.company.period, 10) || new Date().getFullYear();
+      for (let q = 1; q <= 4; q += 1) {
+        const exists = data.vat.declarations.some(dec => parseInt(dec.year, 10) === targetYear && parseInt(dec.quarter, 10) === q);
+        if (!exists) {
+          data.vat.declarations.push(vatDeclarationTemplate(targetYear, q));
+        }
+      }
+    }
+
     function ensureVatStructures() {
       if (!data.vat || typeof data.vat !== 'object') data.vat = { declarations: [] };
       if (!Array.isArray(data.vat.declarations)) data.vat.declarations = [];
+      ensureDefaultVatQuarters();
       data.vat.declarations.forEach(dec => {
         if (!dec.manualBoxes || typeof dec.manualBoxes !== 'object') {
           dec.manualBoxes = {};
@@ -1577,12 +1751,24 @@
         ['44','46','47','48','49','55','56','57','61','62','63','83','91'].forEach(code => {
           if (typeof dec.manualBoxes[code] === 'undefined') dec.manualBoxes[code] = 0;
         });
+        if (typeof dec.closed === 'undefined') dec.closed = false;
+        const bounds = getQuarterBounds(dec.year, dec.quarter);
+        dec.startDate = bounds.start;
+        dec.endDate = bounds.end;
+        if (!dec.dueDate) dec.dueDate = defaultQuarterDueDate(dec.year, dec.quarter);
       });
     }
 
     function addVatDeclaration() {
       ensureVatStructures();
-      data.vat.declarations.push(vatDeclarationTemplate());
+      const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
+      const existingQuarters = data.vat.declarations
+        .filter(dec => parseInt(dec.year, 10) === currentYear)
+        .map(dec => parseInt(dec.quarter, 10))
+        .filter(Number.isFinite);
+      const nextQuarter = [1,2,3,4].find(q => !existingQuarters.includes(q)) || 1;
+      data.vat.declarations.push(vatDeclarationTemplate(currentYear, nextQuarter));
+      expandedVatDeclarationId = data.vat.declarations[data.vat.declarations.length - 1].id;
       sortVatDeclarations();
       saveData(false);
     }
@@ -1610,6 +1796,27 @@
     function deleteVatDeclaration(index) {
       if (!confirm('Supprimer cette déclaration TVA ?')) return;
       data.vat.declarations.splice(index, 1);
+      saveData(false);
+    }
+
+
+    function toggleVatDeclarationExpanded(id) {
+      expandedVatDeclarationId = expandedVatDeclarationId === id ? '' : id;
+      render();
+    }
+
+    function toggleVatExtraCodes(id) {
+      const dec = (data.vat?.declarations || []).find(item => item.id === id);
+      if (!dec || dec.closed) return;
+      dec.showExtraCodes = !dec.showExtraCodes;
+      saveData(false);
+    }
+
+    function setVatClosed(index, checked) {
+      const dec = data.vat.declarations[index];
+      if (!dec || dec.closed || !checked) return;
+      dec.closed = true;
+      dec.showExtraCodes = false;
       saveData(false);
     }
 
@@ -2368,6 +2575,9 @@
     function renderVat() {
       ensureVatStructures();
       const vatLedger = computeVatLedger();
+      if (!expandedVatDeclarationId && vatLedger.rows.length) {
+        expandedVatDeclarationId = vatLedger.rows[0].declaration.id;
+      }
 
       return `
         <section class="page ${activePage === 'vat' ? 'active' : ''}">
@@ -2375,7 +2585,7 @@
             <div class="section-head">
               <div>
                 <h2>Suivi TVA</h2>
-                <div class="hint">Cet onglet isole chaque période TVA. Une déclaration marquée comme déposée n’entre plus dans le suivi “à déclarer”. Les paiements servent au suivi du solde restant à payer. Les grilles Intervat les plus courantes sont préremplies automatiquement à partir des ventes et achats encodés.</div>
+                <div class="hint">Les 4 trimestres de l’année affichée sont générés automatiquement. Les dates de début et fin s’adaptent au bon nombre de jours du mois. Une période clôturée devient verrouillée.</div>
               </div>
               <div class="inline-actions">
                 <button class="primary" onclick="addVatDeclaration()">Ajouter une période TVA</button>
@@ -2390,109 +2600,173 @@
             </div>
 
             <div class="muted-box" style="margin-bottom:16px;">
-              <strong>Repères Intervat intégrés :</strong><br>
-              01/02/03 = base des ventes à 6 % / 12 % / 21 % ; 54 = TVA due sur ventes ; 59 = TVA déductible ; 71 = TVA à payer ; 72 = crédit à reporter ; 81 = achats de marchandises ; 82 = services et frais généraux ; 83 = biens d’investissement (à compléter manuellement si nécessaire).<br>
-              Les grilles 44, 46, 47, 48, 49, 55, 56, 57, 61, 62, 63 et 91 restent disponibles en saisie manuelle pour les cas particuliers.
+              <strong>Grilles principales :</strong><br>
+              01 / 02 / 03 / 54 / 59 / 71 / 72 sont affichées en priorité.<br>
+              Les autres codes Intervat restent disponibles sous <strong>Plus de codes</strong> pour les cas particuliers.
             </div>
 
             ${vatLedger.rows.map((row, i) => {
               const dec = row.declaration;
               const c = row.computed;
+              const isExpanded = expandedVatDeclarationId === dec.id;
+              const isClosed = !!dec.closed;
+              const disableAttr = isClosed ? 'disabled' : '';
               const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
               const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
+              const statusBadge = isClosed
+                ? '<span class="vat-pill success">Clôturé</span>'
+                : (dec.filed ? '<span class="vat-pill">Déclarée</span>' : '<span class="vat-pill muted">À déclarer</span>');
+              const paymentBadge = dec.paid
+                ? '<span class="vat-pill success">Payée</span>'
+                : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Non payée</span>');
               return `
-                <div class="card" style="margin-top:16px; border:1px solid var(--line);">
-                  <div class="section-head">
-                    <div>
-                      <h3>${escapeHtml(quarterLabel(dec.year, dec.quarter))}</h3>
-                      <div class="hint">Période couverte : ${printableDate(c.startDate)} au ${printableDate(c.endDate)} · Échéance : ${dueDateLabel} · ${netLabel}</div>
+                <div class="card vat-declaration-card compact">
+                  <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${escapeAttr(dec.id)}')">
+                    <div class="vat-summary-main">
+                      <div class="vat-summary-title">${escapeHtml(quarterLabel(dec.year, dec.quarter))}</div>
+                      <div class="hint">Période : ${printableDate(c.startDate)} au ${printableDate(c.endDate)} · Échéance : ${dueDateLabel}</div>
+                      <div class="vat-summary-badges">
+                        ${statusBadge}
+                        ${paymentBadge}
+                        <span class="vat-pill muted">${c.salesCount} vente(s)</span>
+                        <span class="vat-pill muted">${c.purchaseCount} achat(s)</span>
+                      </div>
                     </div>
-                    <div class="inline-actions">
-                      <button class="danger" onclick="deleteVatDeclaration(${i})">Suppr.</button>
-                    </div>
+                    <div class="vat-summary-amount ${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${netLabel}</div>
                   </div>
 
-                  <div class="grid-2">
-                    <div>
-                      <table>
-                        <tbody>
-                          <tr><td>Année</td><td><input type="number" step="1" value="${escapeAttr(dec.year)}" onchange="data.vat.declarations[${i}].year=parseInt(this.value,10)||new Date().getFullYear(); syncVatDeclarationPeriod(${i})"></td></tr>
-                          <tr><td>Trimestre</td><td><select onchange="data.vat.declarations[${i}].quarter=parseInt(this.value,10)||1; syncVatDeclarationPeriod(${i})">
-                            <option value="1" ${parseInt(dec.quarter,10)===1?'selected':''}>T1 (janvier à mars)</option>
-                            <option value="2" ${parseInt(dec.quarter,10)===2?'selected':''}>T2 (avril à juin)</option>
-                            <option value="3" ${parseInt(dec.quarter,10)===3?'selected':''}>T3 (juillet à septembre)</option>
-                            <option value="4" ${parseInt(dec.quarter,10)===4?'selected':''}>T4 (octobre à décembre)</option>
-                          </select></td></tr>
-                          <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" onchange="data.vat.declarations[${i}].dueDate=this.value; saveData(false)"></td></tr>
-                          <tr><td>Déclaration déposée</td><td><select onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed?'selected':''}>Non</option><option value="true" ${dec.filed?'selected':''}>Oui</option></select></td></tr>
-                          <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" onchange="data.vat.declarations[${i}].filedDate=this.value; saveData(false)"></td></tr>
-                          <tr><td>Paiement effectué</td><td><select onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid?'selected':''}>Non</option><option value="true" ${dec.paid?'selected':''}>Oui</option></select></td></tr>
-                          <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
-                          <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                          <tr><td>Demande de remboursement</td><td><select onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested?'selected':''}>Non</option><option value="true" ${dec.reimbursementRequested?'selected':''}>Oui</option></select></td></tr>
-                        </tbody>
-                      </table>
+                  <div class="vat-summary-details">
+                    <div class="vat-mini-box">
+                      <div class="vat-mini-label">Grille 54</div>
+                      <div class="vat-mini-value">${money(c.boxes['54'])}</div>
                     </div>
-
-                    <div>
-                      <table>
-                        <tbody>
-                          <tr><td>TVA ventes</td><td>${money(c.salesVat)}</td></tr>
-                          <tr><td>TVA achats déductible</td><td>${money(c.deductibleVat)}</td></tr>
-                          <tr><td>Crédit reporté période précédente</td><td>${money(c.previousCredit)}</td></tr>
-                          <tr><td>Solde déclaration (grille 71)</td><td>${money(c.boxes['71'])}</td></tr>
-                          <tr><td>Crédit à reporter (grille 72)</td><td>${money(c.boxes['72'])}</td></tr>
-                          <tr><td>Reste à payer</td><td class="${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${money(row.outstanding)}</td></tr>
-                          <tr><td>Lignes ventes prises en compte</td><td>${c.salesCount}</td></tr>
-                          <tr><td>Lignes achats prises en compte</td><td>${c.purchaseCount}</td></tr>
-                        </tbody>
-                      </table>
+                    <div class="vat-mini-box">
+                      <div class="vat-mini-label">Grille 59</div>
+                      <div class="vat-mini-value">${money(c.boxes['59'])}</div>
+                    </div>
+                    <div class="vat-mini-box">
+                      <div class="vat-mini-label">Grille 71</div>
+                      <div class="vat-mini-value">${money(c.boxes['71'])}</div>
+                    </div>
+                    <div class="vat-mini-box">
+                      <div class="vat-mini-label">Grille 72</div>
+                      <div class="vat-mini-value">${money(c.boxes['72'])}</div>
                     </div>
                   </div>
 
-                  <div style="overflow:auto; margin-top:16px;">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Grille</th>
-                          <th>Libellé</th>
-                          <th>Montant</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr><td>01</td><td>Opérations à 6 %</td><td>${money(c.boxes['01'])}</td></tr>
-                        <tr><td>02</td><td>Opérations à 12 %</td><td>${money(c.boxes['02'])}</td></tr>
-                        <tr><td>03</td><td>Opérations à 21 %</td><td>${money(c.boxes['03'])}</td></tr>
-                        <tr><td>44</td><td>Prestations/services particuliers</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['44'])}" onchange="data.vat.declarations[${i}].manualBoxes['44']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>46</td><td>Livraisons intracom / opérations assimilées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['46'])}" onchange="data.vat.declarations[${i}].manualBoxes['46']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>47</td><td>Autres opérations exemptées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['47'])}" onchange="data.vat.declarations[${i}].manualBoxes['47']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>48</td><td>Notes de crédit sur opérations antérieures</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['48'])}" onchange="data.vat.declarations[${i}].manualBoxes['48']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>49</td><td>Autres opérations sans TVA belge</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['49'])}" onchange="data.vat.declarations[${i}].manualBoxes['49']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>54</td><td>TVA due sur ventes encodées</td><td>${money(c.boxes['54'])}</td></tr>
-                        <tr><td>55</td><td>TVA due acquisitions intracom / autoliquidation</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['55'])}" onchange="data.vat.declarations[${i}].manualBoxes['55']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>56</td><td>TVA due opérations cocontractant</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['56'])}" onchange="data.vat.declarations[${i}].manualBoxes['56']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>57</td><td>TVA importations / autres régularisations dues</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['57'])}" onchange="data.vat.declarations[${i}].manualBoxes['57']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>59</td><td>TVA déductible sur achats</td><td>${money(c.boxes['59'])}</td></tr>
-                        <tr><td>61</td><td>Régularisations TVA en faveur de l’État</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['61'])}" onchange="data.vat.declarations[${i}].manualBoxes['61']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>62</td><td>Régularisations TVA en votre faveur</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['62'])}" onchange="data.vat.declarations[${i}].manualBoxes['62']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>63</td><td>Crédit antérieur / autres TVA déductibles</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['63'])}" onchange="data.vat.declarations[${i}].manualBoxes['63']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>71</td><td>TVA à payer</td><td>${money(c.boxes['71'])}</td></tr>
-                        <tr><td>72</td><td>Crédit TVA à reporter</td><td>${money(c.boxes['72'])}</td></tr>
-                        <tr><td>81</td><td>Achats marchandises / matières</td><td>${money(c.boxes['81'])}</td></tr>
-                        <tr><td>82</td><td>Services, biens divers et autres</td><td>${money(c.boxes['82'])}</td></tr>
-                        <tr><td>83</td><td>Biens d’investissement</td><td><input type="number" step="0.01" value="${num(c.boxes['83'])}" onchange="data.vat.declarations[${i}].manualBoxes['83']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                        <tr><td>91</td><td>Acompte de décembre (si applicable)</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['91'])}" onchange="data.vat.declarations[${i}].manualBoxes['91']=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                      </tbody>
-                    </table>
-                  </div>
+                  ${isExpanded ? `
+                    <div class="vat-expanded-panel">
+                      <div class="grid-2">
+                        <div>
+                          <table>
+                            <tbody>
+                              <tr><td>Année</td><td><input type="number" step="1" value="${escapeAttr(dec.year)}" ${disableAttr} onchange="data.vat.declarations[${i}].year=parseInt(this.value,10)||new Date().getFullYear(); syncVatDeclarationPeriod(${i})"></td></tr>
+                              <tr><td>Trimestre</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].quarter=parseInt(this.value,10)||1; syncVatDeclarationPeriod(${i})">
+                                <option value="1" ${parseInt(dec.quarter,10)===1?'selected':''}>T1 (janvier à mars)</option>
+                                <option value="2" ${parseInt(dec.quarter,10)===2?'selected':''}>T2 (avril à juin)</option>
+                                <option value="3" ${parseInt(dec.quarter,10)===3?'selected':''}>T3 (juillet à septembre)</option>
+                                <option value="4" ${parseInt(dec.quarter,10)===4?'selected':''}>T4 (octobre à décembre)</option>
+                              </select></td></tr>
+                              <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].dueDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Déclaration déposée</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed?'selected':''}>Non</option><option value="true" ${dec.filed?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].filedDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Paiement effectué</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid?'selected':''}>Non</option><option value="true" ${dec.paid?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" ${disableAttr} onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                              <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested?'selected':''}>Non</option><option value="true" ${dec.reimbursementRequested?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Clôturé</td><td><label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" style="width:auto;" ${dec.closed ? 'checked disabled' : ''} onchange="setVatClosed(${i}, this.checked)"><span>${dec.closed ? 'Oui — période verrouillée' : 'Cocher pour verrouiller définitivement la période'}</span></label></td></tr>
+                            </tbody>
+                          </table>
+                          ${dec.closed ? '<div class="lock-note">Cette période est clôturée. Les champs sont maintenant verrouillés.</div>' : ''}
+                        </div>
 
-                  <div style="margin-top:16px;">
-                    <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
-                    <textarea onchange="data.vat.declarations[${i}].notes=this.value; saveData(false)">${escapeHtml(dec.notes || '')}</textarea>
-                  </div>
+                        <div>
+                          <table>
+                            <tbody>
+                              <tr><td>TVA ventes</td><td>${money(c.salesVat)}</td></tr>
+                              <tr><td>TVA achats déductible</td><td>${money(c.deductibleVat)}</td></tr>
+                              <tr><td>Crédit reporté période précédente</td><td>${money(c.previousCredit)}</td></tr>
+                              <tr><td>Solde déclaration (grille 71)</td><td>${money(c.boxes['71'])}</td></tr>
+                              <tr><td>Crédit à reporter (grille 72)</td><td>${money(c.boxes['72'])}</td></tr>
+                              <tr><td>Reste à payer</td><td class="${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${money(row.outstanding)}</td></tr>
+                              <tr><td>Lignes ventes prises en compte</td><td>${c.salesCount}</td></tr>
+                              <tr><td>Lignes achats prises en compte</td><td>${c.purchaseCount}</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div class="vat-primary-codes" style="overflow:auto;">
+                        <table class="vat-code-table">
+                          <thead>
+                            <tr>
+                              <th>Grille</th>
+                              <th>Libellé</th>
+                              <th>Montant</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr><td>01</td><td>Opérations à 6 %</td><td>${money(c.boxes['01'])}</td></tr>
+                            <tr><td>02</td><td>Opérations à 12 %</td><td>${money(c.boxes['02'])}</td></tr>
+                            <tr><td>03</td><td>Opérations à 21 %</td><td>${money(c.boxes['03'])}</td></tr>
+                            <tr><td>54</td><td>TVA due sur ventes encodées</td><td>${money(c.boxes['54'])}</td></tr>
+                            <tr><td>59</td><td>TVA déductible sur achats</td><td>${money(c.boxes['59'])}</td></tr>
+                            <tr><td>71</td><td>TVA à payer</td><td>${money(c.boxes['71'])}</td></tr>
+                            <tr><td>72</td><td>Crédit TVA à reporter</td><td>${money(c.boxes['72'])}</td></tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div class="vat-extra-codes">
+                        <button type="button" class="vat-extra-toggle" ${disableAttr} onclick="toggleVatExtraCodes('${escapeAttr(dec.id)}')">
+                          <span>Plus de codes</span>
+                          <span>${dec.showExtraCodes ? '▲' : '▼'}</span>
+                        </button>
+                        <div class="vat-extra-body ${dec.showExtraCodes ? 'open' : ''}">
+                          <div style="overflow:auto;">
+                            <table class="vat-code-table">
+                              <thead>
+                                <tr>
+                                  <th>Grille</th>
+                                  <th>Libellé</th>
+                                  <th>Montant</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr><td>44</td><td>Prestations/services particuliers</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['44'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['44']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>46</td><td>Livraisons intracom / opérations assimilées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['46'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['46']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>47</td><td>Autres opérations exemptées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['47'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['47']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>48</td><td>Notes de crédit sur opérations antérieures</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['48'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['48']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>49</td><td>Autres opérations sans TVA belge</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['49'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['49']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>55</td><td>TVA due acquisitions intracom / autoliquidation</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['55'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['55']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>56</td><td>TVA due opérations cocontractant</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['56'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['56']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>57</td><td>TVA importations / autres régularisations dues</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['57'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['57']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>61</td><td>Régularisations TVA en faveur de l’État</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['61'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['61']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>62</td><td>Régularisations TVA en votre faveur</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['62'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['62']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>63</td><td>Crédit antérieur / autres TVA déductibles</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['63'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['63']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>81</td><td>Achats marchandises / matières</td><td>${money(c.boxes['81'])}</td></tr>
+                                <tr><td>82</td><td>Services, biens divers et autres</td><td>${money(c.boxes['82'])}</td></tr>
+                                <tr><td>83</td><td>Biens d’investissement</td><td><input type="number" step="0.01" value="${num(c.boxes['83'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['83']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>91</td><td>Acompte de décembre (si applicable)</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['91'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['91']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style="margin-top:16px;">
+                        <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
+                        <textarea ${disableAttr} onchange="data.vat.declarations[${i}].notes=this.value; saveData(false)">${escapeHtml(dec.notes || '')}</textarea>
+                      </div>
+
+                      <div class="inline-actions" style="margin-top:16px;">
+                        <button class="danger" ${disableAttr} onclick="deleteVatDeclaration(${i})">Suppr.</button>
+                      </div>
+                    </div>
+                  ` : ''}
                 </div>
               `;
-            }).join('') || `<div class="muted-box">Aucune période TVA. Clique sur <strong>Ajouter une période TVA</strong> puis choisis T1, T2, T3 ou T4. Exemple : pour janvier à mars 2026, crée T1 2026, coche “déclaration déposée” si c’est déjà fait et encode le paiement si tu l’as déjà versé.</div>`}
+            }).join('') || `<div class="muted-box">Aucune période TVA.</div>`}
           </div>
         </section>
       `;
