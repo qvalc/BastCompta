@@ -1814,9 +1814,11 @@
 
     function setVatClosed(index, checked) {
       const dec = data.vat.declarations[index];
-      if (!dec || dec.closed || !checked) return;
-      dec.closed = true;
-      dec.showExtraCodes = false;
+      if (!dec) return;
+      dec.closed = !!checked;
+      if (dec.closed) {
+        dec.showExtraCodes = false;
+      }
       saveData(false);
     }
 
@@ -2674,10 +2676,10 @@
                               <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
                               <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" ${disableAttr} onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
                               <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested?'selected':''}>Non</option><option value="true" ${dec.reimbursementRequested?'selected':''}>Oui</option></select></td></tr>
-                              <tr><td>Clôturé</td><td><label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" style="width:auto;" ${dec.closed ? 'checked disabled' : ''} onchange="setVatClosed(${i}, this.checked)"><span>${dec.closed ? 'Oui — période verrouillée' : 'Cocher pour verrouiller définitivement la période'}</span></label></td></tr>
+                              <tr><td>Clôturé</td><td><label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" style="width:auto;" ${dec.closed ? 'checked' : ''} onchange="setVatClosed(${i}, this.checked)"><span>${dec.closed ? 'Oui — période verrouillée, décoche pour modifier à nouveau' : 'Coche pour verrouiller la période'}</span></label></td></tr>
                             </tbody>
                           </table>
-                          ${dec.closed ? '<div class="lock-note">Cette période est clôturée. Les champs sont maintenant verrouillés.</div>' : ''}
+                          ${dec.closed ? '<div class="lock-note">Cette période est clôturée. Décoche la case « Clôturé » pour la déverrouiller et modifier à nouveau les champs.</div>' : ''}
                         </div>
 
                         <div>
