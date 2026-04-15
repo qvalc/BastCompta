@@ -2577,9 +2577,6 @@
     function renderVat() {
       ensureVatStructures();
       const vatLedger = computeVatLedger();
-      if (!expandedVatDeclarationId && vatLedger.rows.length) {
-        expandedVatDeclarationId = vatLedger.rows[0].declaration.id;
-      }
 
       return `
         <section class="page ${activePage === 'vat' ? 'active' : ''}">
