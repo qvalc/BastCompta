@@ -606,6 +606,7 @@
         <div class="top-actions">
           <button onclick="goToPage('gdrive')">Google Drive</button>
           <button onclick="goToPage('settings')">Paramètres</button>
+          <button onclick="openIntervat()">Intervat</button>
         </div>
       </div>
       <div class="actions">
@@ -892,7 +893,17 @@
 
       if (showAlert) {
         if (googleAccessToken) {
-          const synced = await saveSyncToDrive(true);
+          let synced = false;
+
+          if (googleAccessToken) {
+            await saveSyncToDrive(false); // garder sync caché
+            try {
+              await exportJsonToDrive(); // 👉 AJOUT IMPORTANT
+              synced = true;
+            } catch (e) {
+              console.error(e);
+            }
+          }
           alert(synced
             ? 'Données sauvegardées localement et sur Google Drive.'
             : 'Données sauvegardées localement.');
