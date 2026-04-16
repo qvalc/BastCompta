@@ -713,6 +713,11 @@
     let activePage = 'dashboard';
     let expandedVatDeclarationId = '';
 
+    function goToPage(pageKey) {
+      activePage = pageKey;
+      render();
+    }
+
     function loadData() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -823,57 +828,6 @@
         data = mergeDeep(structuredClone(defaultData), parsed || {});
         ensureVatStructures();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        return true;
-      } catch (error) {
-        console.error(error);
-        return false;
-      }
-    }
-
-    async function loadCurrentYearJsonFromDriveIfAvailable() {
-      if (!googleAccessToken) return false;
-
-      try {
-        const currentYear = String(new Date().getFullYear());
-
-        const list = await gapi.client.drive.files.list({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-' and name contains '${currentYear}'`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 20,
-          fields: 'files(id, name, modifiedTime)'
-        });
-
-        const files = (list.result.files || []).filter(file => {
-          const name = String(file.name || '');
-          const hiddenSyncNames = [DRIVE_SYNC_FILE_NAME, 'bastcompta-comptabilite-sync.json'];
-          return !hiddenSyncNames.includes(name) && name.endsWith('.json');
-        });
-
-        if (!files.length) return false;
-
-        const exactYearFiles = files.filter(file =>
-          new RegExp(`(^|-)${currentYear}\\.json$`).test(String(file.name || ''))
-        );
-
-        const fileToLoad = exactYearFiles[0] || files[0];
-        selectedDriveFileId = fileToLoad.id;
-
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileToLoad.id}?alt=media`, {
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          }
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const parsed = await res.json();
-        data = mergeDeep(structuredClone(defaultData), parsed || {});
-        ensureVatStructures();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
         return true;
       } catch (error) {
         console.error(error);
@@ -1002,7 +956,7 @@
         if (googleAccessToken && window.gapi?.client) {
           try {
             gapi.client.setToken({ access_token: googleAccessToken });
-            await loadCurrentYearJsonFromDriveIfAvailable();
+            await loadSyncDataFromDriveIfAvailable();
             await loadDriveFiles();
           } catch (error) {
             console.error(error);
