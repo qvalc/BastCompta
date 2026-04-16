@@ -714,11 +714,6 @@
     let activePage = 'dashboard';
     let expandedVatDeclarationId = '';
 
-    function goToPage(pageKey) {
-      activePage = pageKey;
-      render();
-    }
-
     function loadData() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -887,13 +882,80 @@
       }
     }
 
+    async function saveCurrentYearJsonToDrive(showErrorAlert = false) {
+      if (!googleAccessToken) return false;
+
+      try {
+        const fileName = getDriveFileName();
+        const content = JSON.stringify(data, null, 2);
+
+        let targetFileId = '';
+
+        if (selectedDriveFileId) {
+          targetFileId = selectedDriveFileId;
+        }
+
+        if (!targetFileId) {
+          const existing = await gapi.client.drive.files.list({
+            spaces: 'appDataFolder',
+            q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+            fields: 'files(id, name)'
+          });
+
+          const files = existing.result.files || [];
+          if (files.length) {
+            targetFileId = files[0].id;
+          }
+        }
+
+        const metadata = targetFileId
+          ? { name: fileName }
+          : { name: fileName, parents: ['appDataFolder'] };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([content], { type: 'application/json' }));
+
+        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+        let method = 'POST';
+
+        if (targetFileId) {
+          url = `https://www.googleapis.com/upload/drive/v3/files/${targetFileId}?uploadType=multipart&fields=id,name`;
+          method = 'PATCH';
+        }
+
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          },
+          body: form
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const saved = await res.json();
+        selectedDriveFileId = saved.id;
+        await loadDriveFiles();
+        return true;
+      } catch (error) {
+        console.error(error);
+        if (showErrorAlert) {
+          alert("La sauvegarde Google Drive a échoué.");
+        }
+        return false;
+      }
+    }
+
     async function saveData(showAlert = true) {
       ensureVatStructures();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
       if (showAlert) {
         if (googleAccessToken) {
-          const synced = await saveSyncToDrive(true);
+          const synced = await saveCurrentYearJsonToDrive(true);
           alert(synced
             ? 'Données sauvegardées localement et sur Google Drive.'
             : 'Données sauvegardées localement.');
@@ -1487,53 +1549,10 @@
         return;
       }
 
-      try {
-        const fileName = getDriveFileName();
-        const content = JSON.stringify(data, null, 2);
-
-        const existing = await gapi.client.drive.files.list({
-          spaces: 'appDataFolder',
-          q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
-          fields: 'files(id, name)'
-        });
-
-        const files = existing.result.files || [];
-
-        const metadata = {
-          name: fileName,
-          parents: ['appDataFolder']
-        };
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([content], { type: 'application/json' }));
-
-        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-        let method = 'POST';
-
-        if (files.length) {
-          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
-          method = 'PATCH';
-        }
-
-        const res = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          },
-          body: form
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const saved = await res.json();
-        await loadDriveFiles();
-        selectedDriveFileId = saved.id;
-        alert(`Export Google Drive réussi : ${saved.name}`);
-      } catch (error) {
-        console.error(error);
+      const saved = await saveCurrentYearJsonToDrive(false);
+      if (saved) {
+        alert(`Export Google Drive réussi : ${getDriveFileName()}`);
+      } else {
         alert("Échec de l'export vers Google Drive.");
       }
     }
