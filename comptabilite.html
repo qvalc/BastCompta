@@ -893,17 +893,7 @@
 
       if (showAlert) {
         if (googleAccessToken) {
-          let synced = false;
-
-          if (googleAccessToken) {
-            await saveSyncToDrive(false); // garder sync caché
-            try {
-              await exportJsonToDrive(); // 👉 AJOUT IMPORTANT
-              synced = true;
-            } catch (e) {
-              console.error(e);
-            }
-          }
+          const synced = await saveSyncToDrive(true);
           alert(synced
             ? 'Données sauvegardées localement et sur Google Drive.'
             : 'Données sauvegardées localement.');
