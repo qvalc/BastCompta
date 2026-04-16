@@ -51,6 +51,17 @@
       font-size: 30px;
     }
 
+    .title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+    }
+
     .title-wrap p {
       margin: 0;
       color: var(--muted);
@@ -591,6 +602,11 @@
     <div class="topbar">
       <div class="title-wrap">
         <h1>Comptabilité</h1>
+
+        <div class="top-actions">
+          <button onclick="goToPage('gdrive')">Google Drive</button>
+          <button onclick="goToPage('settings')">Paramètres</button>
+        </div>
       </div>
       <div class="actions">
         <button class="primary" onclick="saveData()">Sauvegarder</button>
@@ -683,16 +699,14 @@
       { key: 'dashboard', label: 'Tableau de bord' },
       { key: 'sales', label: 'Ventes' },
       { key: 'purchases', label: 'Achats' },
-      { key: 'vat', label: 'TVA' },
       { key: 'investments', label: 'Investissements' },
       { key: 'assets', label: 'Immobilisations' },
-      { key: 'stock', label: 'Stock' },
       { key: 'losses', label: 'Pertes & charges' },
+      { key: 'stock', label: 'Stock' },
       { key: 'km', label: 'Kilomètres' },
       { key: 'result', label: 'Compte de résultat' },
       { key: 'balance', label: 'Bilan simplifié' },
-      { key: 'gdrive', label: 'Google Drive' },
-      { key: 'settings', label: 'Paramètres' }
+      { key: 'vat', label: 'TVA' },
     ];
 
     let data = loadData();
