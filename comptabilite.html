@@ -116,8 +116,8 @@
       border: 1px solid var(--line);
       background: var(--panel);
       color: var(--text);
-      padding: 11px 14px;
-      border-radius: 12px;
+      padding: 9px 12px;
+      border-radius: 10px;
       cursor: pointer;
       font-weight: 600;
       box-shadow: var(--shadow);
@@ -161,19 +161,71 @@
 
     .tabs {
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 16px;
+      align-items: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      gap: 0;
+      margin-bottom: 18px;
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      scrollbar-width: thin;
+    }
+
+    .tab-group {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 3px;
+      flex: 0 0 auto;
+      white-space: nowrap;
+      padding: 0 8px;
+      position: relative;
+    }
+
+    .tab-group + .tab-group {
+      margin-left: 8px;
+      padding-left: 14px;
+    }
+
+    .tab-group + .tab-group::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: -6px;
+      bottom: -6px;
+      width: 1px;
+      background: #d7dee8;
+      border-radius: 999px;
+    }
+
+    .tab-group-items {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      align-items: stretch;
     }
 
     .tab {
-      border: 1px solid var(--line);
-      background: white;
-      color: var(--text);
-      padding: 10px 14px;
-      border-radius: 999px;
+      border: 1px solid #e3e8ef;
+      background: #fff;
+      color: #475569;
+      padding: 2px 6px;
+      border-radius: 6px;
       cursor: pointer;
-      font-weight: 700;
+      font-weight: 500;
+      font-size: 10px;
+      line-height: 1.05;
+      min-height: 18px;
+      box-shadow: none;
+      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    }
+
+    .tab:hover {
+      background: #f8fafc;
+      border-color: #cfd8e3;
     }
 
     .tab.active {
@@ -576,6 +628,19 @@
         font-size: 24px;
       }
 
+      .tab-group {
+        align-items: stretch;
+      }
+
+      .tab-group-label {
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        padding-right: 0;
+        padding-bottom: 8px;
+        margin-right: 0;
+        width: 100%;
+      }
+
       table {
         font-size: 13px;
       }
@@ -681,18 +746,37 @@
 
     const pageDefs = [
       { key: 'dashboard', label: 'Tableau de bord' },
-      { key: 'sales', label: 'Ventes' },
-      { key: 'purchases', label: 'Achats' },
-      { key: 'vat', label: 'TVA' },
-      { key: 'investments', label: 'Investissements' },
-      { key: 'assets', label: 'Immobilisations' },
-      { key: 'stock', label: 'Stock' },
-      { key: 'losses', label: 'Pertes & charges' },
-      { key: 'km', label: 'Kilomètres' },
       { key: 'result', label: 'Compte de résultat' },
       { key: 'balance', label: 'Bilan simplifié' },
+      { key: 'vat', label: 'TVA' },
+      { key: 'sales', label: 'Ventes' },
+      { key: 'purchases', label: 'Achats' },
+      { key: 'investments', label: 'Investissements' },
+      { key: 'stock', label: 'Stock' },
+      { key: 'assets', label: 'Immobilisations' },
+      { key: 'losses', label: 'Pertes & charges' },
+      { key: 'km', label: 'Kilomètres' },
       { key: 'gdrive', label: 'Google Drive' },
       { key: 'settings', label: 'Paramètres' }
+    ];
+
+    const pageGroups = [
+      {
+        label: 'Pilotage',
+        keys: ['dashboard', 'result', 'balance', 'vat']
+      },
+      {
+        label: 'Stocks & actifs',
+        keys: ['stock', 'assets', 'losses', 'km']
+      },
+      {
+        label: 'Flux',
+        keys: ['sales', 'purchases', 'investments']
+      },
+      {
+        label: 'Outils',
+        keys: ['gdrive', 'settings']
+      }
     ];
 
     let data = loadData();
@@ -2124,8 +2208,16 @@
 
     function renderTabs() {
       const tabs = document.getElementById('tabs');
-      tabs.innerHTML = pageDefs.map(page => `
-        <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
+      tabs.innerHTML = pageGroups.map(group => `
+        <div class="tab-group">
+          <div class="tab-group-items">
+            ${group.keys.map(key => {
+              const page = pageDefs.find(item => item.key === key);
+              if (!page) return '';
+              return `<button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label.replace(' simplifié', '').replace('Google ', '')}</button>`;
+            }).join('')}
+          </div>
+        </div>
       `).join('');
     }
 
