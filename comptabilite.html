@@ -600,10 +600,13 @@
             <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
             <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
             <div class="dropdown-sep"></div>
-            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google Drive</button>
+            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
+              Drive</button>
             <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
-            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive vers ce PC</button>
-            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer des fichiers du PC vers Drive</button>
+            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive
+              vers ce PC</button>
+            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer des fichiers du PC vers
+              Drive</button>
           </div>
         </div>
         <button onclick="openPrintReport()">Export PDF / Imprimer</button>
@@ -1748,7 +1751,7 @@
         if (!dec.manualBoxes || typeof dec.manualBoxes !== 'object') {
           dec.manualBoxes = {};
         }
-        ['44','46','47','48','49','55','56','57','61','62','63','83','91'].forEach(code => {
+        ['44', '46', '47', '48', '49', '55', '56', '57', '61', '62', '63', '83', '91'].forEach(code => {
           if (typeof dec.manualBoxes[code] === 'undefined') dec.manualBoxes[code] = 0;
         });
         if (typeof dec.closed === 'undefined') dec.closed = false;
@@ -1766,7 +1769,7 @@
         .filter(dec => parseInt(dec.year, 10) === currentYear)
         .map(dec => parseInt(dec.quarter, 10))
         .filter(Number.isFinite);
-      const nextQuarter = [1,2,3,4].find(q => !existingQuarters.includes(q)) || 1;
+      const nextQuarter = [1, 2, 3, 4].find(q => !existingQuarters.includes(q)) || 1;
       data.vat.declarations.push(vatDeclarationTemplate(currentYear, nextQuarter));
       expandedVatDeclarationId = data.vat.declarations[data.vat.declarations.length - 1].id;
       sortVatDeclarations();
@@ -2035,10 +2038,20 @@
       const estimatedProfit = salesNet - totalCharges;
       const netVat = salesVat - purchasesVat - carryover;
 
+      const totalVatPaid = data.vat.declarations
+        .reduce((sum, dec) => sum + (dec.paymentAmount || 0), 0);
+
+      const realVat = netVat - totalVatPaid;
+
       const netFixedAssets = assetsGross - totalAmortized;
-      const liquidities = toNumber(data.settings.bankBalance) + toNumber(data.settings.cashBalance);
-      const receivableVat = netVat < 0 ? Math.abs(netVat) : 0;
-      const payableVat = netVat > 0 ? netVat : 0;
+
+      const liquidities =
+        toNumber(data.settings.bankBalance) +
+        toNumber(data.settings.cashBalance) -
+        totalVatPaid;
+
+      const receivableVat = realVat < 0 ? Math.abs(realVat) : 0;
+      const payableVat = realVat > 0 ? realVat : 0;
       const resultRetained = estimatedProfit;
 
       const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
@@ -2066,6 +2079,7 @@
         totalCharges,
         estimatedProfit,
         netVat,
+        realVat,
         netFixedAssets,
         liquidities,
         receivableVat,
@@ -2605,20 +2619,20 @@
             </div>
 
             ${vatLedger.rows.map((row, i) => {
-              const dec = row.declaration;
-              const c = row.computed;
-              const isExpanded = expandedVatDeclarationId === dec.id;
-              const isClosed = !!dec.closed;
-              const disableAttr = isClosed ? 'disabled' : '';
-              const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
-              const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
-              const statusBadge = isClosed
-                ? '<span class="vat-pill success">Clôturé</span>'
-                : (dec.filed ? '<span class="vat-pill">Déclarée</span>' : '<span class="vat-pill muted">À déclarer</span>');
-              const paymentBadge = dec.paid
-                ? '<span class="vat-pill success">Payée</span>'
-                : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Non payée</span>');
-              return `
+        const dec = row.declaration;
+        const c = row.computed;
+        const isExpanded = expandedVatDeclarationId === dec.id;
+        const isClosed = !!dec.closed;
+        const disableAttr = isClosed ? 'disabled' : '';
+        const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
+        const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
+        const statusBadge = isClosed
+          ? '<span class="vat-pill success">Clôturé</span>'
+          : (dec.filed ? '<span class="vat-pill">Déclarée</span>' : '<span class="vat-pill muted">À déclarer</span>');
+        const paymentBadge = dec.paid
+          ? '<span class="vat-pill success">Payée</span>'
+          : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Non payée</span>');
+        return `
                 <div class="card vat-declaration-card compact">
                   <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${escapeAttr(dec.id)}')">
                     <div class="vat-summary-main">
@@ -2661,18 +2675,18 @@
                             <tbody>
                               <tr><td>Année</td><td><input type="number" step="1" value="${escapeAttr(dec.year)}" ${disableAttr} onchange="data.vat.declarations[${i}].year=parseInt(this.value,10)||new Date().getFullYear(); syncVatDeclarationPeriod(${i})"></td></tr>
                               <tr><td>Trimestre</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].quarter=parseInt(this.value,10)||1; syncVatDeclarationPeriod(${i})">
-                                <option value="1" ${parseInt(dec.quarter,10)===1?'selected':''}>T1 (janvier à mars)</option>
-                                <option value="2" ${parseInt(dec.quarter,10)===2?'selected':''}>T2 (avril à juin)</option>
-                                <option value="3" ${parseInt(dec.quarter,10)===3?'selected':''}>T3 (juillet à septembre)</option>
-                                <option value="4" ${parseInt(dec.quarter,10)===4?'selected':''}>T4 (octobre à décembre)</option>
+                                <option value="1" ${parseInt(dec.quarter, 10) === 1 ? 'selected' : ''}>T1 (janvier à mars)</option>
+                                <option value="2" ${parseInt(dec.quarter, 10) === 2 ? 'selected' : ''}>T2 (avril à juin)</option>
+                                <option value="3" ${parseInt(dec.quarter, 10) === 3 ? 'selected' : ''}>T3 (juillet à septembre)</option>
+                                <option value="4" ${parseInt(dec.quarter, 10) === 4 ? 'selected' : ''}>T4 (octobre à décembre)</option>
                               </select></td></tr>
                               <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].dueDate=this.value; saveData(false)"></td></tr>
-                              <tr><td>Déclaration déposée</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed?'selected':''}>Non</option><option value="true" ${dec.filed?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Déclaration déposée</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed ? 'selected' : ''}>Non</option><option value="true" ${dec.filed ? 'selected' : ''}>Oui</option></select></td></tr>
                               <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].filedDate=this.value; saveData(false)"></td></tr>
-                              <tr><td>Paiement effectué</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid?'selected':''}>Non</option><option value="true" ${dec.paid?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Paiement effectué</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid ? 'selected' : ''}>Non</option><option value="true" ${dec.paid ? 'selected' : ''}>Oui</option></select></td></tr>
                               <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
                               <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" ${disableAttr} onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
-                              <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested?'selected':''}>Non</option><option value="true" ${dec.reimbursementRequested?'selected':''}>Oui</option></select></td></tr>
+                              <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested ? 'selected' : ''}>Non</option><option value="true" ${dec.reimbursementRequested ? 'selected' : ''}>Oui</option></select></td></tr>
                               <tr><td>Clôturé</td><td><label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" style="width:auto;" ${dec.closed ? 'checked' : ''} onchange="setVatClosed(${i}, this.checked)"><span>${dec.closed ? 'Oui — période verrouillée, décoche pour modifier à nouveau' : 'Coche pour verrouiller la période'}</span></label></td></tr>
                             </tbody>
                           </table>
@@ -2765,7 +2779,7 @@
                   ` : ''}
                 </div>
               `;
-            }).join('') || `<div class="muted-box">Aucune période TVA.</div>`}
+      }).join('') || `<div class="muted-box">Aucune période TVA.</div>`}
           </div>
         </section>
       `;
@@ -3193,11 +3207,11 @@
       <div class="section-grid">
         <div class="panel"><div class="panel-body">${reportKv(vatReportRows.length ? vatReportRows : [['Aucune période TVA', '—']])}</div></div>
         <div class="panel"><div class="panel-body">${reportKv([
-          ['Report TVA initial', money(data.settings.vatCarryover)],
-          ['TVA déclarée non payée', money(vatLedger.totalFiledUnpaid)],
-          ['TVA non déclarée nette', money(vatLedger.totalUnfiledDue - vatLedger.totalUnfiledCredit)],
-          ['Solde TVA ouvert', money(vatLedger.totalDueOpen)]
-        ])}</div></div>
+        ['Report TVA initial', money(data.settings.vatCarryover)],
+        ['TVA déclarée non payée', money(vatLedger.totalFiledUnpaid)],
+        ['TVA non déclarée nette', money(vatLedger.totalUnfiledDue - vatLedger.totalUnfiledCredit)],
+        ['Solde TVA ouvert', money(vatLedger.totalDueOpen)]
+      ])}</div></div>
       </div>
     </section>
 
