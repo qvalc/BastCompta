@@ -714,6 +714,11 @@
     let activePage = 'dashboard';
     let expandedVatDeclarationId = '';
 
+    function goToPage(pageKey) {
+      activePage = pageKey;
+      render();
+    }
+
     function loadData() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
