@@ -116,8 +116,8 @@
       border: 1px solid var(--line);
       background: var(--panel);
       color: var(--text);
-      padding: 9px 12px;
-      border-radius: 10px;
+      padding: 11px 14px;
+      border-radius: 12px;
       cursor: pointer;
       font-weight: 600;
       box-shadow: var(--shadow);
@@ -161,71 +161,19 @@
 
     .tabs {
       display: flex;
-      align-items: flex-start;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      gap: 0;
-      margin-bottom: 18px;
-      padding: 6px 8px;
-      background: rgba(255, 255, 255, 0.82);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      box-shadow: var(--shadow);
-      scrollbar-width: thin;
-    }
-
-    .tab-group {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 3px;
-      flex: 0 0 auto;
-      white-space: nowrap;
-      padding: 0 8px;
-      position: relative;
-    }
-
-    .tab-group + .tab-group {
-      margin-left: 8px;
-      padding-left: 14px;
-    }
-
-    .tab-group + .tab-group::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: -6px;
-      bottom: -6px;
-      width: 1px;
-      background: #d7dee8;
-      border-radius: 999px;
-    }
-
-    .tab-group-items {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      align-items: stretch;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
     }
 
     .tab {
-      border: 1px solid #e3e8ef;
-      background: #fff;
-      color: #475569;
-      padding: 2px 6px;
-      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 999px;
       cursor: pointer;
-      font-weight: 500;
-      font-size: 10px;
-      line-height: 1.05;
-      min-height: 18px;
-      box-shadow: none;
-      transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-    }
-
-    .tab:hover {
-      background: #f8fafc;
-      border-color: #cfd8e3;
+      font-weight: 700;
     }
 
     .tab.active {
@@ -628,19 +576,6 @@
         font-size: 24px;
       }
 
-      .tab-group {
-        align-items: stretch;
-      }
-
-      .tab-group-label {
-        border-right: none;
-        border-bottom: 1px solid var(--line);
-        padding-right: 0;
-        padding-bottom: 8px;
-        margin-right: 0;
-        width: 100%;
-      }
-
       table {
         font-size: 13px;
       }
@@ -746,37 +681,18 @@
 
     const pageDefs = [
       { key: 'dashboard', label: 'Tableau de bord' },
-      { key: 'result', label: 'Compte de résultat' },
-      { key: 'balance', label: 'Bilan simplifié' },
-      { key: 'vat', label: 'TVA' },
       { key: 'sales', label: 'Ventes' },
       { key: 'purchases', label: 'Achats' },
+      { key: 'vat', label: 'TVA' },
       { key: 'investments', label: 'Investissements' },
-      { key: 'stock', label: 'Stock' },
       { key: 'assets', label: 'Immobilisations' },
+      { key: 'stock', label: 'Stock' },
       { key: 'losses', label: 'Pertes & charges' },
       { key: 'km', label: 'Kilomètres' },
+      { key: 'result', label: 'Compte de résultat' },
+      { key: 'balance', label: 'Bilan simplifié' },
       { key: 'gdrive', label: 'Google Drive' },
       { key: 'settings', label: 'Paramètres' }
-    ];
-
-    const pageGroups = [
-      {
-        label: 'Pilotage',
-        keys: ['dashboard', 'result', 'balance', 'vat']
-      },
-      {
-        label: 'Stocks & actifs',
-        keys: ['stock', 'assets', 'losses', 'km']
-      },
-      {
-        label: 'Flux',
-        keys: ['sales', 'purchases', 'investments']
-      },
-      {
-        label: 'Outils',
-        keys: ['gdrive', 'settings']
-      }
     ];
 
     let data = loadData();
@@ -1064,12 +980,25 @@
     }
 
     function getDriveFileName() {
-      return getDriveFileNameFromData(data);
+      const period = String(data.company.period || '').trim();
+      const company = String(data.company.name || '').trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40);
+
+      if (period && company) return `comptabilite-${company}-${period}.json`;
+      if (period) return `comptabilite-${period}.json`;
+      if (company) return `comptabilite-${company}.json`;
+      return 'comptabilite-export.json';
     }
 
     function getDriveFileNameFromData(sourceData) {
-      const period = String(sourceData?.company?.period || '').trim();
-      const company = String(sourceData?.company?.name || '').trim()
+      const safeData = sourceData || {};
+      const period = String(safeData.company?.period || '').trim();
+      const company = String(safeData.company?.name || '').trim()
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
@@ -1087,6 +1016,13 @@
       window.open('https://finances.belgium.be/fr/E-services/Intervat', '_blank', 'noopener');
     }
 
+    function commitPendingInputChanges() {
+      const activeEl = document.activeElement;
+      if (activeEl && typeof activeEl.blur === 'function') {
+        activeEl.blur();
+      }
+    }
+
     function buildNextExerciseData(targetYear) {
       const year = String(targetYear || '').trim();
       if (!/^\d{4}$/.test(year)) {
@@ -1095,19 +1031,21 @@
 
       const t = totals();
       const nextData = structuredClone(defaultData);
+      const preservedSettings = mergeDeep(structuredClone(defaultData.settings), structuredClone(data.settings || {}));
 
       nextData.company = {
-        name: data.company.name || '',
+        name: data.company?.name || '',
         period: year,
-        notes: ''
+        notes: data.company?.notes || ''
       };
 
-      nextData.stock = structuredClone(data.stock || []);
-      nextData.assets = structuredClone(data.assets || []);
-      nextData.investments = structuredClone(data.investments || []);
+      nextData.stock = structuredClone(Array.isArray(data.stock) ? data.stock : []);
+      nextData.assets = structuredClone(Array.isArray(data.assets) ? data.assets : []);
+      nextData.investments = structuredClone(Array.isArray(data.investments) ? data.investments : []);
 
-      nextData.settings = mergeDeep(structuredClone(defaultData.settings), structuredClone(data.settings || {}));
-      nextData.settings.retainedEarnings = round2(toNumber(data.settings.retainedEarnings) + toNumber(t.estimatedProfit));
+      nextData.settings = preservedSettings;
+      nextData.settings.retainedEarnings = round2(toNumber(preservedSettings.retainedEarnings) + toNumber(t.estimatedProfit));
+      nextData.settings.vatCarryover = Math.max(0, round2(toNumber(t.receivableVat)));
 
       nextData.purchases = [];
       nextData.sales = [];
@@ -1131,22 +1069,92 @@
       URL.revokeObjectURL(url);
     }
 
-    function createNextExerciseFile() {
+    async function uploadJsonObjectToDrive(sourceData, fileName = '') {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return false;
+      }
+
+      const finalFileName = fileName || getDriveFileNameFromData(sourceData);
+      const content = JSON.stringify(sourceData, null, 2);
+
+      const existing = await gapi.client.drive.files.list({
+        spaces: 'appDataFolder',
+        q: `name='${finalFileName.replace(/'/g, "\\'")}' and trashed=false`,
+        fields: 'files(id, name)'
+      });
+
+      const files = existing.result.files || [];
+      const metadata = {
+        name: finalFileName,
+        parents: ['appDataFolder']
+      };
+
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([content], { type: 'application/json' }));
+
+      let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+      let method = 'POST';
+
+      if (files.length) {
+        url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
+        method = 'PATCH';
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${googleAccessToken}`
+        },
+        body: form
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const saved = await res.json();
+      selectedDriveFileId = saved.id;
+      await loadDriveFiles();
+      return saved;
+    }
+
+    async function createNextExerciseFile() {
+      commitPendingInputChanges();
+      await saveData(false);
+
       const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
       const suggestedYear = currentYear + 1;
       const answer = prompt("Année du nouvel exercice :", suggestedYear);
-
       if (answer === null) return;
 
       const targetYear = String(answer).trim();
+      const destinationDefault = googleAccessToken ? 'drive' : 'pc';
+      const destinationAnswer = prompt("Destination du nouveau fichier : pc ou drive ?", destinationDefault);
+      if (destinationAnswer === null) return;
+
+      const destination = String(destinationAnswer).trim().toLowerCase();
 
       try {
         const nextData = buildNextExerciseData(targetYear);
-        downloadJsonFile(nextData, getDriveFileNameFromData(nextData));
-        alert(`Le fichier de l'exercice ${targetYear} a été généré.`);
+        const fileName = getDriveFileNameFromData(nextData);
+
+        if (destination === 'drive') {
+          const saved = await uploadJsonObjectToDrive(nextData, fileName);
+          alert(`Le fichier de l'exercice ${targetYear} a été envoyé sur Google Drive : ${saved.name}`);
+          return;
+        }
+
+        if (destination !== 'pc') {
+          throw new Error('Destination invalide.');
+        }
+
+        downloadJsonFile(nextData, fileName);
+        alert(`Le fichier de l'exercice ${targetYear} a été téléchargé sur ce PC.`);
       } catch (error) {
         console.error(error);
-        alert("Impossible de créer le nouvel exercice. Vérifie l'année saisie.");
+        alert("Impossible de créer le nouvel exercice. Vérifie l'année ou la destination choisie.");
       }
     }
 
@@ -2279,16 +2287,8 @@
 
     function renderTabs() {
       const tabs = document.getElementById('tabs');
-      tabs.innerHTML = pageGroups.map(group => `
-        <div class="tab-group">
-          <div class="tab-group-items">
-            ${group.keys.map(key => {
-              const page = pageDefs.find(item => item.key === key);
-              if (!page) return '';
-              return `<button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label.replace(' simplifié', '').replace('Google ', '')}</button>`;
-            }).join('')}
-          </div>
-        </div>
+      tabs.innerHTML = pageDefs.map(page => `
+        <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
       `).join('');
     }
 
@@ -2764,7 +2764,6 @@
                 <div class="hint">Les 4 trimestres de l’année affichée sont générés automatiquement. Les dates de début et fin s’adaptent au bon nombre de jours du mois. Une période clôturée devient verrouillée.</div>
               </div>
               <div class="inline-actions">
-                <button class="primary" onclick="addVatDeclaration()">Ajouter une période TVA</button>
                 <button type="button" onclick="openIntervat()">Intervat</button>
               </div>
             </div>
@@ -2779,7 +2778,8 @@
             <div class="muted-box" style="margin-bottom:16px;">
               <strong>Grilles principales :</strong><br>
               01 / 02 / 03 / 54 / 59 / 71 / 72 sont affichées en priorité.<br>
-              Les autres codes Intervat restent disponibles sous <strong>Plus de codes</strong> pour les cas particuliers.
+              Les autres codes Intervat restent disponibles sous <strong>Plus de codes</strong> pour les cas particuliers.<br>
+              Le bouton <strong>Intervat</strong> ouvre directement le portail officiel de déclaration.
             </div>
 
             ${vatLedger.rows.map((row, i) => {
@@ -2982,7 +2982,7 @@
             <div class="section-head" style="margin-top:20px;">
               <div>
                 <h3>Exercice suivant</h3>
-                <div class="hint">Crée un nouveau fichier JSON en reprenant le stock, les immobilisations, les investissements, les paramètres et le résultat reporté.</div>
+                <div class="hint">Crée un nouveau fichier JSON pour l'année suivante en reprenant le stock, les immobilisations, les investissements, les paramètres et le résultat reporté. Tu choisis ensuite un téléchargement sur PC ou un envoi direct sur Drive.</div>
               </div>
             </div>
             <div class="inline-actions">
