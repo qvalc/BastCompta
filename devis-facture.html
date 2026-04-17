@@ -1064,10 +1064,28 @@ Cordialement,
 
       if (showAlert) {
         if (googleAccessToken) {
-          const syncSaved = await saveSyncToDrive(true);
-          const exportedDocs = await exportAvailableDocumentsToDrive(false);
+          let syncSaved = false;
+          let exportedDocs = [];
+
+          try {
+            syncSaved = await saveSyncToDrive(true);
+          } catch (error) {
+            console.error(error);
+          }
+
+          try {
+            if (typeof exportAvailableDocumentsToDrive === 'function') {
+              exportedDocs = await exportAvailableDocumentsToDrive(false);
+            }
+          } catch (error) {
+            console.error(error);
+          }
+
           const hasDriveSaves = syncSaved || exportedDocs.length > 0;
-          const exportLabel = exportedDocs.length ? ` Documents Drive : ${exportedDocs.join(', ')}` : ' Aucun devis, facture ou rappel numéroté à exporter.';
+          const exportLabel = exportedDocs.length
+            ? ` Documents Drive : ${exportedDocs.join(', ')}`
+            : ' Aucun devis, facture ou rappel numéroté à exporter.';
+
           alert(hasDriveSaves
             ? `Données sauvegardées localement et sur Google Drive.${exportLabel}`
             : 'Données sauvegardées localement.');
