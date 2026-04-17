@@ -1059,42 +1059,56 @@ Cordialement,
     }
 
     async function saveData(showAlert = true) {
-      syncCommunicationFromInvoice(false);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-
-      if (showAlert) {
-        if (googleAccessToken) {
-          let syncSaved = false;
-          let exportedDocs = [];
-
-          try {
-            syncSaved = await saveSyncToDrive(true);
-          } catch (error) {
-            console.error(error);
-          }
-
-          try {
-            if (typeof exportAvailableDocumentsToDrive === 'function') {
-              exportedDocs = await exportAvailableDocumentsToDrive(false);
-            }
-          } catch (error) {
-            console.error(error);
-          }
-
-          const hasDriveSaves = syncSaved || exportedDocs.length > 0;
-          const exportLabel = exportedDocs.length
-            ? ` Documents Drive : ${exportedDocs.join(', ')}`
-            : ' Aucun devis, facture ou rappel numéroté à exporter.';
-
-          alert(hasDriveSaves
-            ? `Données sauvegardées localement et sur Google Drive.${exportLabel}`
-            : 'Données sauvegardées localement.');
-        } else {
-          alert('Données sauvegardées localement.');
-        }
+      const btn = document.querySelector('button.primary');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sauvegarde...';
       }
 
-      render();
+      try {
+        syncCommunicationFromInvoice(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        if (showAlert) {
+          if (googleAccessToken) {
+            let syncSaved = false;
+            let exportedDocs = [];
+
+            try {
+              syncSaved = await saveSyncToDrive(true);
+            } catch (error) {
+              console.error(error);
+            }
+
+            try {
+              if (typeof exportAvailableDocumentsToDrive === 'function') {
+                exportedDocs = await exportAvailableDocumentsToDrive(false);
+              }
+            } catch (error) {
+              console.error(error);
+            }
+
+            const hasDriveSaves = syncSaved || exportedDocs.length > 0;
+            const exportLabel = exportedDocs.length
+              ? ` Documents Drive : ${exportedDocs.join(', ')}`
+              : ' Aucun devis, facture ou rappel numéroté à exporter.';
+
+            alert(hasDriveSaves
+              ? `Données sauvegardées localement et sur Google Drive.${exportLabel}`
+              : 'Données sauvegardées localement.');
+          } else {
+            alert('Données sauvegardées localement.');
+          }
+        }
+
+        render();
+
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Sauvegarder';
+        }
+      }
     }
 
     function toggleFileMenu(event) {
