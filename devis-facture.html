@@ -1064,9 +1064,12 @@ Cordialement,
 
       if (showAlert) {
         if (googleAccessToken) {
-          const synced = await saveSyncToDrive(true);
-          alert(synced
-            ? 'Données sauvegardées localement et sur Google Drive.'
+          const syncSaved = await saveSyncToDrive(true);
+          const exportedDocs = await exportAvailableDocumentsToDrive(false);
+          const hasDriveSaves = syncSaved || exportedDocs.length > 0;
+          const exportLabel = exportedDocs.length ? ` Documents Drive : ${exportedDocs.join(', ')}` : ' Aucun devis, facture ou rappel numéroté à exporter.';
+          alert(hasDriveSaves
+            ? `Données sauvegardées localement et sur Google Drive.${exportLabel}`
             : 'Données sauvegardées localement.');
         } else {
           alert('Données sauvegardées localement.');
@@ -1169,13 +1172,16 @@ Cordialement,
       selectedDriveFileIds = [];
       render();
     }
+    function getDriveDocsByType(type) {
+      return googleDriveFiles.filter(file => normalizeDocTypeFromName(file.name) === type);
+    }
 
-    function renderGoogleDrive() {
-      const fileItems = googleDriveFiles.map(file => {
+    function renderDriveColumn(type, title) {
+      const docs = getDriveDocsByType(type);
+      const items = docs.map(file => {
         const isImportSelected = selectedDriveFileId === file.id;
         const isChecked = isDriveFileChecked(file.id);
         const dateLabel = file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('fr-BE') : 'Date inconnue';
-
         return `
           <div class="drive-file-item ${isImportSelected ? 'active' : ''}">
             <input type="radio" name="driveImportFile" ${isImportSelected ? 'checked' : ''} onchange="selectDriveFileForImport('${escapeAttr(file.id)}')"
@@ -1184,23 +1190,34 @@ Cordialement,
               title="Ajouter ce fichier à la sélection pour téléchargement ou suppression">
             <div>
               <div class="drive-file-name">${escapeHtml(file.name)}</div>
-              <div class="hint">Radio = charger dans l’application. Case = télécharger ou supprimer un ou plusieurs fichiers.</div>
+              <div class="hint">Radio = charger. Case = télécharger ou supprimer.</div>
             </div>
             <div class="drive-file-date">${escapeHtml(dateLabel)}</div>
           </div>
         `;
       }).join('');
 
+      return `
+        <div class="crm-drive-column">
+          <h3 style="margin:0 0 10px; font-size:18px;">${escapeHtml(title)}${docs.length ? ` (${docs.length})` : ''}</h3>
+          <div class="drive-file-list">
+            ${items || `<div class="simple-box">Aucun ${escapeHtml(title.toLowerCase())} sur Drive.</div>`}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderGoogleDrive() {
       const checkedCount = selectedDriveFileIds.length;
 
       return `
     <section class="page ${activePage === 'gdrive' ? 'active' : ''}" data-page="gdrive">
       <div class="sheet">
         <div class="toolbar no-print">
-          <div class="hint">Google Drive sert de gestionnaire de sauvegardes.</div>
+          <div class="hint">Google Drive sert de gestionnaire de sauvegardes séparées pour devis, factures et rappels.</div>
           <div class="inline-actions">
             <button onclick="loadDriveFiles()">Actualiser la liste</button>
-            <button class="primary" onclick="exportJsonToDrive()">Exporter le document actuel vers Drive</button>
+            <button class="primary" onclick="exportJsonToDrive()">Sauvegarder les documents numérotés vers Drive</button>
             <button onclick="pickLocalJsonForDrive()">Envoyer des fichiers du PC vers Drive</button>
           </div>
         </div>
@@ -1210,7 +1227,7 @@ Cordialement,
 
           <div class="simple-box" style="margin-bottom:16px; line-height:1.7;">
   La connexion Google Drive se fait depuis le portail principal BastCompta.<br>
-  Les actions rapides sont aussi disponibles dans le menu <strong>Fichier</strong> en haut de l’écran.<br>La sauvegarde automatique du CRM reste masquée dans cette liste pour éviter toute suppression accidentelle.
+  Le bouton <strong>Sauvegarder</strong> enregistre maintenant séparément le devis, la facture et le rappel s’ils ont chacun un numéro.<br>La sauvegarde automatique du CRM reste masquée dans cette liste pour éviter toute suppression accidentelle.
 </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -1221,8 +1238,10 @@ Cordialement,
           </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
-            <strong>Nom qui sera utilisé pour le prochain export du document actuel :</strong><br>
-            ${escapeHtml(getDriveFileName())}
+            <strong>Noms actuellement prêts à être exportés :</strong><br>
+            Devis : ${escapeHtml(String(data.quote.documentNumber || '').trim() ? `devis-${String(data.quote.documentNumber || '').trim()}.json` : 'non exporté (numéro vide)')}<br>
+            Facture : ${escapeHtml(String(data.invoice.documentNumber || '').trim() ? `facture-${String(data.invoice.documentNumber || '').trim()}.json` : 'non exportée (numéro vide)')}<br>
+            Rappel : ${escapeHtml(String(data.reminder?.documentNumber || '').trim() ? `rappel-${String(data.reminder.documentNumber || '').trim()}.json` : 'non exporté (numéro vide)')}
           </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -1244,16 +1263,18 @@ Cordialement,
               <button class="danger" onclick="deleteSelectedJsonFromDrive()">Supprimer${checkedCount ? ` (${checkedCount})` : ''}</button>
             </div>
 
-            <div class="drive-file-list">
-              ${fileItems || '<div class="simple-box">Aucune sauvegarde JSON trouvée sur Google Drive.</div>'}
+            <div class="crm-drive-grid" style="margin-top:16px; grid-template-columns: repeat(3, minmax(0, 1fr));">
+              ${renderDriveColumn('quote', 'Devis')}
+              ${renderDriveColumn('invoice', 'Factures')}
+              ${renderDriveColumn('reminder', 'Rappels')}
             </div>
           </div>
 
 <div class="simple-box" style="line-height:1.7;">
   <strong>Conseil</strong><br>
-  Donne toujours un numéro de devis ou de facture avant d’exporter.<br>
-  Même numéro = mise à jour du même fichier.<br>
-  Nouveau numéro = nouveau fichier JSON.
+  Même numéro dans la même catégorie = mise à jour du même fichier.<br>
+  Un devis n’écrase jamais une facture, et une facture n’écrase jamais un rappel.<br>
+  Si le numéro est vide, rien n’est exporté pour ce document.
 </div>
         </div>
       </div>
@@ -1261,26 +1282,28 @@ Cordialement,
   `;
     }
 
-    function getDriveFileName() {
-      const quoteNumber = String(data.quote.documentNumber || '').trim();
-      const invoiceNumber = String(data.invoice.documentNumber || '').trim();
-      const reminderNumber = String(data.reminder?.documentNumber || '').trim();
+    function getDriveFileName(docKey = '') {
+      const numbers = {
+        quote: String(data.quote.documentNumber || '').trim(),
+        invoice: String(data.invoice.documentNumber || '').trim(),
+        reminder: String(data.reminder?.documentNumber || '').trim()
+      };
+      const prefixes = {
+        quote: 'devis',
+        invoice: 'facture',
+        reminder: 'rappel'
+      };
 
-      if (activePage === 'reminder' && reminderNumber) {
-        return `rappel-${reminderNumber}.json`;
+      if (docKey && numbers[docKey]) {
+        return `${prefixes[docKey]}-${numbers[docKey]}.json`;
       }
 
-      if (invoiceNumber) {
-        return `facture-${invoiceNumber}.json`;
-      }
-
-      if (quoteNumber) {
-        return `devis-${quoteNumber}.json`;
-      }
-
-      if (reminderNumber) {
-        return `rappel-${reminderNumber}.json`;
-      }
+      if (activePage === 'quote' && numbers.quote) return `devis-${numbers.quote}.json`;
+      if (activePage === 'invoice' && numbers.invoice) return `facture-${numbers.invoice}.json`;
+      if (activePage === 'reminder' && numbers.reminder) return `rappel-${numbers.reminder}.json`;
+      if (numbers.quote) return `devis-${numbers.quote}.json`;
+      if (numbers.invoice) return `facture-${numbers.invoice}.json`;
+      if (numbers.reminder) return `rappel-${numbers.reminder}.json`;
 
       return 'devis-facture-sans-numero.json';
     }
@@ -2108,7 +2131,11 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
     function getDriveDocMetaFromParsed(parsed, fileName, modifiedTime = '') {
       const type = normalizeDocTypeFromName(fileName);
-      const source = type === 'invoice' ? (parsed.invoice || {}) : (parsed.quote || {});
+      const source = type === 'invoice'
+        ? (parsed.invoice || {})
+        : type === 'reminder'
+          ? (parsed.reminder || {})
+          : (parsed.quote || {});
       return {
         type,
         documentNumber: String(source.documentNumber || '').trim(),
@@ -2183,7 +2210,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
       return {
         quotes: docs.filter(doc => doc.type === 'quote').sort(sortDocs),
-        invoices: docs.filter(doc => doc.type === 'invoice').sort(sortDocs)
+        invoices: docs.filter(doc => doc.type === 'invoice').sort(sortDocs),
+        reminders: docs.filter(doc => doc.type === 'reminder').sort(sortDocs)
       };
     }
 
@@ -2201,7 +2229,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       if (baseFields.some(value => value.includes(term))) return true;
 
       const linked = getIndexedDriveDocsForClient(client);
-      const docs = [...linked.quotes, ...linked.invoices];
+      const docs = [...linked.quotes, ...linked.invoices, ...linked.reminders];
       return docs.some(doc => [
         doc.documentNumber,
         doc.clientNumber,
@@ -2327,9 +2355,13 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
       try {
         const doc = data[docKey] || {};
-        const prefix = docKey === 'invoice' ? 'facture' : 'devis';
+        const prefixes = { quote: 'devis', invoice: 'facture', reminder: 'rappel' };
+        const prefix = prefixes[docKey] || 'document';
         const docNumber = String(doc.documentNumber || '').trim();
-        const fileName = docNumber ? `${prefix}-${docNumber}.json` : `${prefix}-sans-numero.json`;
+        if (!docNumber) {
+          return null;
+        }
+        const fileName = `${prefix}-${docNumber}.json`;
         const content = JSON.stringify(data, null, 2);
 
         const existing = await gapi.client.drive.files.list({
@@ -2477,7 +2509,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             </div>
           </div>
 
-          <div class="crm-drive-grid">
+          <div class="crm-drive-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
             <div class="crm-drive-column">
               <strong>Devis</strong>
               <div class="inline-actions no-print" style="margin-top:10px;">
@@ -2492,6 +2524,14 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
                 <button type="button" onclick="exportDocTypeToDrive('invoice')">Exporter la facture courante</button>
               </div>
               ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce client.')}
+            </div>
+
+            <div class="crm-drive-column">
+              <strong>Rappels</strong>
+              <div class="inline-actions no-print" style="margin-top:10px;">
+                <button type="button" onclick="exportDocTypeToDrive('reminder')">Exporter le rappel courant</button>
+              </div>
+              ${renderCrmDriveDocList(linkedDocs.reminders, 'Aucun rappel lié à ce client.')}
             </div>
           </div>
         ` : ''}
@@ -2690,71 +2730,37 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
     }
 
-    async function exportJsonToDrive() {
+    async function exportAvailableDocumentsToDrive(showAlert = true) {
       if (!googleAccessToken) {
-        alert("Connecte Google Drive depuis le portail BastCompta.");
-        return;
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
+        return [];
       }
 
+      const savedNames = [];
       try {
         syncCommunicationFromInvoice(false);
-
-        if (activePage === 'reminder') {
-          const savedReminder = await exportDocTypeToDrive('reminder', false);
-          if (savedReminder) {
-            alert(`Export Google Drive réussi : ${savedReminder.name}`);
-          }
-          return;
+        for (const docKey of ['quote', 'invoice', 'reminder']) {
+          const docNumber = String(data[docKey]?.documentNumber || '').trim();
+          if (!docNumber) continue;
+          const saved = await exportDocTypeToDrive(docKey, false);
+          if (saved?.name) savedNames.push(saved.name);
         }
-
-        const fileName = getDriveFileName();
-        const content = JSON.stringify(data, null, 2);
-
-        const existing = await gapi.client.drive.files.list({
-          spaces: 'appDataFolder',
-          q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
-          fields: 'files(id, name)'
-        });
-
-        const files = existing.result.files || [];
-
-        const metadata = {
-          name: fileName,
-          parents: ['appDataFolder']
-        };
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([content], { type: 'application/json' }));
-
-        let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-        let method = 'POST';
-
-        if (files.length) {
-          url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
-          method = 'PATCH';
-        }
-
-        const res = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          },
-          body: form
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const saved = await res.json();
         await loadDriveFiles();
-        selectedDriveFileId = saved.id;
-        alert(`Export Google Drive réussi : ${saved.name}`);
+        if (showAlert) {
+          alert(savedNames.length
+            ? `Export Google Drive réussi : ${savedNames.join(', ')}`
+            : 'Aucun devis, facture ou rappel numéroté à exporter.');
+        }
+        return savedNames;
       } catch (error) {
         console.error(error);
-        alert("Échec de l'export vers Google Drive.");
+        if (showAlert) alert("Échec de l'export vers Google Drive.");
+        return savedNames;
       }
+    }
+
+    async function exportJsonToDrive() {
+      await exportAvailableDocumentsToDrive(true);
     }
 
     async function importJsonFromDrive() {
