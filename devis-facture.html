@@ -969,6 +969,23 @@
         suppliesLines: defaultLines(),
         notes: ''
       },
+      reminder: {
+        documentNumber: '',
+        clientNumber: '',
+        clientVat: '',
+        clientId: '',
+        clientName: '',
+        clientEmail: '',
+        address: '',
+        date: '',
+        dueDate: '',
+        siteName: '',
+        paidAmount: 0,
+        lines: defaultLines(),
+        suppliesEnabled: false,
+        suppliesLines: defaultLines(),
+        notes: ''
+      },
       communication: {
         clientNumber: '',
         invoiceYear: '',
@@ -992,6 +1009,13 @@ Cordialement,
 Veuillez trouver ci-joint votre facture {documentNumber} d'un montant de {totalTTC}.
 
 Cordialement,
+{companyName}`,
+        reminderSubject: 'Votre rappel {documentNumber}',
+        reminderBody: `Bonjour {clientName},
+
+Veuillez trouver ci-joint votre rappel {documentNumber} concernant le solde restant de {totalTTC}.
+
+Cordialement,
 {companyName}`
       }
     };
@@ -999,6 +1023,7 @@ Cordialement,
     const pageDefs = [
       { key: 'quote', label: 'Devis' },
       { key: 'invoice', label: 'Facture' },
+      { key: 'reminder', label: 'Rappel' },
       { key: 'communication', label: 'Communication structurée' },
       { key: 'peppol', label: 'Peppol / Doccle' },
       { key: 'crm', label: 'Carnet d\'adresses' },
@@ -1192,6 +1217,7 @@ Cordialement,
             Les sauvegardes sont créées sous forme de fichiers séparés, par exemple :
             <br>• devis-DEV-001.json
             <br>• facture-FA-2026-001.json
+            <br>• rappel-RAP-2026-001.json
           </div>
 
           <div class="simple-box" style="margin-bottom:16px;">
@@ -1238,6 +1264,11 @@ Cordialement,
     function getDriveFileName() {
       const quoteNumber = String(data.quote.documentNumber || '').trim();
       const invoiceNumber = String(data.invoice.documentNumber || '').trim();
+      const reminderNumber = String(data.reminder?.documentNumber || '').trim();
+
+      if (activePage === 'reminder' && reminderNumber) {
+        return `rappel-${reminderNumber}.json`;
+      }
 
       if (invoiceNumber) {
         return `facture-${invoiceNumber}.json`;
@@ -1245,6 +1276,10 @@ Cordialement,
 
       if (quoteNumber) {
         return `devis-${quoteNumber}.json`;
+      }
+
+      if (reminderNumber) {
+        return `rappel-${reminderNumber}.json`;
       }
 
       return 'devis-facture-sans-numero.json';
@@ -1259,7 +1294,7 @@ Cordialement,
       try {
         const list = await gapi.client.drive.files.list({
           spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and (name contains 'devis-' or name contains 'facture-')`,
+          q: `mimeType='application/json' and trashed=false and (name contains 'devis-' or name contains 'facture-' or name contains 'rappel-')`,
           orderBy: 'modifiedTime desc',
           pageSize: 100,
           fields: 'files(id, name, modifiedTime)'
@@ -1646,6 +1681,29 @@ Cordialement,
 
       saveData(false);
       activePage = 'invoice';
+      render();
+    }
+
+    function copyInvoiceToReminder() {
+      if (!confirm('Reprendre les données de la facture dans le rappel ? Cela remplacera les données actuelles du rappel.')) return;
+
+      data.reminder.clientId = data.invoice.clientId || '';
+      data.reminder.clientNumber = data.invoice.clientNumber;
+      data.reminder.clientVat = data.invoice.clientVat;
+      data.reminder.clientName = data.invoice.clientName;
+      data.reminder.clientEmail = data.invoice.clientEmail || '';
+      data.reminder.address = data.invoice.address;
+      data.reminder.date = data.invoice.date || '';
+      data.reminder.dueDate = data.invoice.dueDate || '';
+      data.reminder.siteName = data.invoice.siteName;
+      data.reminder.paidAmount = toNumber(data.invoice.paidAmount);
+      data.reminder.notes = data.invoice.notes;
+      data.reminder.lines = structuredClone(data.invoice.lines || defaultLines());
+      data.reminder.suppliesEnabled = !!data.invoice.suppliesEnabled;
+      data.reminder.suppliesLines = structuredClone(data.invoice.suppliesLines || defaultLines());
+
+      saveData(false);
+      activePage = 'reminder';
       render();
     }
 
@@ -2044,6 +2102,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       const lower = String(fileName || '').toLowerCase();
       if (lower.startsWith('devis-')) return 'quote';
       if (lower.startsWith('facture-')) return 'invoice';
+      if (lower.startsWith('rappel-')) return 'reminder';
       return '';
     }
 
@@ -2545,8 +2604,17 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       rememberClientEmail(email);
 
       const isQuote = docKey === 'quote';
-      const subjectTemplate = isQuote ? data.mail?.quoteSubject : data.mail?.invoiceSubject;
-      const bodyTemplate = isQuote ? data.mail?.quoteBody : data.mail?.invoiceBody;
+      const isReminder = docKey === 'reminder';
+      const subjectTemplate = isQuote
+        ? data.mail?.quoteSubject
+        : isReminder
+          ? data.mail?.reminderSubject
+          : data.mail?.invoiceSubject;
+      const bodyTemplate = isQuote
+        ? data.mail?.quoteBody
+        : isReminder
+          ? data.mail?.reminderBody
+          : data.mail?.invoiceBody;
       const subject = formatMailTemplate(subjectTemplate, docKey);
       const body = formatMailTemplate(bodyTemplate, docKey);
       const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -2630,6 +2698,14 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
       try {
         syncCommunicationFromInvoice(false);
+
+        if (activePage === 'reminder') {
+          const savedReminder = await exportDocTypeToDrive('reminder', false);
+          if (savedReminder) {
+            alert(`Export Google Drive réussi : ${savedReminder.name}`);
+          }
+          return;
+        }
 
         const fileName = getDriveFileName();
         const content = JSON.stringify(data, null, 2);
@@ -2901,7 +2977,11 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       const doc = data[docKey];
       const totals = totalsFor(docKey);
       const isQuote = docKey === 'quote';
-      const paidAmount = isQuote ? 0 : toNumber(data.invoice.paidAmount);
+      const isReminder = docKey === 'reminder';
+      const docLabel = isQuote ? 'DEVIS' : (isReminder ? 'RAPPEL' : 'FACTURE');
+      const emailLabel = isQuote ? 'Envoyer devis' : (isReminder ? 'Envoyer rappel' : 'Envoyer facture');
+      const notesLabel = isQuote ? 'Remarques du devis' : (isReminder ? 'Remarques du rappel' : 'Remarques');
+      const paidAmount = isQuote ? 0 : toNumber(doc.paidAmount);
       const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
 
       return `
@@ -2910,7 +2990,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="hint"></div>
             <div class="inline-actions">
               ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
-              <button onclick="sendDocumentEmail('${docKey}')">${isQuote ? 'Envoyer devis' : 'Envoyer facture'}</button>
+              ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre les données de la facture</button>` : ''}
+              <button onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
               <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer ce client</button>
               <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
               ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
@@ -2922,7 +3003,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
   ${renderCompanyBlock()}
 
   <div class="doc-head-right">
-    <div class="doc-title-top">${isQuote ? 'DEVIS' : 'FACTURE'}</div>
+    <div class="doc-title-top">${docLabel}</div>
 
     <div class="client-box">
       <div class="box-title">Client</div>
@@ -2952,9 +3033,11 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="bottom">
   <div>
     <div class="notes-block">
-      <div class="box-title">${isQuote ? 'Remarques du devis' : 'Remarques'}</div>
+      <div class="box-title">${notesLabel}</div>
       <textarea oninput="autoResize(this); data.${docKey}.notes=this.value" onchange="saveData(false)">${escapeHtml(doc.notes || '')}</textarea>
-${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; line-height:1.35;">${escapeHtml(getInvoicePaymentText())}</div>` : ``}
+${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; line-height:1.35;">${escapeHtml(`Paiement : ${money(balance)}
+Compte : ${data.company.iban || 'IBAN'}
+Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
     </div>
   </div>
 
@@ -2969,7 +3052,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
       <div class="pay-block">
         <div class="field" style="margin-bottom:10px;">
           <label>Montant payé</label>
-          <input type="number" step="0.01" value="${num(data.invoice.paidAmount)}" onchange="data.invoice.paidAmount=parseFloat(this.value)||0; saveData(false)">
+          <input type="number" step="0.01" value="${num(doc.paidAmount)}" onchange="data.${docKey}.paidAmount=parseFloat(this.value)||0; saveData(false)">
         </div>
         <div class="pay-line"><span>Payé</span><strong>${money(paidAmount)}</strong></div>
         <div class="pay-line"><span>Solde</span><strong>${money(balance)}</strong></div>
@@ -2978,7 +3061,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
   </div>
 </div>
 
-          ${renderConditionsPages(docKey, isQuote ? 'DEVIS' : 'FACTURE')}
+          ${renderConditionsPages(docKey, docLabel)}
         </section>
       `;
     }
@@ -2990,6 +3073,11 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
     function renderInvoice() {
       syncCommunicationFromInvoice(false);
       return renderDocumentPage('invoice');
+    }
+
+    function renderReminder() {
+      syncCommunicationFromInvoice(false);
+      return renderDocumentPage('reminder');
     }
 
     function renderCommunication() {
@@ -3054,7 +3142,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
         <section class="page ${activePage === 'settings' ? 'active' : ''}" data-page="settings">
           <div class="sheet">
             <div class="toolbar no-print">
-              <div class="hint">Paramètres société utilisés pour devis et facture</div>
+              <div class="hint">Paramètres société utilisés pour devis, facture et rappel</div>
             </div>
 
             <div class="settings-grid">
@@ -3142,6 +3230,16 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
                 </div>
 
                 <div class="field">
+                  <label>Objet email rappel</label>
+                  <input value="${escapeAttr(data.mail.reminderSubject || '')}" onchange="setField('mail.reminderSubject', this.value)">
+                </div>
+
+                <div class="field">
+                  <label>Message email rappel</label>
+                  <textarea oninput="autoResize(this); data.mail.reminderBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.reminderBody || '')}</textarea>
+                </div>
+
+                <div class="field">
                   <label>Conditions</label>
                   <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveData(false)">${escapeHtml(data.company.conditions || '')}</textarea>
                 </div>
@@ -3163,6 +3261,7 @@ ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; 
       wrap.innerHTML = `
     ${renderQuote()}
     ${renderInvoice()}
+    ${renderReminder()}
     ${renderCommunication()}
     ${renderPeppol()}
     ${renderCRM()}
