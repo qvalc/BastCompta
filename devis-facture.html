@@ -64,52 +64,6 @@
       align-items: center;
     }
 
-    .dropdown {
-      position: relative;
-    }
-
-    .dropdown-toggle {
-      min-width: 150px;
-    }
-
-    .dropdown-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      min-width: 320px;
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-      padding: 6px;
-      z-index: 50;
-      display: none;
-    }
-
-    .dropdown.open .dropdown-menu {
-      display: block;
-    }
-
-    .dropdown-menu button {
-      width: 100%;
-      text-align: left;
-      border: none;
-      background: transparent;
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-weight: 700;
-    }
-
-    .dropdown-menu button:hover {
-      background: #f3f4f6;
-    }
-
-    .dropdown-sep {
-      height: 1px;
-      background: var(--line);
-      margin: 6px 0;
-    }
-
     button,
     .file-label {
       border: 1px solid var(--line);
@@ -1055,29 +1009,13 @@ Cordialement,
         if (showAlert) {
           if (googleAccessToken) {
             let syncSaved = false;
-            let exportedDocs = [];
-
             try {
               syncSaved = await saveSyncToDrive(true);
             } catch (error) {
               console.error(error);
             }
-
-            try {
-              if (typeof exportAvailableDocumentsToDrive === 'function') {
-                exportedDocs = await exportAvailableDocumentsToDrive(false);
-              }
-            } catch (error) {
-              console.error(error);
-            }
-
-            const hasDriveSaves = syncSaved || exportedDocs.length > 0;
-            const exportLabel = exportedDocs.length
-              ? ` Documents Drive : ${exportedDocs.join(', ')}`
-              : ' Aucun devis, facture ou rappel numéroté à exporter.';
-
-            alert(hasDriveSaves
-              ? `Données sauvegardées localement et sur Google Drive.${exportLabel}`
+            alert(syncSaved
+              ? 'Données sauvegardées localement et CRM synchronisé sur Google Drive.'
               : 'Données sauvegardées localement.');
           } else {
             alert('Données sauvegardées localement.');
@@ -1092,20 +1030,6 @@ Cordialement,
           btn.textContent = 'Sauvegarder';
         }
       }
-    }
-
-    function toggleFileMenu(event) {
-      event.stopPropagation();
-      const dropdown = event.currentTarget.closest('.dropdown');
-      if (!dropdown) return;
-      document.querySelectorAll('.dropdown.open').forEach(el => {
-        if (el !== dropdown) el.classList.remove('open');
-      });
-      dropdown.classList.toggle('open');
-    }
-
-    function closeFileMenu() {
-      document.querySelectorAll('.dropdown.open').forEach(el => el.classList.remove('open'));
     }
 
     function exportDataLocal() {
@@ -1144,18 +1068,6 @@ Cordialement,
         console.error(error);
         alert("Le fichier sélectionné n'est pas un JSON valide.");
       }
-    }
-
-    async function importDataFromDriveMenu() {
-      activePage = 'crm';
-      render();
-      await loadDriveFiles();
-    }
-
-    async function openDriveDownloadManager() {
-      activePage = 'crm';
-      render();
-      await loadDriveFiles();
     }
 
     function isDriveFileChecked(fileId) {
@@ -1853,6 +1765,59 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
     }
 
+async function downloadHiddenCrmSyncFromDrive() {
+  if (!googleAccessToken) {
+    alert("Connecte Google Drive depuis le portail BastCompta.");
+    return false;
+  }
+
+  try {
+    const fileName = getSyncDriveFileName();
+    const list = await gapi.client.drive.files.list({
+      spaces: 'appDataFolder',
+      q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 1,
+      fields: 'files(id, name, modifiedTime)'
+    });
+
+    const file = (list.result.files || [])[0];
+    if (!file) {
+      alert('Aucun fichier CRM caché trouvé sur Google Drive.');
+      return false;
+    }
+
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+      headers: {
+        Authorization: `Bearer ${googleAccessToken}`
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+
+    const content = await res.text();
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name || fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    alert(`Téléchargement terminé : ${file.name || fileName}`);
+    return true;
+  } catch (error) {
+    console.error(error);
+    alert("Échec du téléchargement du fichier CRM caché depuis Google Drive.");
+    return false;
+  }
+}
+
+
     function createEmptyClient() {
       return {
         id: `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2479,35 +2444,34 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     }
 
     function renderCrmDriveDocList(docs, emptyLabel) {
-      if (!docs.length) {
-        return `<div class="crm-drive-empty">${escapeHtml(emptyLabel)}</div>`;
-      }
+  if (!docs.length) {
+    return `<div class="crm-drive-empty">${escapeHtml(emptyLabel)}</div>`;
+  }
 
-      return `<div class="crm-drive-doc-list">${docs.map(doc => {
-        const isImportSelected = selectedDriveFileId === doc.id;
-        const isChecked = isDriveFileChecked(doc.id);
-        return `
-        <div class="crm-drive-doc-item ${isImportSelected ? 'active' : ''}">
-          <div style="display:grid; grid-template-columns:22px 22px 1fr; gap:10px; align-items:start;">
-            <input type="radio" name="driveImportFile" ${isImportSelected ? 'checked' : ''} onchange="selectDriveFileForImport('${escapeAttr(doc.id)}')" title="Choisir ce fichier pour le charger dans l’application">
-            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDriveFileSelection('${escapeAttr(doc.id)}', this.checked)" title="Ajouter ce fichier à la sélection pour téléchargement ou suppression">
-            <div>
-              <div class="crm-drive-doc-title">${escapeHtml(doc.documentNumber || doc.name || 'Document')}</div>
-              <div class="crm-drive-doc-meta">
-                ${escapeHtml(doc.name || '')}<br>
-                ${doc.modifiedTime ? `Modifié le ${escapeHtml(new Date(doc.modifiedTime).toLocaleString('fr-BE'))}` : 'Date inconnue'}
-              </div>
-              <div class="inline-actions no-print">
-                <button type="button" onclick="loadDriveJsonFileById('${escapeAttr(doc.id)}')">Charger</button>
-                <button type="button" onclick="downloadDriveFileById('${escapeAttr(doc.id)}')">Télécharger</button>
-                <button type="button" class="danger" onclick="deleteDriveFileById('${escapeAttr(doc.id)}')">Supprimer</button>
-              </div>
-            </div>
+  return `<div class="crm-drive-doc-list">${docs.map(doc => {
+    const isImportSelected = selectedDriveFileId === doc.id;
+    const isChecked = isDriveFileChecked(doc.id);
+    return `
+    <div class="crm-drive-doc-item">
+      <div style="display:grid; grid-template-columns:22px 22px 1fr; gap:10px; align-items:start;">
+        <input type="radio" name="driveImportFile" ${isImportSelected ? 'checked' : ''} onchange="selectDriveFileForImport('${escapeAttr(doc.id)}')" title="Choisir ce fichier pour le charger dans l’application">
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDriveFileSelection('${escapeAttr(doc.id)}', this.checked)" title="Ajouter ce fichier à la sélection pour téléchargement ou suppression">
+        <div>
+          <div class="crm-drive-doc-title">${escapeHtml(doc.documentNumber || doc.name || 'Document')}</div>
+          <div class="crm-drive-doc-meta">
+            ${escapeHtml(doc.name || '')}<br>
+            ${doc.modifiedTime ? `Modifié le ${escapeHtml(new Date(doc.modifiedTime).toLocaleString('fr-BE'))}` : 'Date inconnue'}
+          </div>
+          <div class="inline-actions no-print">
+            <button type="button" onclick="loadDriveJsonFileById('${escapeAttr(doc.id)}')">Charger</button>
+            <button type="button" onclick="downloadDriveFileById('${escapeAttr(doc.id)}')">Télécharger</button>
+            <button type="button" class="danger" onclick="deleteDriveFileById('${escapeAttr(doc.id)}')">Supprimer</button>
           </div>
         </div>
-      `;
-      }).join('')}</div>`;
-    }
+      </div>
+    </div>
+  `;}).join('')}</div>`;
+}
 
     function renderCRMInner() {
       const clients = getClients().filter(clientMatchesSearch);
@@ -2587,12 +2551,10 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
                 <span class="hint">Radio = charger. Case = télécharger ou supprimer.</span>
               </div>
               <div class="inline-actions no-print">
-                <button type="button" onclick="exportAvailableDocumentsToDrive()">Exporter les documents en cours vers Drive</button>
                 <button type="button" onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
               </div>
             </div>
             <div class="inline-actions no-print" style="margin-top:12px;">
-              <button type="button" onclick="importSelectedClientJsonFromDrive('${escapeAttr(client.id)}')">Charger la sélection</button>
               <button type="button" onclick="downloadSelectedClientJsonFromDrive('${escapeAttr(client.id)}')">Télécharger la sélection</button>
               <button type="button" onclick="selectAllDriveFilesForClient('${escapeAttr(client.id)}')">Tout cocher</button>
               <button type="button" onclick="clearDriveFileSelectionForClient('${escapeAttr(client.id)}')">Tout décocher</button>
@@ -2600,23 +2562,38 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             </div>
           </div>
 
-          <div class="crm-drive-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
-            <div class="crm-drive-column">
-              <strong>Devis</strong>
-              ${renderCrmDriveDocList(linkedDocs.quotes, 'Aucun devis lié à ce client.')}
-            </div>
+<div class="simple-box no-print" style="margin-top:14px;">
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+      <div>
+        <strong>Documents Drive liés à ce client</strong><br>
+        <span class="hint">Radio = charger. Case = télécharger ou supprimer.</span>
+      </div>
+      <div class="inline-actions">
+        <button type="button" onclick="downloadSelectedClientJsonFromDrive('${escapeAttr(client.id)}')">Télécharger la sélection</button>
+        <button type="button" onclick="selectAllDriveFilesForClient('${escapeAttr(client.id)}')">Tout cocher</button>
+        <button type="button" onclick="clearDriveFileSelectionForClient('${escapeAttr(client.id)}')">Tout décocher</button>
+        <button type="button" class="danger" onclick="deleteSelectedClientJsonFromDrive('${escapeAttr(client.id)}')">Supprimer la sélection</button>
+      </div>
+    </div>
+  </div>
 
-            <div class="crm-drive-column">
-              <strong>Factures</strong>
-              ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce client.')}
-            </div>
+  <div class="crm-drive-grid" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
+    <div class="crm-drive-column">
+      <strong>Devis</strong>
+      ${renderCrmDriveDocList(linkedDocs.quotes, 'Aucun devis lié à ce client.')}
+    </div>
 
-            <div class="crm-drive-column">
-              <strong>Rappels</strong>
-              ${renderCrmDriveDocList(linkedDocs.reminders, 'Aucun rappel lié à ce client.')}
-            </div>
-          </div>
-        ` : ''}
+    <div class="crm-drive-column">
+      <strong>Factures</strong>
+      ${renderCrmDriveDocList(linkedDocs.invoices, 'Aucune facture liée à ce client.')}
+    </div>
+
+    <div class="crm-drive-column">
+      <strong>Rappels</strong>
+      ${renderCrmDriveDocList(linkedDocs.reminders, 'Aucun rappel lié à ce client.')}
+    </div>
+  </div>
+` : ''}
       </div>
     `;
       }).join('');
@@ -2651,14 +2628,16 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return `
     <section class="page ${activePage === 'crm' ? 'active' : ''}" data-page="crm">
       <div class="sheet">
-        <div class="toolbar no-print">
-          <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
-          <div class="inline-actions">
-            <button class="primary" onclick="createNewClient()">Nouveau client</button>
-            <button onclick="saveData()">Sauvegarder</button>
-            <button onclick="loadDriveFiles()">Actualiser</button>
-            <button onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM caché</button>
-          </div>
+<div class="toolbar no-print">
+  <div class="hint">Le CRM se gère ici, puis devis et facture récupèrent simplement les infos client.</div>
+  <div class="inline-actions">
+    <button class="primary" onclick="createNewClient()">Nouveau client</button>
+    <button onclick="loadDriveFiles()">Actualiser Drive</button>
+    <button onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
+    <button onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM caché</button>
+    <button onclick="saveData()">Sauvegarder</button>
+  </div>
+</div>
         </div>
 
         ${renderCRMInner()}
@@ -2815,11 +2794,6 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
     }
 
     async function exportAvailableDocumentsToDrive(showAlert = true) {
-      if (!googleAccessToken) {
-        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
-        return [];
-      }
-
       const savedNames = [];
       try {
         syncCommunicationFromInvoice(false);
@@ -2841,10 +2815,6 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         if (showAlert) alert("Échec de l'export vers Google Drive.");
         return savedNames;
       }
-    }
-
-    async function exportJsonToDrive() {
-      await exportAvailableDocumentsToDrive(true);
     }
 
     async function importJsonFromDrive() {
@@ -3244,6 +3214,14 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
               </div>
             </div>
 
+            <div class="simple-box" style="margin-bottom:16px;">
+              <strong>Sauvegarde complète de l’application</strong><br>
+              <div class="inline-actions" style="margin-top:10px;">
+                <button type="button" onclick="exportDataLocal()">Sauvegarder toute l’application</button>
+                <button type="button" onclick="importDataLocal()">Restaurer une sauvegarde complète</button>
+              </div>
+            </div>
+
             <div class="settings-grid">
               <div class="stack">
                 <div class="field">
@@ -3380,9 +3358,6 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
     }
 
     document.addEventListener('click', (event) => {
-      if (!event.target.closest('.dropdown')) {
-        closeFileMenu();
-      }
     });
 
     window.addEventListener('load', async () => {
