@@ -1060,13 +1060,30 @@ Cordialement,
       try {
         const content = await file.text();
         const parsed = JSON.parse(content);
-        data = mergeDeep(structuredClone(defaultData), parsed);
+        const docType = normalizeDocTypeFromName(file.name || '');
+
+        if (docType === 'quote' && parsed.quote) {
+          data.quote = mergeDeep(structuredClone(defaultData.quote), parsed.quote);
+          activePage = 'quote';
+        } else if (docType === 'invoice' && parsed.invoice) {
+          data.invoice = mergeDeep(structuredClone(defaultData.invoice), parsed.invoice);
+          activePage = 'invoice';
+        } else if (docType === 'reminder' && parsed.reminder) {
+          data.reminder = mergeDeep(structuredClone(defaultData.reminder), parsed.reminder);
+          activePage = 'reminder';
+        } else {
+          throw new Error('Type de document inconnu.');
+        }
+
         syncCommunicationFromInvoice(false);
-        saveData(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        render();
         alert(`Import réussi : ${file.name}`);
       } catch (error) {
         console.error(error);
         alert("Le fichier sélectionné n'est pas un JSON valide.");
+      } finally {
+        event.target.value = '';
       }
     }
 
@@ -1217,28 +1234,7 @@ Cordialement,
         return;
       }
 
-      try {
-        const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
-
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
-          headers: {
-            Authorization: `Bearer ${googleAccessToken}`
-          }
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const parsed = await res.json();
-        data = mergeDeep(structuredClone(defaultData), parsed);
-        syncCommunicationFromInvoice(false);
-        saveData(false);
-        alert(`Import réussi : ${file ? file.name : 'fichier sélectionné'}`);
-      } catch (error) {
-        console.error(error);
-        alert("Échec de l'import depuis Google Drive.");
-      }
+      await loadDriveJsonFileById(selectedDriveFileId, true);
     }
 
     async function downloadSelectedJsonFromDrive() {
@@ -1879,6 +1875,7 @@ async function downloadHiddenCrmSyncFromDrive() {
 
     function saveClientRecord(client, shouldAlert = true) {
       const normalized = normalizeClient(client);
+
       if (!normalized.name) {
         if (shouldAlert) {
           alert('Renseigne au minimum le nom du client.');
@@ -1887,19 +1884,40 @@ async function downloadHiddenCrmSyncFromDrive() {
       }
 
       const list = Array.isArray(data.clients) ? [...data.clients] : [];
-      const index = list.findIndex(item => item.id === normalized.id);
+      const normalizedClientNumber = String(normalized.clientNumber || '').trim();
+
+      let index = -1;
+
+      if (normalized.id) {
+        index = list.findIndex(item => item.id === normalized.id);
+      }
+
+      if (index < 0 && normalizedClientNumber) {
+        index = list.findIndex(item =>
+          String(item?.clientNumber || '').trim() === normalizedClientNumber
+        );
+
+        if (index >= 0) {
+          normalized.id = list[index].id;
+        }
+      }
 
       if (index >= 0) {
-        list[index] = normalized;
+        list[index] = {
+          ...list[index],
+          ...normalized
+        };
       } else {
         list.push(normalized);
       }
 
       data.clients = list.filter(item => String(item?.name || '').trim());
       crmExpandedClientId = normalized.id;
+
       if (normalized.email) rememberClientEmail(normalized.email);
       saveData(false);
-      if (shouldAlert) alert('Client enregistré dans le carnet d\'adresses.');
+
+      if (shouldAlert) alert("Client enregistré dans le carnet d'adresses.");
     }
 
     function saveCurrentClientFromDoc(docKey) {
@@ -1914,7 +1932,16 @@ async function downloadHiddenCrmSyncFromDrive() {
         phone: '',
         contact: '',
         notes: ''
-      });
+      }, false);
+
+      const savedClient = getClients().find(client =>
+        String(client.clientNumber || '').trim() === String(doc.clientNumber || '').trim()
+      );
+
+      if (savedClient) {
+        data[docKey].clientId = savedClient.id;
+        saveData(false);
+      }
     }
 
     function applyClientToDocument(docKey, clientId) {
@@ -2145,7 +2172,21 @@ async function downloadHiddenCrmSyncFromDrive() {
       try {
         const file = googleDriveFiles.find(item => item.id === fileId);
         const parsed = await fetchDriveFileParsed(fileId);
-        data = mergeDeep(structuredClone(defaultData), parsed);
+        const docType = normalizeDocTypeFromName(file?.name || '');
+
+        if (docType === 'quote' && parsed.quote) {
+          data.quote = mergeDeep(structuredClone(defaultData.quote), parsed.quote);
+          activePage = 'quote';
+        } else if (docType === 'invoice' && parsed.invoice) {
+          data.invoice = mergeDeep(structuredClone(defaultData.invoice), parsed.invoice);
+          activePage = 'invoice';
+        } else if (docType === 'reminder' && parsed.reminder) {
+          data.reminder = mergeDeep(structuredClone(defaultData.reminder), parsed.reminder);
+          activePage = 'reminder';
+        } else {
+          throw new Error('Type de document inconnu.');
+        }
+
         syncCommunicationFromInvoice(false);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         selectedDriveFileId = fileId;
