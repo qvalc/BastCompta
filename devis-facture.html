@@ -1961,6 +1961,59 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
     }
 
+
+    async function downloadHiddenCrmSyncFromDrive() {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return false;
+      }
+
+      try {
+        const fileName = getSyncDriveFileName();
+        const list = await gapi.client.drive.files.list({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          fields: 'files(id, name, modifiedTime)'
+        });
+
+        const file = (list.result.files || [])[0];
+        if (!file) {
+          alert('Aucun fichier CRM caché trouvé sur Google Drive.');
+          return false;
+        }
+
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const content = await res.text();
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name || fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        alert(`Téléchargement terminé : ${file.name || fileName}`);
+        return true;
+      } catch (error) {
+        console.error(error);
+        alert("Échec du téléchargement du fichier CRM caché depuis Google Drive.");
+        return false;
+      }
+    }
+
     function createEmptyClient() {
       return {
         id: `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -2615,6 +2668,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           <div class="inline-actions">
             <button class="primary" onclick="createNewClient()">Nouveau client</button>
             <button onclick="saveData()">Sauvegarder</button>
+            <button onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM</button>
           </div>
         </div>
 
