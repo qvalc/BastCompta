@@ -872,23 +872,7 @@
       </div>
       <div class="actions">
         <button class="primary" onclick="saveData()">Sauvegarder</button>
-        <div class="dropdown">
-          <button type="button" class="dropdown-toggle" onclick="toggleFileMenu(event)">Fichier ▼</button>
-          <div class="dropdown-menu" id="fileMenu">
-            <button type="button" onclick="importDataLocal(); closeFileMenu()">Importer depuis ce PC</button>
-            <button type="button" onclick="exportDataLocal(); closeFileMenu()">Exporter vers ce PC</button>
-            <div class="dropdown-sep"></div>
-            <button type="button" onclick="importDataFromDriveMenu(); closeFileMenu()">Importer depuis Google
-              Drive</button>
-            <button type="button" onclick="exportJsonToDrive(); closeFileMenu()">Exporter vers Google Drive</button>
-            <button type="button" onclick="openDriveDownloadManager(); closeFileMenu()">Sauvegarder un fichier Drive
-              vers ce PC</button>
-            <button type="button" onclick="pickLocalJsonForDrive(); closeFileMenu()">Envoyer un fichier du PC vers
-              Google Drive</button>
-          </div>
-        </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
-        <button class="danger" onclick="resetData()">Réinitialiser</button>
       </div>
     </div>
 
@@ -1436,13 +1420,6 @@ Cordialement,
       }
     }
 
-    function resetData() {
-      if (!confirm('Tout effacer et revenir à une base locale vide ?')) return;
-      data = structuredClone(defaultData);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      alert('Données locales réinitialisées. Aucune modification sur Google Drive.');
-      render();
-    }
 
     function pickLocalJsonForDrive() {
       if (!googleAccessToken) {
@@ -2612,7 +2589,6 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
               <div class="inline-actions no-print">
                 <button type="button" onclick="exportAvailableDocumentsToDrive()">Exporter les documents en cours vers Drive</button>
                 <button type="button" onclick="pickLocalJsonForDrive()">Importer des fichiers du PC vers Drive</button>
-                <button type="button" onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM caché</button>
               </div>
             </div>
             <div class="inline-actions no-print" style="margin-top:12px;">
@@ -2681,6 +2657,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <button class="primary" onclick="createNewClient()">Nouveau client</button>
             <button onclick="saveData()">Sauvegarder</button>
             <button onclick="loadDriveFiles()">Actualiser</button>
+            <button onclick="downloadHiddenCrmSyncFromDrive()">Télécharger le CRM caché</button>
           </div>
         </div>
 
@@ -3256,6 +3233,15 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
           <div class="sheet">
             <div class="toolbar no-print">
               <div class="hint">Paramètres société utilisés pour devis, facture et rappel</div>
+            </div>
+
+            <div class="simple-box no-print" style="margin-bottom:16px; line-height:1.7;">
+              <strong>Sauvegarde complète de l'application</strong><br>
+              Ces boutons importent ou exportent l'intégralité des données locales : devis, facture, rappel, CRM, société et paramètres email.
+              <div class="inline-actions" style="margin-top:12px;">
+                <button type="button" onclick="exportDataLocal()">Sauvegarder toute l'application</button>
+                <button type="button" onclick="importDataLocal()">Restaurer une sauvegarde complète</button>
+              </div>
             </div>
 
             <div class="settings-grid">
