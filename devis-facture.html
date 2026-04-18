@@ -888,7 +888,6 @@
           </div>
         </div>
         <button onclick="printCurrentPage()">Imprimer l’onglet</button>
-        <button class="danger" onclick="resetData()">Réinitialiser</button>
       </div>
     </div>
 
@@ -1512,11 +1511,21 @@ Cordialement,
       }
     }
 
-    function resetData() {
-      if (!confirm('Tout effacer et revenir à une base locale vide ?')) return;
-      data = structuredClone(defaultData);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      alert('Données locales réinitialisées. Aucune modification sur Google Drive.');
+    function clearDocumentData(docKey) {
+      const labels = {
+        quote: 'devis',
+        invoice: 'facture',
+        reminder: 'rappel'
+      };
+
+      if (!labels[docKey]) return;
+      if (!confirm(`Effacer toutes les données remplies de ce ${labels[docKey]} ?`)) return;
+
+      data[docKey] = structuredClone(defaultData[docKey]);
+      if (docKey === 'invoice' || docKey === 'reminder') {
+        syncCommunicationFromInvoice(false);
+      }
+      saveData(false);
       render();
     }
 
@@ -3029,6 +3038,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             <div class="inline-actions">
               ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
               ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre les données de la facture</button>` : ''}
+              <button class="danger" onclick="clearDocumentData('${docKey}')">Effacer cet onglet</button>
               <button onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
               <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer ce client</button>
               <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
