@@ -849,6 +849,66 @@
     let selectedDriveFileId = '';
     let selectedDriveFileIds = [];
 
+    function notifyParentToRefreshGoogleToken() {
+      try {
+        window.parent.postMessage({
+          type: 'BASTCOMPTA_REFRESH_TOKEN'
+        }, window.location.origin);
+      } catch (error) {
+        console.error('Impossible de demander un refresh du token Google.', error);
+      }
+    }
+
+    function resetGoogleDriveSession() {
+      googleAccessToken = null;
+      if (window.gapi?.client) {
+        gapi.client.setToken(null);
+      }
+    }
+
+    async function handleGoogleDriveAuthError(status, showAlert = true) {
+      if (status === 401) {
+        resetGoogleDriveSession();
+        notifyParentToRefreshGoogleToken();
+
+        if (showAlert) {
+          alert('La session Google Drive a expiré. Reconnexion en cours...');
+        }
+
+        return true;
+      }
+
+      return false;
+    }
+
+    function extractGoogleDriveErrorStatus(error) {
+      return error?.status || error?.result?.error?.code || error?.code || null;
+    }
+
+    async function handleGoogleDriveException(error, showAlert = true) {
+      const status = extractGoogleDriveErrorStatus(error);
+      return handleGoogleDriveAuthError(status, showAlert);
+    }
+
+    async function driveFilesList(params, showAlert401 = true) {
+      try {
+        return await gapi.client.drive.files.list(params);
+      } catch (error) {
+        if (await handleGoogleDriveException(error, showAlert401)) {
+          return null;
+        }
+        throw error;
+      }
+    }
+
+    async function googleDriveFetch(url, options = {}, showAlert401 = true) {
+      const response = await fetch(url, options);
+      if (await handleGoogleDriveAuthError(response.status, showAlert401)) {
+        return null;
+      }
+      return response;
+    }
+
     const defaultLines = () => ([
       {
         description: '',
@@ -1184,13 +1244,15 @@ Cordialement,
       }
 
       try {
-        const list = await gapi.client.drive.files.list({
+        const list = await driveFilesList({
           spaces: 'appDataFolder',
           q: `mimeType='application/json' and trashed=false and (name contains 'devis-' or name contains 'facture-' or name contains 'rappel-')`,
           orderBy: 'modifiedTime desc',
           pageSize: 100,
           fields: 'files(id, name, modifiedTime)'
         });
+
+        if (!list) return;
 
         googleDriveFiles = (list.result.files || []).filter(file => {
           const hiddenSyncNames = ['bastcompta-devis-facture-sync.json', DRIVE_SYNC_FILE_NAME];
@@ -1256,11 +1318,13 @@ Cordialement,
         for (const fileId of fileIds) {
           const file = googleDriveFiles.find(f => f.id === fileId);
 
-          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             }
           });
+
+          if (!res) return;
 
           if (!res.ok) {
             throw new Error(await res.text());
@@ -1306,12 +1370,14 @@ Cordialement,
 
       try {
         for (const fileId of fileIds) {
-          await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             }
           });
+          if (!res) return;
+          if (!res.ok) throw new Error(await res.text());
         }
 
         selectedDriveFileIds = [];
@@ -1370,12 +1436,13 @@ Cordialement,
             parents: ['appDataFolder']
           };
 
-          const existing = await gapi.client.drive.files.list({
+          const existing = await driveFilesList({
             spaces: 'appDataFolder',
             q: `name='${file.name.replace(/'/g, "\'")}' and trashed=false`,
             fields: 'files(id, name)'
           });
 
+          if (!existing) return;
           const files = existing.result.files || [];
 
           const form = new FormData();
@@ -1390,13 +1457,15 @@ Cordialement,
             method = 'PATCH';
           }
 
-          const res = await fetch(url, {
+          const res = await googleDriveFetch(url, {
             method,
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             },
             body: form
           });
+
+          if (!res) return;
 
           if (!res.ok) {
             throw new Error(await res.text());
@@ -1670,12 +1739,13 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         };
         const content = JSON.stringify(syncPayload, null, 2);
 
-        const existing = await gapi.client.drive.files.list({
+        const existing = await driveFilesList({
           spaces: 'appDataFolder',
           q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
           fields: 'files(id, name)'
         });
 
+        if (!existing) return false;
         const files = existing.result.files || [];
         const isUpdate = files.length > 0;
         const metadata = isUpdate
@@ -1694,13 +1764,15 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           method = 'PATCH';
         }
 
-        const res = await fetch(url, {
+        const res = await googleDriveFetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           },
           body: form
         });
+
+        if (!res) return false;
 
         if (!res.ok) {
           const errorText = await res.text();
@@ -1722,7 +1794,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 
       try {
         const fileName = getSyncDriveFileName();
-        const list = await gapi.client.drive.files.list({
+        const list = await driveFilesList({
           spaces: 'appDataFolder',
           q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
           orderBy: 'modifiedTime desc',
@@ -1730,14 +1802,17 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
           fields: 'files(id, name, modifiedTime)'
         });
 
+        if (!list) return false;
         const file = (list.result.files || [])[0];
         if (!file) return false;
 
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
-        });
+        }, false);
+
+        if (!res) return false;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -1769,25 +1844,28 @@ async function downloadHiddenCrmSyncFromDrive() {
 
   try {
     const fileName = getSyncDriveFileName();
-    const list = await gapi.client.drive.files.list({
+    const list = await driveFilesList({
       spaces: 'appDataFolder',
       q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
       orderBy: 'modifiedTime desc',
       pageSize: 1,
       fields: 'files(id, name, modifiedTime)'
-    });
+    }, false);
 
+    if (!list) return false;
     const file = (list.result.files || [])[0];
     if (!file) {
       alert('Aucun fichier CRM caché trouvé sur Google Drive.');
       return false;
     }
 
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
       headers: {
         Authorization: `Bearer ${googleAccessToken}`
       }
     });
+
+    if (!res) return false;
 
     if (!res.ok) {
       throw new Error(await res.text());
@@ -2071,11 +2149,15 @@ async function downloadHiddenCrmSyncFromDrive() {
     }
 
     async function fetchDriveFileParsed(fileId) {
-      const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
         headers: {
           Authorization: `Bearer ${googleAccessToken}`
         }
-      });
+      }, false);
+
+      if (!res) {
+        throw new Error('Session Google Drive expirée.');
+      }
 
       if (!res.ok) {
         throw new Error(await res.text());
@@ -2214,11 +2296,13 @@ async function downloadHiddenCrmSyncFromDrive() {
 
       try {
         const file = googleDriveFiles.find(item => item.id === fileId);
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
         });
+
+        if (!res) return false;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -2258,12 +2342,14 @@ async function downloadHiddenCrmSyncFromDrive() {
       if (!confirm(`Supprimer définitivement ${file?.name || 'cette sauvegarde'} ?`)) return false;
 
       try {
-        await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
         });
+        if (!res) return false;
+        if (!res.ok) throw new Error(await res.text());
 
         delete driveFileIndex[fileId];
         googleDriveFiles = googleDriveFiles.filter(item => item.id !== fileId);
@@ -2349,9 +2435,10 @@ async function downloadHiddenCrmSyncFromDrive() {
       try {
         for (const fileId of fileIds) {
           const file = googleDriveFiles.find(f => f.id === fileId);
-          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: { Authorization: `Bearer ${googleAccessToken}` }
           });
+          if (!res) return false;
           if (!res.ok) throw new Error(await res.text());
           const content = await res.text();
           const blob = new Blob([content], { type: 'application/json' });
@@ -2391,10 +2478,12 @@ async function downloadHiddenCrmSyncFromDrive() {
 
       try {
         for (const fileId of fileIds) {
-          await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${googleAccessToken}` }
           });
+          if (!res) return false;
+          if (!res.ok) throw new Error(await res.text());
           delete driveFileIndex[fileId];
         }
 
@@ -2431,7 +2520,7 @@ async function downloadHiddenCrmSyncFromDrive() {
         const fileName = `${prefix}-${docNumber}.json`;
         const content = JSON.stringify(data, null, 2);
 
-        const existing = await gapi.client.drive.files.list({
+        const existing = await driveFilesList({
           spaces: 'appDataFolder',
           q: `name='${fileName.replace(/'/g, "\\'")}' and trashed=false`,
           fields: 'files(id, name)'
@@ -2455,13 +2544,15 @@ async function downloadHiddenCrmSyncFromDrive() {
           method = 'PATCH';
         }
 
-        const res = await fetch(url, {
+        const res = await googleDriveFetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           },
           body: form
         });
+
+        if (!res) return null;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -3251,14 +3342,6 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
               Ces boutons importent ou exportent l'intégralité des données locales : devis, facture, rappel, CRM, société et paramètres email.
               <div class="inline-actions" style="margin-top:12px;">
                 <button type="button" onclick="exportDataLocal()">Sauvegarder toute l'application</button>
-                <button type="button" onclick="importDataLocal()">Restaurer une sauvegarde complète</button>
-              </div>
-            </div>
-
-            <div class="simple-box" style="margin-bottom:16px;">
-              <strong>Sauvegarde complète de l’application</strong><br>
-              <div class="inline-actions" style="margin-top:10px;">
-                <button type="button" onclick="exportDataLocal()">Sauvegarder toute l’application</button>
                 <button type="button" onclick="importDataLocal()">Restaurer une sauvegarde complète</button>
               </div>
             </div>
