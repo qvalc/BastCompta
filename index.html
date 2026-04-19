@@ -862,7 +862,7 @@
     function requestGoogleDriveAccess(promptValue = 'consent') {
       return new Promise((resolve, reject) => {
         if (!googleTokenClient) {
-          reject(new Error('Google Drive n'est pas prêt.'));
+          reject(new Error("Google Drive n'est pas prêt."));
           return;
         }
 
@@ -883,7 +883,7 @@
       }
 
       if (!googleDriveReady || !googleTokenClient) {
-        throw new Error('Google Drive n'est pas prêt.');
+        throw new Error("Google Drive n'est pas prêt."));
       }
 
       const promptValue = forceInteractive
