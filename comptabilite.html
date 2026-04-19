@@ -667,6 +667,69 @@
     let selectedDriveFileId = '';
     let selectedDriveFileIds = [];
 
+    function notifyParentToRefreshGoogleToken() {
+      try {
+        window.parent.postMessage({
+          type: 'BASTCOMPTA_REFRESH_TOKEN'
+        }, window.location.origin);
+      } catch (error) {
+        console.error('Impossible de demander un refresh du token Google.', error);
+      }
+    }
+
+    function resetGoogleDriveSession() {
+      googleAccessToken = null;
+      googleDriveFiles = [];
+      selectedDriveFileId = '';
+      selectedDriveFileIds = [];
+      if (window.gapi?.client) {
+        gapi.client.setToken(null);
+      }
+    }
+
+    async function handleGoogleDriveAuthError(status, showAlert = true) {
+      if (status === 401) {
+        resetGoogleDriveSession();
+        notifyParentToRefreshGoogleToken();
+
+        if (showAlert) {
+          alert('La session Google Drive a expiré. Reconnexion en cours...');
+        }
+
+        return true;
+      }
+
+      return false;
+    }
+
+    function extractGoogleDriveErrorStatus(error) {
+      return error?.status || error?.result?.error?.code || error?.code || null;
+    }
+
+    async function handleGoogleDriveException(error, showAlert = true) {
+      const status = extractGoogleDriveErrorStatus(error);
+      return handleGoogleDriveAuthError(status, showAlert);
+    }
+
+    async function driveFilesList(params, showAlert401 = true) {
+      try {
+        return await gapi.client.drive.files.list(params);
+      } catch (error) {
+        if (await handleGoogleDriveException(error, showAlert401)) {
+          return null;
+        }
+        throw error;
+      }
+    }
+
+    async function googleDriveFetch(url, options = {}, showAlert401 = true) {
+      const response = await fetch(url, options);
+      if (await handleGoogleDriveAuthError(response.status, showAlert401)) {
+        return null;
+      }
+      return response;
+    }
+
 
     const defaultData = {
       company: {
@@ -752,12 +815,13 @@
         const syncPayload = mergeDeep(structuredClone(defaultData), data || {});
         const content = JSON.stringify(syncPayload, null, 2);
 
-        const existing = await gapi.client.drive.files.list({
+        const existing = await driveFilesList({
           spaces: 'appDataFolder',
           q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
           fields: 'files(id, name)'
         });
 
+        if (!existing) return false;
         const files = existing.result.files || [];
         const isUpdate = files.length > 0;
         const metadata = isUpdate
@@ -776,7 +840,7 @@
           method = 'PATCH';
         }
 
-        const res = await fetch(url, {
+        const res = await googleDriveFetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
@@ -804,7 +868,7 @@
 
       try {
         const fileName = getSyncDriveFileName();
-        const list = await gapi.client.drive.files.list({
+        const list = await driveFilesList({
           spaces: 'appDataFolder',
           q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
           orderBy: 'modifiedTime desc',
@@ -812,14 +876,19 @@
           fields: 'files(id, name, modifiedTime)'
         });
 
+        if (!list) return false;
         const file = (list.result.files || [])[0];
         if (!file) return false;
 
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
         });
+
+        if (!res) return false;
+
+        if (!res) return false;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -842,7 +911,7 @@
       try {
         const currentYear = String(new Date().getFullYear());
 
-        const list = await gapi.client.drive.files.list({
+        const list = await driveFilesList({
           spaces: 'appDataFolder',
           q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-' and name contains '${currentYear}'`,
           orderBy: 'modifiedTime desc',
@@ -850,6 +919,7 @@
           fields: 'files(id, name, modifiedTime)'
         });
 
+        if (!list) return false;
         const files = (list.result.files || []).filter(file => {
           const name = String(file.name || '');
           const hiddenSyncNames = [DRIVE_SYNC_FILE_NAME, 'bastcompta-comptabilite-sync.json'];
@@ -865,7 +935,7 @@
         const fileToLoad = exactYearFiles[0] || files[0];
         selectedDriveFileId = fileToLoad.id;
 
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileToLoad.id}?alt=media`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileToLoad.id}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
@@ -901,12 +971,13 @@
         }
 
         if (!targetFileId) {
-          const existing = await gapi.client.drive.files.list({
+          const existing = await driveFilesList({
             spaces: 'appDataFolder',
             q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
             fields: 'files(id, name)'
           });
 
+          if (!existing) return false;
           const files = existing.result.files || [];
           if (files.length) {
             targetFileId = files[0].id;
@@ -929,13 +1000,15 @@
           method = 'PATCH';
         }
 
-        const res = await fetch(url, {
+        const res = await googleDriveFetch(url, {
           method,
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           },
           body: form
         });
+
+        if (!res) return false;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -1072,6 +1145,12 @@
       if (message.type === 'BASTCOMPTA_GOOGLE_TOKEN') {
         googleAccessToken = message.accessToken || null;
 
+        if (!googleAccessToken) {
+          resetGoogleDriveSession();
+          render();
+          return;
+        }
+
         if (googleAccessToken && window.gapi?.client) {
           try {
             gapi.client.setToken({ access_token: googleAccessToken });
@@ -1086,15 +1165,7 @@
       }
 
       if (message.type === 'BASTCOMPTA_GOOGLE_LOGOUT') {
-        googleAccessToken = null;
-        googleDriveFiles = [];
-        selectedDriveFileId = '';
-        selectedDriveFileIds = [];
-
-        if (window.gapi?.client) {
-          gapi.client.setToken(null);
-        }
-
+        resetGoogleDriveSession();
         render();
       }
     });
@@ -1216,7 +1287,7 @@
       const finalFileName = fileName || getDriveFileNameFromData(sourceData);
       const content = JSON.stringify(sourceData, null, 2);
 
-      const existing = await gapi.client.drive.files.list({
+      const existing = await driveFilesList({
         spaces: 'appDataFolder',
         q: `name='${finalFileName.replace(/'/g, "\\'")}' and trashed=false`,
         fields: 'files(id, name)'
@@ -1240,7 +1311,7 @@
         method = 'PATCH';
       }
 
-      const res = await fetch(url, {
+      const res = await googleDriveFetch(url, {
         method,
         headers: {
           Authorization: `Bearer ${googleAccessToken}`
@@ -1303,13 +1374,15 @@
       }
 
       try {
-        const list = await gapi.client.drive.files.list({
+        const list = await driveFilesList({
           spaces: 'appDataFolder',
           q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-'`,
           orderBy: 'modifiedTime desc',
           pageSize: 100,
           fields: 'files(id, name, modifiedTime)'
         });
+
+        if (!list) return;
 
         googleDriveFiles = (list.result.files || []).filter(file => {
           const hiddenSyncNames = [DRIVE_SYNC_FILE_NAME, 'bastcompta-comptabilite-sync.json'];
@@ -1348,11 +1421,13 @@
       try {
         const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
 
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleAccessToken}`
           }
         });
+
+        if (!res) return;
 
         if (!res.ok) {
           throw new Error(await res.text());
@@ -1388,11 +1463,13 @@
         for (const fileId of fileIds) {
           const file = googleDriveFiles.find(f => f.id === fileId);
 
-          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             }
           });
+
+          if (!res) return;
 
           if (!res.ok) {
             throw new Error(await res.text());
@@ -1438,12 +1515,14 @@
 
       try {
         for (const fileId of fileIds) {
-          await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+          const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
             method: 'DELETE',
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             }
           });
+          if (!res) return;
+          if (!res.ok) throw new Error(await res.text());
         }
 
         selectedDriveFileIds = [];
@@ -1500,12 +1579,13 @@
             parents: ['appDataFolder']
           };
 
-          const existing = await gapi.client.drive.files.list({
+          const existing = await driveFilesList({
             spaces: 'appDataFolder',
             q: `name='${file.name.replace(/'/g, "\'")}' and trashed=false`,
             fields: 'files(id, name)'
           });
 
+          if (!existing) return;
           const files = existing.result.files || [];
 
           const form = new FormData();
@@ -1520,13 +1600,15 @@
             method = 'PATCH';
           }
 
-          const res = await fetch(url, {
+          const res = await googleDriveFetch(url, {
             method,
             headers: {
               Authorization: `Bearer ${googleAccessToken}`
             },
             body: form
           });
+
+          if (!res) return;
 
           if (!res.ok) {
             throw new Error(await res.text());
@@ -1786,57 +1868,33 @@
         .map(({ i }) => i);
 
       if (groupIndexes.length <= 1 || !row.invoiceNumber) {
-        return round2(rowVatFromTvac(row.tvac, row.rate));
+        return round2(rowHtvaToVat(row.htva, row.rate));
       }
 
-      function purchaseVatAllocated(index) {
-        const row = data.purchases[index];
-        if (!row || !row.deductible) return 0;
+      const groupHtva = groupIndexes.reduce(
+        (sum, i) => sum + toNumber(data.purchases[i].htva),
+        0
+      );
 
-        const key = [
-          row.supplier || '',
-          row.invoiceNumber || '',
-          toNumber(row.rate),
-          row.deductible ? '1' : '0'
-        ].join('||');
+      const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
 
-        const groupIndexes = data.purchases
-          .map((item, i) => ({ item, i }))
-          .filter(({ item }) => {
-            const itemKey = [
-              item.supplier || '',
-              item.invoiceNumber || '',
-              toNumber(item.rate),
-              item.deductible ? '1' : '0'
-            ].join('||');
-            return itemKey === key;
-          })
-          .map(({ i }) => i);
+      let allocatedBefore = 0;
 
-        if (groupIndexes.length <= 1 || !row.invoiceNumber) {
-          return round2(rowHtvaToVat(row.htva, row.rate));
+      for (let pos = 0; pos < groupIndexes.length; pos++) {
+        const i = groupIndexes[pos];
+        const lineHtva = toNumber(data.purchases[i].htva);
+
+        if (pos === groupIndexes.length - 1) {
+          const lastValue = round2(groupVat - allocatedBefore);
+          if (i === index) return lastValue;
+        } else {
+          const proportional = groupHtva === 0
+            ? 0
+            : round2(groupVat * (lineHtva / groupHtva));
+
+          if (i === index) return proportional;
+          allocatedBefore += proportional;
         }
-
-        const groupHtva = groupIndexes.reduce((sum, i) => sum + toNumber(data.purchases[i].htva), 0);
-        const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
-
-        let allocatedBefore = 0;
-
-        for (let pos = 0; pos < groupIndexes.length; pos++) {
-          const i = groupIndexes[pos];
-          const lineHtva = toNumber(data.purchases[i].htva);
-
-          if (pos === groupIndexes.length - 1) {
-            const lastValue = round2(groupVat - allocatedBefore);
-            if (i === index) return lastValue;
-          } else {
-            const proportional = groupHtva === 0 ? 0 : round2(groupVat * (lineHtva / groupHtva));
-            if (i === index) return proportional;
-            allocatedBefore += proportional;
-          }
-        }
-
-        return 0;
       }
 
       return 0;
