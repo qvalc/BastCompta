@@ -1069,14 +1069,29 @@ Cordialement,
         if (showAlert) {
           if (googleAccessToken) {
             let syncSaved = false;
+            let exportedDocs = [];
+
             try {
-              syncSaved = await saveSyncToDrive(true);
+              syncSaved = await saveSyncToDrive(false);
             } catch (error) {
               console.error(error);
             }
-            alert(syncSaved
-              ? 'Données sauvegardées localement et CRM synchronisé sur Google Drive.'
-              : 'Données sauvegardées localement.');
+
+            try {
+              exportedDocs = await exportAvailableDocumentsToDrive(false);
+            } catch (error) {
+              console.error(error);
+            }
+
+            if (syncSaved && exportedDocs.length) {
+              alert(`Données sauvegardées localement, CRM synchronisé et documents exportés sur Google Drive : ${exportedDocs.join(', ')}`);
+            } else if (syncSaved) {
+              alert('Données sauvegardées localement et CRM synchronisé sur Google Drive.');
+            } else if (exportedDocs.length) {
+              alert(`Données sauvegardées localement et documents exportés sur Google Drive : ${exportedDocs.join(', ')}`);
+            } else {
+              alert('Données sauvegardées localement.');
+            }
           } else {
             alert('Données sauvegardées localement.');
           }
@@ -1836,60 +1851,60 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       }
     }
 
-async function downloadHiddenCrmSyncFromDrive() {
-  if (!googleAccessToken) {
-    alert("Connecte Google Drive depuis le portail BastCompta.");
-    return false;
-  }
-
-  try {
-    const fileName = getSyncDriveFileName();
-    const list = await driveFilesList({
-      spaces: 'appDataFolder',
-      q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
-      orderBy: 'modifiedTime desc',
-      pageSize: 1,
-      fields: 'files(id, name, modifiedTime)'
-    }, false);
-
-    if (!list) return false;
-    const file = (list.result.files || [])[0];
-    if (!file) {
-      alert('Aucun fichier CRM caché trouvé sur Google Drive.');
-      return false;
-    }
-
-    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
-      headers: {
-        Authorization: `Bearer ${googleAccessToken}`
+    async function downloadHiddenCrmSyncFromDrive() {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return false;
       }
-    });
 
-    if (!res) return false;
+      try {
+        const fileName = getSyncDriveFileName();
+        const list = await driveFilesList({
+          spaces: 'appDataFolder',
+          q: `name='${fileName.replace(/'/g, "\'")}' and trashed=false`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 1,
+          fields: 'files(id, name, modifiedTime)'
+        }, false);
 
-    if (!res.ok) {
-      throw new Error(await res.text());
+        if (!list) return false;
+        const file = (list.result.files || [])[0];
+        if (!file) {
+          alert('Aucun fichier CRM caché trouvé sur Google Drive.');
+          return false;
+        }
+
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res) return false;
+
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const content = await res.text();
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name || fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        alert(`Téléchargement terminé : ${file.name || fileName}`);
+        return true;
+      } catch (error) {
+        console.error(error);
+        alert("Échec du téléchargement du fichier CRM caché depuis Google Drive.");
+        return false;
+      }
     }
-
-    const content = await res.text();
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name || fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-
-    alert(`Téléchargement terminé : ${file.name || fileName}`);
-    return true;
-  } catch (error) {
-    console.error(error);
-    alert("Échec du téléchargement du fichier CRM caché depuis Google Drive.");
-    return false;
-  }
-}
 
 
     function createEmptyClient() {
@@ -2576,14 +2591,14 @@ async function downloadHiddenCrmSyncFromDrive() {
     }
 
     function renderCrmDriveDocList(docs, emptyLabel) {
-  if (!docs.length) {
-    return `<div class="crm-drive-empty">${escapeHtml(emptyLabel)}</div>`;
-  }
+      if (!docs.length) {
+        return `<div class="crm-drive-empty">${escapeHtml(emptyLabel)}</div>`;
+      }
 
-  return `<div class="crm-drive-doc-list">${docs.map(doc => {
-    const isImportSelected = selectedDriveFileId === doc.id;
-    const isChecked = isDriveFileChecked(doc.id);
-    return `
+      return `<div class="crm-drive-doc-list">${docs.map(doc => {
+        const isImportSelected = selectedDriveFileId === doc.id;
+        const isChecked = isDriveFileChecked(doc.id);
+        return `
     <div class="crm-drive-doc-item">
       <div style="display:grid; grid-template-columns:22px 22px 1fr; gap:10px; align-items:start;">
         <input type="radio" name="driveImportFile" ${isImportSelected ? 'checked' : ''} onchange="selectDriveFileForImport('${escapeAttr(doc.id)}')" title="Choisir ce fichier pour le charger dans l’application">
@@ -2602,8 +2617,9 @@ async function downloadHiddenCrmSyncFromDrive() {
         </div>
       </div>
     </div>
-  `;}).join('')}</div>`;
-}
+  `;
+      }).join('')}</div>`;
+    }
 
     function renderCRMInner() {
       const clients = getClients().filter(clientMatchesSearch);
