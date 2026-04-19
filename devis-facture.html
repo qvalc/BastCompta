@@ -1655,6 +1655,26 @@ Cordialement,
       render();
     }
 
+    function resetDocumentLocal(docKey) {
+      const labels = {
+        quote: 'devis',
+        invoice: 'facture',
+        reminder: 'rappel'
+      };
+      const label = labels[docKey] || 'document';
+
+      if (!confirm(`Vider localement ce ${label} ?`)) return;
+
+      data[docKey] = structuredClone(defaultData[docKey]);
+
+      if (docKey === 'invoice') {
+        syncCommunicationFromInvoice(false);
+      }
+
+      saveData(false);
+      render();
+    }
+
     function getInvoicePaymentText() {
       const totals = totalsFor('invoice');
       const paidAmount = toNumber(data.invoice.paidAmount);
@@ -3201,6 +3221,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
               ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre les données de la facture</button>` : ''}
               <button onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
               <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer ce client</button>
+              <button class="danger" onclick="resetDocumentLocal('${docKey}')">Vider ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
               <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
               ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
             </div>
