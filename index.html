@@ -615,7 +615,7 @@
           </div>
 
           <div id="panel-compta" class="tab-panel">
-            <iframe id="comptaFrame" src="Comptabilite.html" title="Comptabilité"></iframe>
+            <iframe id="comptaFrame" src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
         </div>
       </div>
@@ -883,7 +883,7 @@
       }
 
       if (!googleDriveReady || !googleTokenClient) {
-        throw new Error("Google Drive n'est pas prêt."));
+        throw new Error("Google Drive n'est pas prêt.");
       }
 
       const promptValue = forceInteractive
@@ -996,8 +996,6 @@
     await setPersistence(auth, browserLocalPersistence);
     await initGoogleDrive();
     bindIframeMessaging();
-    bindIframeAutoResize(devisFrame);
-    bindIframeAutoResize(comptaFrame);
 
     registerForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -1173,6 +1171,9 @@
         }
       });
     }
+
+    bindIframeAutoResize(devisFrame);
+    bindIframeAutoResize(comptaFrame);
 
     onAuthStateChanged(auth, async (user) => {
       if (user) {
