@@ -1769,7 +1769,9 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
             quoteSubject: data.mail?.quoteSubject || defaultData.mail.quoteSubject,
             quoteBody: data.mail?.quoteBody || defaultData.mail.quoteBody,
             invoiceSubject: data.mail?.invoiceSubject || defaultData.mail.invoiceSubject,
-            invoiceBody: data.mail?.invoiceBody || defaultData.mail.invoiceBody
+            invoiceBody: data.mail?.invoiceBody || defaultData.mail.invoiceBody,
+            reminderSubject: data.mail?.reminderSubject || defaultData.mail.reminderSubject,
+            reminderBody: data.mail?.reminderBody || defaultData.mail.reminderBody
           }
         };
         const content = JSON.stringify(syncPayload, null, 2);
