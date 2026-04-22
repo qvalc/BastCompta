@@ -127,9 +127,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 10px;
+      gap: 14px;
       flex-wrap: wrap;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
+      padding: 14px 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.05);
     }
 
     .toolbar .hint {
@@ -137,10 +142,110 @@
       color: var(--muted);
     }
 
-    .inline-actions {
+    .toolbar-meta {
+      display: grid;
+      gap: 4px;
+      min-width: 220px;
+    }
+
+    .toolbar-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .toolbar-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .toolbar-group {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toolbar-group.secondary button,
+    .toolbar-group.primary button,
+    .toolbar-group.more button {
+      min-height: 42px;
+    }
+
+    .button-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 42px;
+      padding: 10px 12px;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .split-button {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+    }
+
+    .split-button-main {
+      border-top-right-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .split-button-toggle {
+      min-width: 42px;
+      padding: 10px 12px;
+      border-left: none;
+      border-top-left-radius: 0;
+      border-bottom-left-radius: 0;
+    }
+
+    .toolbar-menu {
+      position: relative;
+    }
+
+    .menu-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 220px;
+      padding: 6px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(17, 24, 39, 0.12);
+      z-index: 20;
+      display: none;
+    }
+
+    .menu-panel.open {
+      display: grid;
+      gap: 4px;
+    }
+
+    .menu-panel button {
+      width: 100%;
+      text-align: left;
+      box-shadow: none;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .menu-panel button.danger-ghost {
+      color: var(--danger);
+      border-color: #fecaca;
+      background: #fff5f5;
     }
 
     .sheet {
@@ -670,6 +775,15 @@
       .comm-meta,
       .settings-grid {
         grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        align-items: stretch;
+      }
+
+      .toolbar-actions {
+        width: 100%;
+        justify-content: flex-start;
       }
     }
 
@@ -1673,6 +1787,23 @@ Cordialement,
 
       saveData(false);
       render();
+    }
+
+
+    function closeToolbarMenus() {
+      document.querySelectorAll('.menu-panel.open').forEach(panel => panel.classList.remove('open'));
+    }
+
+    function toggleToolbarMenu(event, menuId) {
+      event.stopPropagation();
+      const target = document.getElementById(menuId);
+      if (!target) return;
+
+      const shouldOpen = !target.classList.contains('open');
+      closeToolbarMenus();
+      if (shouldOpen) {
+        target.classList.add('open');
+      }
     }
 
     function getInvoicePaymentText() {
@@ -3209,23 +3340,50 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       const isQuote = docKey === 'quote';
       const isReminder = docKey === 'reminder';
       const docLabel = isQuote ? 'DEVIS' : (isReminder ? 'RAPPEL' : 'FACTURE');
-      const emailLabel = isQuote ? 'Envoyer devis' : (isReminder ? 'Envoyer rappel' : 'Envoyer facture');
+      const emailLabel = isQuote ? 'Envoyer le devis' : (isReminder ? 'Envoyer le rappel' : 'Envoyer la facture');
       const notesLabel = isQuote ? 'Remarques du devis' : (isReminder ? 'Remarques du rappel' : 'Remarques');
       const paidAmount = isQuote ? 0 : toNumber(doc.paidAmount);
       const balance = isQuote ? totals.tvac : (totals.tvac - paidAmount);
+      const totalLines = (Array.isArray(doc.lines) ? doc.lines.length : 0) + (doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines.length : 0);
+      const docSubtitle = isQuote
+        ? `${totalLines} ligne${totalLines > 1 ? 's' : ''} • Total estimé ${money(totals.tvac)}`
+        : `${totalLines} ligne${totalLines > 1 ? 's' : ''} • Solde ${money(balance)}`;
 
       return `
         <section class="page ${activePage === docKey ? 'active' : ''}" data-page="${docKey}">
-                    <div class="toolbar no-print">
-            <div class="hint"></div>
-            <div class="inline-actions">
-              ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre les données du devis</button>` : ''}
-              ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre les données de la facture</button>` : ''}
-              <button onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
-              <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer ce client</button>
-              <button class="danger" onclick="resetDocumentLocal('${docKey}')">Vider ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
-              <button class="primary" onclick="addLine('${docKey}', 'lines')">Ajouter une ligne</button>
-              ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">Ajouter une ligne fournitures</button>` : ''}
+          <div class="toolbar no-print">
+            <div class="toolbar-meta">
+              <div class="toolbar-title">Actions du ${docLabel.toLowerCase()}</div>
+              <div class="toolbar-subtitle">${docSubtitle}</div>
+            </div>
+            <div class="toolbar-actions">
+              <div class="toolbar-group secondary">
+                ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre le devis</button>` : ''}
+                ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre la facture</button>` : ''}
+                <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer le client</button>
+                <button onclick="addLine('${docKey}', 'lines')">+ Ajouter une ligne</button>
+                ${doc.suppliesEnabled ? `<button onclick="addLine('${docKey}', 'suppliesLines')">+ Ligne fournitures</button>` : ''}
+              </div>
+              <div class="toolbar-group primary">
+                <div class="split-button toolbar-menu" data-menu-root>
+                  <button class="primary split-button-main" onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
+                  <button class="primary split-button-toggle" type="button" onclick="toggleToolbarMenu(event, 'send-menu-${docKey}')">▼</button>
+                  <div class="menu-panel" id="send-menu-${docKey}">
+                    <button type="button" onclick="sendDocumentEmail('${docKey}'); closeToolbarMenus();">${emailLabel}</button>
+                    <button type="button" onclick="printCurrentPage(); closeToolbarMenus();">Imprimer ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
+                    <button type="button" onclick="exportDataLocal(); closeToolbarMenus();">Exporter en JSON</button>
+                  </div>
+                </div>
+              </div>
+              <div class="toolbar-group more">
+                <div class="toolbar-menu" data-menu-root>
+                  <button class="button-icon" type="button" title="Plus d’actions" onclick="toggleToolbarMenu(event, 'more-menu-${docKey}')">⋯</button>
+                  <div class="menu-panel" id="more-menu-${docKey}">
+                    <button type="button" onclick="saveData(); closeToolbarMenus();">Sauvegarder maintenant</button>
+                    <button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Vider ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -3521,6 +3679,9 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
     }
 
     document.addEventListener('click', (event) => {
+      if (!event.target.closest('[data-menu-root]')) {
+        closeToolbarMenus();
+      }
     });
 
     window.addEventListener('load', async () => {
