@@ -886,11 +886,21 @@
         throw new Error("Google Drive n'est pas prêt.");
       }
 
-      const promptValue = forceInteractive
-        ? 'consent'
-        : (wasDrivePreviouslyConnected() ? '' : 'consent');
+      if (forceInteractive || !wasDrivePreviouslyConnected()) {
+        await requestGoogleDriveAccess('consent');
+        return googleAccessToken;
+      }
 
-      await requestGoogleDriveAccess(promptValue);
+      // 1) Après un refresh, on tente d'abord une reconnexion silencieuse.
+      try {
+        await requestGoogleDriveAccess('');
+        return googleAccessToken;
+      } catch (silentError) {
+        console.info('Reconnexion silencieuse Google Drive refusée, passage en mode confirmation :', silentError);
+      }
+
+      // 2) Si Google ou le navigateur refuse le mode silencieux, on ouvre la confirmation Google normale.
+      await requestGoogleDriveAccess('consent');
       return googleAccessToken;
     }
 
