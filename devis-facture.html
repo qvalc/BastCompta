@@ -1403,7 +1403,7 @@ Cordialement,
         );
 
         render();
-        ensureDriveFileIndex(false).then(() => {
+        ensureDriveFileIndex(true).then(() => {
           if (activePage === 'crm') render();
         });
 
