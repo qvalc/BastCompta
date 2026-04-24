@@ -1723,7 +1723,7 @@ Cordialement,
         date: invoice.date || '',
         client: invoice.clientName || '',
         invoiceNumber: invoice.documentNumber || '',
-        description: group.descriptions.join(' | ') || invoice.siteName || 'Facture',
+        description: '',
         rate: group.rate,
         tvac: roundMoney(group.tvac)
       }));
