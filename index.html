@@ -603,6 +603,7 @@
         <div class="main-tabs">
           <button class="main-tab active" data-main-tab="devis" type="button">Devis &amp; Facture</button>
           <button class="main-tab" data-main-tab="compta" type="button">Comptabilité</button>
+          <button id="sendInvoiceToAccountingBtn" class="primary" type="button">Envoyer la facture en comptabilité</button>
         </div>
 
         <div class="workspace">
@@ -672,6 +673,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const connectDriveBtn = document.getElementById('connectDriveBtn');
     const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
+    const sendInvoiceToAccountingBtn = document.getElementById('sendInvoiceToAccountingBtn');
     const devisFrame = document.getElementById('devisFrame');
     const comptaFrame = document.getElementById('comptaFrame');
     const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
@@ -771,6 +773,50 @@
     function postToFrame(frame, message) {
       if (!frame?.contentWindow) return;
       frame.contentWindow.postMessage(message, getFrameOrigin(frame));
+    }
+
+    function getFrameApi(frame, functionName) {
+      try {
+        const api = frame?.contentWindow?.[functionName];
+        return typeof api === 'function' ? api : null;
+      } catch (error) {
+        console.warn('Accès iframe impossible :', error);
+        return null;
+      }
+    }
+
+    async function sendInvoiceToAccounting() {
+      const getRows = getFrameApi(devisFrame, 'getInvoiceAccountingRowsForComptabilite');
+      const importRows = getFrameApi(comptaFrame, 'importInvoiceSalesRowsFromPortal');
+
+      if (!getRows || !importRows) {
+        alert('Les modules Devis/Facture et Comptabilité ne sont pas encore prêts.');
+        return;
+      }
+
+      const payload = getRows();
+      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+
+      if (!rows.length) {
+        alert(payload?.message || 'Aucune ligne de facture valide à envoyer en comptabilité.');
+        return;
+      }
+
+      const invoiceNumber = payload.invoiceNumber || 'sans numéro';
+      const totalTvac = rows.reduce((sum, row) => sum + (Number(row.tvac) || 0), 0);
+      const totalText = totalTvac.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' });
+      const confirmText = 'Envoyer la facture ' + invoiceNumber + ' en comptabilité ?\n\n' + rows.length + ' ligne(s) de vente seront créée(s) ou remplacée(s).\nTotal TVAC : ' + totalText;
+
+      if (!confirm(confirmText)) return;
+
+      const result = await importRows(rows);
+      switchMainTab('compta');
+
+      const openSales = getFrameApi(comptaFrame, 'goToPage');
+      if (openSales) openSales('sales');
+
+      setTimeout(() => resizeIframeToContent(comptaFrame), 100);
+      alert(result?.message || 'Facture envoyée en comptabilité.');
     }
 
     function broadcastDriveToken() {
@@ -1000,6 +1046,7 @@
 
     connectDriveBtn.addEventListener('click', connectGoogleDrive);
     disconnectDriveBtn.addEventListener('click', () => disconnectGoogleDrive(true));
+    if (sendInvoiceToAccountingBtn) sendInvoiceToAccountingBtn.addEventListener('click', sendInvoiceToAccounting);
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
