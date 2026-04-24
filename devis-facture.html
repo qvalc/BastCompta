@@ -1692,6 +1692,51 @@ Cordialement,
       return { htva, vat, tvac };
     }
 
+    function roundMoney(value) {
+      return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    function getInvoiceAccountingRowsForComptabilite() {
+      const invoice = data.invoice || {};
+      const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
+      const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines) ? invoice.suppliesLines : [];
+      const allLines = [...mainLines, ...suppliesLines].filter(row => {
+        return String(row.description || '').trim() || toNumber(row.qty) || toNumber(row.unitPrice);
+      });
+
+      if (!allLines.length) {
+        return { rows: [], message: 'La facture ne contient aucune ligne.' };
+      }
+
+      const grouped = new Map();
+      allLines.forEach(row => {
+        const rate = roundMoney(row.vatRate);
+        const key = String(rate);
+        if (!grouped.has(key)) grouped.set(key, { rate, tvac: 0, descriptions: [] });
+        const group = grouped.get(key);
+        group.tvac += lineTvac(row);
+        const description = String(row.description || '').trim();
+        if (description) group.descriptions.push(description);
+      });
+
+      const rows = Array.from(grouped.values()).map(group => ({
+        date: invoice.date || '',
+        client: invoice.clientName || '',
+        invoiceNumber: invoice.documentNumber || '',
+        description: group.descriptions.join(' | ') || invoice.siteName || 'Facture',
+        rate: group.rate,
+        tvac: roundMoney(group.tvac)
+      }));
+
+      return {
+        invoiceNumber: invoice.documentNumber || '',
+        rows,
+        message: rows.length + ' ligne(s) prête(s) pour la comptabilité.'
+      };
+    }
+
+    window.getInvoiceAccountingRowsForComptabilite = getInvoiceAccountingRowsForComptabilite;
+
     function createEmptyLine() {
       return {
         description: '',
