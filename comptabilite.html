@@ -3598,6 +3598,49 @@
       if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
     }
 
+    
+    function normalizeInvoiceImportRow(row) {
+      return {
+        date: String(row?.date || ''),
+        client: String(row?.client || ''),
+        invoiceNumber: String(row?.invoiceNumber || ''),
+        description: String(row?.description || ''),
+        rate: parseFloat(row?.rate) || 0,
+        tvac: Math.round(((parseFloat(row?.tvac) || 0) + Number.EPSILON) * 100) / 100
+      };
+    }
+
+    async function importInvoiceSalesRowsFromPortal(rows) {
+      const incomingRows = (Array.isArray(rows) ? rows : [])
+        .map(normalizeInvoiceImportRow)
+        .filter(row => row.tvac !== 0 || row.description || row.invoiceNumber || row.client);
+
+      if (!incomingRows.length) {
+        return { ok: false, count: 0, message: 'Aucune donnée de facture valide à importer.' };
+      }
+
+      const invoiceNumbers = [...new Set(incomingRows.map(row => row.invoiceNumber).filter(Boolean))];
+      if (invoiceNumbers.length) {
+        data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
+      }
+
+      data.sales.push(...incomingRows);
+      sortByDate(data.sales);
+      activePage = 'sales';
+      await saveData(false);
+      if (googleAccessToken) await saveCurrentYearJsonToDrive(false);
+      render();
+
+      const replacedText = invoiceNumbers.length ? ' Les anciennes lignes avec le même N° facture ont été remplacées.' : '';
+      return {
+        ok: true,
+        count: incomingRows.length,
+        message: incomingRows.length + ' ligne(s) ajoutée(s) dans le journal des ventes.' + replacedText
+      };
+    }
+
+    window.importInvoiceSalesRowsFromPortal = importInvoiceSalesRowsFromPortal;
+
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.dropdown')) {
         closeFileMenu();
