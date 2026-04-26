@@ -3080,6 +3080,22 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return String(value || '').replace(/'/g, "\\'");
     }
 
+    function normalizeInvoiceLookupValue(value) {
+      return String(value || '')
+        .trim()
+        .replace(/^facture-/i, '')
+        .replace(/\.json$/i, '')
+        .trim()
+        .toLowerCase();
+    }
+
+    function invoiceFileMatchesNumber(file, invoiceNumber) {
+      const wanted = normalizeInvoiceLookupValue(invoiceNumber);
+      const fileName = String(file?.name || '');
+      const fileNumber = normalizeInvoiceLookupValue(fileName);
+      return !!wanted && (fileNumber === wanted || fileName.toLowerCase().includes(wanted));
+    }
+
     async function findInvoiceDriveFileByNumber(invoiceNumber) {
       if (!googleAccessToken) {
         alert("Connecte Google Drive depuis le portail BastCompta.");
@@ -3092,17 +3108,24 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         return null;
       }
 
-      const fileName = `facture-${normalized}.json`;
+      let cachedFile = (googleDriveFiles || []).find(file => invoiceFileMatchesNumber(file, normalized));
+      if (cachedFile) return cachedFile;
+
+      await loadDriveFiles();
+      cachedFile = (googleDriveFiles || []).find(file => invoiceFileMatchesNumber(file, normalized));
+      if (cachedFile) return cachedFile;
+
+      const searchValue = escapeDriveQueryValue(normalized);
       const list = await driveFilesList({
         spaces: 'appDataFolder',
-        q: `name='${escapeDriveQueryValue(fileName)}' and trashed=false`,
+        q: `mimeType='application/json' and trashed=false and name contains '${searchValue}'`,
         orderBy: 'modifiedTime desc',
-        pageSize: 1,
+        pageSize: 20,
         fields: 'files(id, name, modifiedTime)'
       });
 
       if (!list) return null;
-      return (list.result.files || [])[0] || null;
+      return (list.result.files || []).find(file => invoiceFileMatchesNumber(file, normalized)) || null;
     }
 
     async function openInvoicePreviewByNumberFromDrive(invoiceNumber) {
