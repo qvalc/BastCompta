@@ -819,8 +819,10 @@
       alert(result?.message || 'Facture envoyée en comptabilité.');
     }
 
-    async function openInvoicePrintPreviewFromAccounting(invoiceNumber) {
+    async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
       switchMainTab('devis');
+
+      await new Promise(resolve => setTimeout(resolve, 150));
 
       const openPreview = getFrameApi(devisFrame, 'openInvoicePreviewByNumberFromDrive');
       if (!openPreview) {
@@ -828,7 +830,7 @@
         return false;
       }
 
-      return await openPreview(invoiceNumber);
+      return await openPreview(invoiceNumber, invoiceFileId);
     }
 
     window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
