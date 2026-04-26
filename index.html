@@ -819,6 +819,20 @@
       alert(result?.message || 'Facture envoyée en comptabilité.');
     }
 
+    async function openInvoicePrintPreviewFromAccounting(invoiceNumber) {
+      switchMainTab('devis');
+
+      const openPreview = getFrameApi(devisFrame, 'openInvoicePreviewByNumberFromDrive');
+      if (!openPreview) {
+        alert('Le module Devis & Facture n’est pas encore prêt.');
+        return false;
+      }
+
+      return await openPreview(invoiceNumber);
+    }
+
+    window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
+
     function broadcastDriveToken() {
       if (!isTokenFresh()) return;
 
