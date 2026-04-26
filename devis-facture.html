@@ -3076,6 +3076,71 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       alert('Communication structurée copiée.');
     }
 
+    function escapeDriveQueryValue(value) {
+      return String(value || '').replace(/'/g, "\\'");
+    }
+
+    async function findInvoiceDriveFileByNumber(invoiceNumber) {
+      if (!googleAccessToken) {
+        alert("Connecte Google Drive depuis le portail BastCompta.");
+        return null;
+      }
+
+      const normalized = String(invoiceNumber || '').trim();
+      if (!normalized) {
+        alert('Numéro de facture manquant.');
+        return null;
+      }
+
+      const fileName = `facture-${normalized}.json`;
+      const list = await driveFilesList({
+        spaces: 'appDataFolder',
+        q: `name='${escapeDriveQueryValue(fileName)}' and trashed=false`,
+        orderBy: 'modifiedTime desc',
+        pageSize: 1,
+        fields: 'files(id, name, modifiedTime)'
+      });
+
+      if (!list) return null;
+      return (list.result.files || [])[0] || null;
+    }
+
+    async function openInvoicePreviewByNumberFromDrive(invoiceNumber) {
+      try {
+        const file = await findInvoiceDriveFileByNumber(invoiceNumber);
+        if (!file) {
+          alert(`Aucune facture trouvée sur Drive pour le numéro ${invoiceNumber}.`);
+          return false;
+        }
+
+        const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${googleAccessToken}`
+          }
+        });
+
+        if (!res) return false;
+        if (!res.ok) throw new Error(await res.text());
+
+        const parsed = await res.json();
+        data = mergeDeep(structuredClone(defaultData), parsed || {});
+        activePage = 'invoice';
+        render();
+
+        setTimeout(() => {
+          printCurrentPage();
+        }, 80);
+
+        return true;
+      } catch (error) {
+        console.error(error);
+        alert("Impossible d’ouvrir l’aperçu d’impression de cette facture.");
+        return false;
+      }
+    }
+
+    window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive;
+
     function printCurrentPage() {
       const pages = Array.from(document.querySelectorAll('.page'));
       pages.forEach(page => page.classList.remove('print-include'));
