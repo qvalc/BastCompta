@@ -3076,91 +3076,109 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       alert('Communication structurée copiée.');
     }
 
+function escapeDriveQueryValue(value) {
+  return String(value || '').replace(/'/g, "\'");
+}
 
-    function normalizeInvoiceNumberForDrive(value) {
-      return String(value || '').trim();
+function normalizeInvoiceLookupValue(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^facture-/i, '')
+    .replace(/\.json$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function invoiceFileMatchesNumber(file, invoiceNumber) {
+  const wanted = normalizeInvoiceLookupValue(invoiceNumber);
+  const fileName = String(file?.name || '');
+  const fileNumber = normalizeInvoiceLookupValue(fileName);
+  return !!wanted && (fileNumber === wanted || fileName.toLowerCase().includes(wanted));
+}
+
+async function findInvoiceDriveFileByNumber(invoiceNumber, preferredFileId = '') {
+  if (!googleAccessToken) {
+    alert("Connecte Google Drive depuis le portail BastCompta.");
+    return null;
+  }
+
+  const normalized = String(invoiceNumber || '').trim();
+  if (!normalized) {
+    alert('Numéro de facture manquant.');
+    return null;
+  }
+
+  if (preferredFileId) {
+    const preferred = (googleDriveFiles || []).find(file => file.id === preferredFileId);
+    if (preferred) return preferred;
+    return { id: preferredFileId, name: `facture-${normalized}.json` };
+  }
+
+  let cachedFile = (googleDriveFiles || []).find(file => invoiceFileMatchesNumber(file, normalized));
+  if (cachedFile) return cachedFile;
+
+  await loadDriveFiles();
+  cachedFile = (googleDriveFiles || []).find(file => invoiceFileMatchesNumber(file, normalized));
+  if (cachedFile) return cachedFile;
+
+  const searchValue = escapeDriveQueryValue(normalized);
+  const list = await driveFilesList({
+    spaces: 'appDataFolder',
+    q: `mimeType='application/json' and trashed=false and name contains '${searchValue}'`,
+    orderBy: 'modifiedTime desc',
+    pageSize: 20,
+    fields: 'files(id, name, modifiedTime)'
+  });
+
+  if (!list) return null;
+  return (list.result.files || []).find(file => invoiceFileMatchesNumber(file, normalized)) || null;
+}
+
+async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileId = '') {
+  try {
+    const normalized = String(invoiceNumber || '').trim();
+    const file = await findInvoiceDriveFileByNumber(normalized, preferredFileId);
+    if (!file) {
+      alert(`Aucune facture trouvée sur Drive pour le numéro ${normalized}.`);
+      return false;
     }
 
-    function invoiceFileMatchesNumber(file, invoiceNumber) {
-      const wanted = normalizeInvoiceNumberForDrive(invoiceNumber).toLowerCase();
-      const fileName = String(file?.name || '').toLowerCase();
-      const fileNumber = fileName
-        .replace(/^facture-/i, '')
-        .replace(/\.json$/i, '')
-        .trim();
-      return !!wanted && (fileNumber === wanted || fileName.includes(wanted));
+    const parsed = await fetchDriveFileParsed(file.id);
+    if (!parsed?.invoice) {
+      alert('Le fichier trouvé ne contient pas de facture valide.');
+      return false;
     }
 
-    async function findInvoiceDriveFileByNumber(invoiceNumber, preferredFileId = '') {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      if (!normalized || !googleAccessToken) return null;
-
-      if (preferredFileId) {
-        const fromList = googleDriveFiles.find(file => file.id === preferredFileId);
-        if (fromList) return fromList;
-        return { id: preferredFileId, name: `facture-${normalized}.json` };
-      }
-
-      const cached = googleDriveFiles.find(file => invoiceFileMatchesNumber(file, normalized));
-      if (cached) return cached;
-
-      const list = await driveFilesList({
-        spaces: 'appDataFolder',
-        q: `mimeType='application/json' and trashed=false and name contains '${normalized.replace(/'/g, "\\'")}'`,
-        orderBy: 'modifiedTime desc',
-        pageSize: 20,
-        fields: 'files(id, name, modifiedTime)'
-      });
-
-      if (!list) return null;
-      const files = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().endsWith('.json'));
-      googleDriveFiles = [...googleDriveFiles, ...files].filter((file, index, all) =>
-        all.findIndex(item => item.id === file.id) === index
-      );
-      return files.find(file => invoiceFileMatchesNumber(file, normalized)) || null;
+    const loadedNumber = String(parsed.invoice?.documentNumber || '').trim();
+    if (normalized && loadedNumber && normalizeInvoiceLookupValue(loadedNumber) !== normalizeInvoiceLookupValue(normalized)) {
+      alert(`Le fichier trouvé (${file.name || file.id}) contient la facture ${loadedNumber}, pas ${normalized}.`);
+      return false;
     }
 
-    async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileId = '') {
-      try {
-        if (!googleAccessToken) {
-          alert('Connecte Google Drive depuis le portail BastCompta.');
-          return false;
-        }
+    // Important : ne jamais remplacer tout "data" ici.
+    // On charge uniquement la facture à imprimer afin de préserver le CRM complet.
+    data.invoice = mergeDeep(structuredClone(defaultData.invoice), parsed.invoice);
+    selectedDriveFileId = file.id;
+    activePage = 'invoice';
+    syncCommunicationFromInvoice(false);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render();
 
-        const file = await findInvoiceDriveFileByNumber(invoiceNumber, preferredFileId);
-        if (!file) {
-          alert(`Aucune facture trouvée sur Drive pour le numéro ${invoiceNumber}.`);
-          return false;
-        }
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    setTimeout(() => {
+      window.focus();
+      printCurrentPage();
+    }, 250);
 
-        const parsed = await fetchDriveFileParsed(file.id);
-        if (!parsed?.invoice) {
-          alert('Le fichier trouvé ne contient pas de facture valide.');
-          return false;
-        }
+    return true;
+  } catch (error) {
+    console.error(error);
+    alert("Impossible d’ouvrir l’aperçu d’impression de cette facture.");
+    return false;
+  }
+}
 
-        // Important : ne jamais remplacer tout "data" ici.
-        // On charge uniquement la facture à imprimer afin de préserver le CRM complet.
-        data.invoice = mergeDeep(structuredClone(defaultData.invoice), parsed.invoice);
-        selectedDriveFileId = file.id;
-        activePage = 'invoice';
-        syncCommunicationFromInvoice(false);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        render();
-
-        setTimeout(() => {
-          printCurrentPage();
-        }, 120);
-
-        return true;
-      } catch (error) {
-        console.error(error);
-        alert("Impossible d’ouvrir l’aperçu d’impression de cette facture.");
-        return false;
-      }
-    }
-
-    window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive;
+window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive;
 
     function printCurrentPage() {
       const pages = Array.from(document.querySelectorAll('.page'));
