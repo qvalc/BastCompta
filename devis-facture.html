@@ -3096,7 +3096,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return !!wanted && (fileNumber === wanted || fileName.toLowerCase().includes(wanted));
     }
 
-    async function findInvoiceDriveFileByNumber(invoiceNumber) {
+    async function findInvoiceDriveFileByNumber(invoiceNumber, preferredFileId = '') {
       if (!googleAccessToken) {
         alert("Connecte Google Drive depuis le portail BastCompta.");
         return null;
@@ -3106,6 +3106,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       if (!normalized) {
         alert('Numéro de facture manquant.');
         return null;
+      }
+
+      if (preferredFileId) {
+        const preferred = (googleDriveFiles || []).find(file => file.id === preferredFileId);
+        if (preferred) return preferred;
+        return { id: preferredFileId, name: `facture-${normalized}.json` };
       }
 
       let cachedFile = (googleDriveFiles || []).find(file => invoiceFileMatchesNumber(file, normalized));
@@ -3128,11 +3134,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       return (list.result.files || []).find(file => invoiceFileMatchesNumber(file, normalized)) || null;
     }
 
-    async function openInvoicePreviewByNumberFromDrive(invoiceNumber) {
+    async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileId = '') {
       try {
-        const file = await findInvoiceDriveFileByNumber(invoiceNumber);
+        const normalized = String(invoiceNumber || '').trim();
+        const file = await findInvoiceDriveFileByNumber(normalized, preferredFileId);
         if (!file) {
-          alert(`Aucune facture trouvée sur Drive pour le numéro ${invoiceNumber}.`);
+          alert(`Aucune facture trouvée sur Drive pour le numéro ${normalized}.`);
           return false;
         }
 
@@ -3146,13 +3153,24 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
         if (!res.ok) throw new Error(await res.text());
 
         const parsed = await res.json();
-        data = mergeDeep(structuredClone(defaultData), parsed || {});
+        const nextData = mergeDeep(structuredClone(defaultData), parsed || {});
+        const loadedNumber = String(nextData.invoice?.documentNumber || '').trim();
+
+        if (normalized && loadedNumber && normalizeInvoiceLookupValue(loadedNumber) !== normalizeInvoiceLookupValue(normalized)) {
+          alert(`Le fichier trouvé (${file.name || file.id}) contient la facture ${loadedNumber}, pas ${normalized}.`);
+          return false;
+        }
+
+        data = nextData;
+        selectedDriveFileId = file.id;
         activePage = 'invoice';
         render();
 
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         setTimeout(() => {
+          window.focus();
           printCurrentPage();
-        }, 80);
+        }, 250);
 
         return true;
       } catch (error) {
