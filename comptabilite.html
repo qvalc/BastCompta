@@ -671,6 +671,7 @@
 
     let googleAccessToken = null;
     let googleDriveFiles = [];
+    let invoiceDriveFiles = [];
     let selectedDriveFileId = '';
     let selectedDriveFileIds = [];
 
@@ -687,6 +688,7 @@
     function resetGoogleDriveSession() {
       googleAccessToken = null;
       googleDriveFiles = [];
+      invoiceDriveFiles = [];
       selectedDriveFileId = '';
       selectedDriveFileIds = [];
       if (window.gapi?.client) {
