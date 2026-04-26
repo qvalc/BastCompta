@@ -663,6 +663,8 @@
       onchange="handleLocalJsonImport(event)">
     <input id="localJsonToDriveInput" type="file" accept="application/json" multiple style="display:none"
       onchange="uploadLocalJsonToDrive(event)">
+    <input id="purchasePdfUploadInput" type="file" accept="application/pdf" style="display:none"
+      onchange="handlePurchasePdfUpload(event)">
   </div>
 
   <script>
@@ -672,8 +674,10 @@
     let googleAccessToken = null;
     let googleDriveFiles = [];
     let invoiceDriveFiles = [];
+    let purchasePdfDriveFiles = [];
     let selectedDriveFileId = '';
     let selectedDriveFileIds = [];
+    let selectedPurchasePdfRowIndex = null;
 
     function notifyParentToRefreshGoogleToken() {
       try {
@@ -689,8 +693,10 @@
       googleAccessToken = null;
       googleDriveFiles = [];
       invoiceDriveFiles = [];
+      purchasePdfDriveFiles = [];
       selectedDriveFileId = '';
       selectedDriveFileIds = [];
+      selectedPurchasePdfRowIndex = null;
       if (window.gapi?.client) {
         gapi.client.setToken(null);
       }
@@ -1144,105 +1150,328 @@
       render();
     }
 
-    function normalizeInvoiceNumberForDrive(value) {
-      return String(value || '').trim();
-    }
+function normalizeInvoiceNumberForDrive(value) {
+  return String(value || '').trim();
+}
 
-    function getInvoiceDriveFileForNumber(invoiceNumber) {
-      const wanted = normalizeInvoiceNumberForDrive(invoiceNumber).toLowerCase();
-      if (!wanted) return null;
+function getInvoiceDriveFileForNumber(invoiceNumber) {
+  const wanted = normalizeInvoiceNumberForDrive(invoiceNumber).toLowerCase();
+  if (!wanted) return null;
 
-      return invoiceDriveFiles.find(file => {
-        const fileName = String(file.name || '').toLowerCase();
+  return invoiceDriveFiles.find(file => {
+    const fileName = String(file.name || '').toLowerCase();
+    if (!fileName.startsWith('facture-')) return false;
+    const fileNumber = fileName
+      .replace(/^facture-/i, '')
+      .replace(/\.json$/i, '')
+      .trim();
+    return fileNumber === wanted;
+  }) || null;
+}
 
-        if (!fileName.startsWith('facture-')) return false;
+async function findInvoiceDriveFileForNumber(invoiceNumber, showAlert401 = false) {
+  const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
+  if (!normalized || !googleAccessToken || !window.gapi?.client) return null;
 
-        const fileNumber = fileName
-          .replace(/^facture-/i, '')
-          .replace(/\.json$/i, '')
-          .trim();
+  const cached = getInvoiceDriveFileForNumber(normalized);
+  if (cached) return cached;
 
-        return fileNumber === wanted;
-      }) || null;
-    }
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `mimeType='application/json' and trashed=false and name contains 'facture-' and name contains '${normalized.replace(/'/g, "\'")}'`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 20,
+      fields: 'files(id, name, modifiedTime)'
+    }, showAlert401);
 
-    async function findInvoiceDriveFileForNumber(invoiceNumber, showAlert401 = false) {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      if (!normalized || !googleAccessToken || !window.gapi?.client) return null;
+    if (!list) return null;
+    const files = list.result.files || [];
+    invoiceDriveFiles = [...invoiceDriveFiles, ...files].filter((file, index, all) =>
+      all.findIndex(item => item.id === file.id) === index
+    );
+    return getInvoiceDriveFileForNumber(normalized);
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
 
-      const cached = getInvoiceDriveFileForNumber(normalized);
-      if (cached) return cached;
+async function loadInvoiceDriveFiles(showAlert401 = false) {
+  if (!googleAccessToken || !window.gapi?.client) return [];
 
-      try {
-        const list = await driveFilesList({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains '${normalized.replace(/'/g, "\'")}'`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 20,
-          fields: 'files(id, name, modifiedTime)'
-        }, showAlert401);
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `mimeType='application/json' and trashed=false and name contains 'facture-'`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 100,
+      fields: 'files(id, name, modifiedTime)'
+    }, showAlert401);
 
-        if (!list) return null;
-        const files = list.result.files || [];
-        invoiceDriveFiles = [...invoiceDriveFiles, ...files].filter((file, index, all) =>
-          all.findIndex(item => item.id === file.id) === index
-        );
-        return getInvoiceDriveFileForNumber(normalized);
-      } catch (error) {
-        console.error(error);
-        return null;
+    if (!list) return invoiceDriveFiles;
+    invoiceDriveFiles = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().endsWith('.json'));
+    return invoiceDriveFiles;
+  } catch (error) {
+    console.error(error);
+    return invoiceDriveFiles;
+  }
+}
+
+async function openSalesInvoicePreview(invoiceNumber) {
+  const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
+  if (!normalized) {
+    alert('Aucun numéro de facture sur cette ligne.');
+    return;
+  }
+
+  if (!getInvoiceDriveFileForNumber(normalized)) {
+    await findInvoiceDriveFileForNumber(normalized, true);
+  }
+
+  if (!getInvoiceDriveFileForNumber(normalized)) {
+    alert(`Aucune facture trouvée dans Google Drive pour le numéro ${normalized}.`);
+    render();
+    return;
+  }
+
+  const invoiceFile = getInvoiceDriveFileForNumber(normalized);
+  const opener = window.parent?.openInvoicePrintPreviewFromAccounting;
+  if (typeof opener === 'function') {
+    await opener(normalized, invoiceFile?.id || '');
+    return;
+  }
+
+  alert('Ouvre le fichier via le portail BastCompta pour afficher l’aperçu d’impression de la facture.');
+}
+
+window.openSalesInvoicePreview = openSalesInvoicePreview;
+
+function sanitizeDriveFileNamePart(value, fallback = 'sans-reference') {
+  const cleaned = String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+  return cleaned || fallback;
+}
+
+function getPurchasePdfFileName(row, originalName = 'facture.pdf') {
+  const invoice = sanitizeDriveFileNamePart(row?.invoiceNumber, 'sans-numero');
+  const supplier = sanitizeDriveFileNamePart(row?.supplier, 'fournisseur');
+  const date = sanitizeDriveFileNamePart(row?.date, 'sans-date');
+  const baseName = String(originalName || 'facture.pdf').replace(/\.pdf$/i, '');
+  const shortOriginal = sanitizeDriveFileNamePart(baseName, 'document');
+  return `achat-${date}-${supplier}-${invoice}-${shortOriginal}.pdf`;
+}
+
+function getPurchasePdfFileById(fileId) {
+  if (!fileId) return null;
+  return purchasePdfDriveFiles.find(file => file.id === fileId) || null;
+}
+
+async function loadPurchasePdfDriveFiles(showAlert401 = false) {
+  if (!googleAccessToken || !window.gapi?.client) return [];
+
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `mimeType='application/pdf' and trashed=false and name contains 'achat-'`,
+      orderBy: 'modifiedTime desc',
+      pageSize: 100,
+      fields: 'files(id, name, modifiedTime, size)'
+    }, showAlert401);
+
+    if (!list) return purchasePdfDriveFiles;
+    purchasePdfDriveFiles = list.result.files || [];
+    return purchasePdfDriveFiles;
+  } catch (error) {
+    console.error(error);
+    return purchasePdfDriveFiles;
+  }
+}
+
+function pickPurchasePdf(rowIndex) {
+  if (!googleAccessToken) {
+    alert('Connecte Google Drive depuis le portail BastCompta.');
+    return;
+  }
+
+  selectedPurchasePdfRowIndex = rowIndex;
+  const input = document.getElementById('purchasePdfUploadInput');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+async function handlePurchasePdfUpload(event) {
+  const file = event.target.files?.[0];
+  const rowIndex = selectedPurchasePdfRowIndex;
+  selectedPurchasePdfRowIndex = null;
+
+  if (!file || rowIndex === null || rowIndex === undefined) return;
+  if (file.type !== 'application/pdf' && !String(file.name || '').toLowerCase().endsWith('.pdf')) {
+    alert('Sélectionne un fichier PDF.');
+    return;
+  }
+
+  if (!googleAccessToken) {
+    alert('Connecte Google Drive depuis le portail BastCompta.');
+    return;
+  }
+
+  try {
+    const row = data.purchases[rowIndex] || {};
+    const fileName = getPurchasePdfFileName(row, file.name);
+    const metadata = { name: fileName, parents: ['appDataFolder'] };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+
+    const res = await googleDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,size', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${googleAccessToken}` },
+      body: form
+    });
+
+    if (!res) return;
+    if (!res.ok) throw new Error(await res.text());
+
+    const saved = await res.json();
+    data.purchases[rowIndex].pdfFileId = saved.id;
+    data.purchases[rowIndex].pdfFileName = saved.name;
+    data.purchases[rowIndex].pdfModifiedTime = saved.modifiedTime || '';
+
+    await saveData(false);
+    await saveCurrentYearJsonToDrive(false);
+    await loadPurchasePdfDriveFiles(false);
+    render();
+    alert('Facture PDF ajoutée à Google Drive.');
+  } catch (error) {
+    console.error(error);
+    alert("Échec de l'envoi de la facture PDF vers Google Drive.");
+  }
+}
+
+async function openPurchasePdf(fileId) {
+  if (!googleAccessToken) {
+    alert('Connecte Google Drive depuis le portail BastCompta.');
+    return;
+  }
+
+  if (!fileId) {
+    alert('Aucun PDF lié à cette ligne.');
+    return;
+  }
+
+  try {
+    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
+
+    if (!res) return;
+    if (!res.ok) throw new Error(await res.text());
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    console.error(error);
+    alert('Impossible d’ouvrir ce PDF.');
+  }
+}
+
+async function deletePurchasePdf(fileId) {
+  if (!googleAccessToken) {
+    alert('Connecte Google Drive depuis le portail BastCompta.');
+    return;
+  }
+
+  if (!fileId) return;
+  if (!confirm('Supprimer définitivement cette facture PDF de Google Drive ?')) return;
+
+  try {
+    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
+
+    if (!res) return;
+    if (!res.ok) throw new Error(await res.text());
+
+    data.purchases.forEach(row => {
+      if (row.pdfFileId === fileId) {
+        row.pdfFileId = '';
+        row.pdfFileName = '';
+        row.pdfModifiedTime = '';
       }
-    }
+    });
 
-    async function loadInvoiceDriveFiles(showAlert401 = false) {
-      if (!googleAccessToken || !window.gapi?.client) return [];
+    await saveData(false);
+    await saveCurrentYearJsonToDrive(false);
+    await loadPurchasePdfDriveFiles(false);
+    render();
+    alert('Facture PDF supprimée.');
+  } catch (error) {
+    console.error(error);
+    alert('Erreur lors de la suppression du PDF.');
+  }
+}
 
-      try {
-        const list = await driveFilesList({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains 'facture-'`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 100,
-          fields: 'files(id, name, modifiedTime)'
-        }, showAlert401);
+function renderPurchasePdfList() {
+  if (!googleAccessToken) {
+    return '<div class="muted-box">Connecte Google Drive pour afficher les factures PDF d’achat.</div>';
+  }
 
-        if (!list) return invoiceDriveFiles;
-        invoiceDriveFiles = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().endsWith('.json'));
-        return invoiceDriveFiles;
-      } catch (error) {
-        console.error(error);
-        return invoiceDriveFiles;
-      }
-    }
+  if (!purchasePdfDriveFiles.length) {
+    return '<div class="muted-box">Aucune facture PDF d’achat trouvée sur Google Drive.</div>';
+  }
 
-    async function openSalesInvoicePreview(invoiceNumber) {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      if (!normalized) {
-        alert('Aucun numéro de facture sur cette ligne.');
-        return;
-      }
+  return `
+    <div style="overflow:auto; margin-top:12px;">
+      <table class="table-purchases" style="table-layout:fixed; width:100%;">
+        <colgroup>
+          <col style="width: 45%;">
+          <col style="width: 160px;">
+          <col style="width: 220px;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Fichier PDF</th>
+            <th>Modifié le</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${purchasePdfDriveFiles.map(file => {
+            const modified = file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('fr-BE') : '—';
+            return `
+              <tr>
+                <td>${escapeHtml(file.name || 'facture.pdf')}</td>
+                <td>${escapeHtml(modified)}</td>
+                <td>
+                  <div class="inline-actions">
+                    <button type="button" onclick='openPurchasePdf(${JSON.stringify(file.id)})'>Consulter</button>
+                    <button type="button" class="danger" onclick='deletePurchasePdf(${JSON.stringify(file.id)})'>Supprimer</button>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
 
-      if (!getInvoiceDriveFileForNumber(normalized)) {
-        await findInvoiceDriveFileForNumber(normalized, true);
-      }
-
-      if (!getInvoiceDriveFileForNumber(normalized)) {
-        alert(`Aucune facture trouvée dans Google Drive pour le numéro ${normalized}.`);
-        render();
-        return;
-      }
-
-      const invoiceFile = getInvoiceDriveFileForNumber(normalized);
-      const opener = window.parent?.openInvoicePrintPreviewFromAccounting;
-      if (typeof opener === 'function') {
-        await opener(normalized, invoiceFile?.id || '');
-        return;
-      }
-
-      alert('Ouvre le fichier via le portail BastCompta pour afficher l’aperçu d’impression de la facture.');
-    }
-
-    window.openSalesInvoicePreview = openSalesInvoicePreview;
+window.pickPurchasePdf = pickPurchasePdf;
+window.handlePurchasePdfUpload = handlePurchasePdfUpload;
+window.openPurchasePdf = openPurchasePdf;
+window.deletePurchasePdf = deletePurchasePdf;
 
     window.addEventListener('message', async (event) => {
       if (event.origin !== window.location.origin) return;
@@ -1263,6 +1492,7 @@
             gapi.client.setToken({ access_token: googleAccessToken });
             await loadCurrentYearJsonFromDriveIfAvailable();
             await loadDriveFiles();
+            await loadPurchasePdfDriveFiles(false);
           } catch (error) {
             console.error(error);
           }
@@ -2611,22 +2841,22 @@
       `;
     }
 
-    function renderSales() {
-      const t = totals();
-      return renderTablePage({
-        key: 'sales',
-        title: 'Journal des ventes',
-        hint: '',
-        addLabel: 'Ajouter une vente',
-        onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0 })`,
-        tableAttrs: `class="table-sales"`,
-        headers: ['Date', 'Client', 'N° Facture', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
-        rows: data.sales.map((row, i) => {
-          const hasInvoiceNumber = String(row.invoiceNumber || '').trim();
-          const invoiceButton = hasInvoiceNumber
-            ? `<button type="button" class="invoice-preview-btn" onclick="openSalesInvoicePreview('${escapeAttr(row.invoiceNumber || '')}')">Aperçu</button>`
-            : '<span class="hint">&mdash;</span>';
-          return `
+function renderSales() {
+  const t = totals();
+  return renderTablePage({
+    key: 'sales',
+    title: 'Journal des ventes',
+    hint: '',
+    addLabel: 'Ajouter une vente',
+    onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0 })`,
+    tableAttrs: `class="table-sales"`,
+    headers: ['Date', 'Client', 'N° Facture', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
+    rows: data.sales.map((row, i) => {
+      const hasInvoiceNumber = String(row.invoiceNumber || '').trim();
+      const invoiceButton = hasInvoiceNumber
+        ? `<button type="button" class="invoice-preview-btn" onclick="openSalesInvoicePreview('${escapeAttr(row.invoiceNumber || '')}')">Aperçu</button>`
+        : '<span class="hint">&mdash;</span>';
+      return `
   <tr>
     <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.sales[${i}].date=this.value; sortByDate(data.sales); saveData(false)"></td>
     <td><input value="${escapeAttr(row.client)}" onchange="data.sales[${i}].client=this.value; saveData(false)"></td>
@@ -2639,12 +2869,12 @@
     <td><button class="danger" onclick="deleteRow('sales', ${i})">Suppr.</button></td>
   </tr>
 `}).join(''),
-        footer: `
+    footer: `
   <div class="kv"><span>Total ventes HTVA</span><span>${money(t.salesNet)}</span></div>
   <div class="kv"><span>Total TVA ventes</span><span>${money(t.salesVat)}</span></div>
 `
-      });
-    }
+  });
+}
 
     function renderPurchases() {
       const t = totals();
@@ -2654,10 +2884,11 @@
         <div class="section-head">
           <div>
             <h2>Journal des achats</h2>
-            <div class="hint">Chaque ligne garde le montant TVAC, le taux et le caractère déductible ou non de la TVA.</div>
+            <div class="hint">Chaque ligne garde le montant HTVA, le taux, le caractère déductible de la TVA et le PDF de la facture si disponible.</div>
           </div>
           <div class="inline-actions">
-            <button class="primary" onclick="addRow('purchases', { date: '', supplier: '', invoiceNumber: '', description: '', rate: 21, htva: 0, category: 'frais_generaux', deductible: true })">Ajouter un achat</button>
+            <button class="primary" onclick="addRow('purchases', { date: '', supplier: '', invoiceNumber: '', rate: 21, htva: 0, category: 'frais_generaux', deductible: true, pdfFileId: '', pdfFileName: '' })">Ajouter un achat</button>
+            <button type="button" onclick="loadPurchasePdfDriveFiles(true).then(() => render())">Actualiser les PDF</button>
           </div>
         </div>
 
@@ -2665,15 +2896,15 @@
           <table class="table-purchases" style="table-layout:fixed; width:100%;">
             <colgroup>
               <col style="width: 115px;">
-              <col style="width: 140px;">
+              <col style="width: 160px;">
               <col style="width: 135px;">
-              <col style="width: 200px;">
-              <col style="width: 60px;">
-              <col style="width: 80px;">
               <col style="width: 95px;">
-              <col style="width: 75px;">
-              <col style="width: 75px;">
-              <col style="width: 75px;">
+              <col style="width: 85px;">
+              <col style="width: 100px;">
+              <col style="width: 90px;">
+              <col style="width: 90px;">
+              <col style="width: 90px;">
+              <col style="width: 180px;">
               <col style="width: 75px;">
             </colgroup>
             <thead>
@@ -2681,22 +2912,24 @@
                 <th>Date</th>
                 <th>Fournisseur</th>
                 <th>N° Facture</th>
-                <th>Description</th>
                 <th>Type</th>
                 <th>Taux TVA</th>
                 <th>HTVA</th>
                 <th>Déductible TVA</th>
                 <th>TVA récup.</th>
                 <th>TVAC</th>
+                <th>Facture PDF</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              ${data.purchases.map((row, i) => `
+              ${data.purchases.map((row, i) => {
+                const linkedPdf = getPurchasePdfFileById(row.pdfFileId) || (row.pdfFileId ? { id: row.pdfFileId, name: row.pdfFileName || 'PDF lié' } : null);
+                return `
                 <tr>
                   <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.purchases[${i}].date=this.value; sortByDate(data.purchases); saveData(false)"></td>
                   <td><input value="${escapeAttr(row.supplier)}" onchange="data.purchases[${i}].supplier=this.value; saveData(false)"></td>
                   <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.purchases[${i}].invoiceNumber=this.value; saveData(false)"></td>
-                  <td><input value="${escapeAttr(row.description)}" onchange="data.purchases[${i}].description=this.value; saveData(false)"></td>
                   <td>
                     <select onchange="data.purchases[${i}].category=this.value; saveData(false)">
                       <option value="marchandise" ${row.category === 'marchandise' ? 'selected' : ''}>Marchandise</option>
@@ -2706,16 +2939,22 @@
                   <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.purchases[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
                   <td><input type="number" step="0.01" value="${num(row.htva)}" onchange="data.purchases[${i}].htva=parseFloat(this.value)||0; saveData(false)"></td>
                   <td>
-                 <select onchange="data.purchases[${i}].deductible=this.value==='true'; saveData(false)">
-                  <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
-                  <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
-                 </select>
-                   </td>
-                   <td>${money(row.deductible ? purchaseVatDisplay(i) : 0)}</td>
-                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
+                    <select onchange="data.purchases[${i}].deductible=this.value==='true'; saveData(false)">
+                      <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
+                      <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
+                    </select>
+                  </td>
+                  <td>${money(row.deductible ? purchaseVatDisplay(i) : 0)}</td>
+                  <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
+                  <td>
+                    <div class="inline-actions">
+                      <button type="button" onclick="pickPurchasePdf(${i})">Ajouter</button>
+                      ${linkedPdf ? `<button type="button" onclick='openPurchasePdf(${JSON.stringify(linkedPdf.id)})'>Voir</button>` : '<span class="hint">—</span>'}
+                    </div>
+                  </td>
                   <td><button class="danger" onclick="deleteRow('purchases', ${i})">Suppr.</button></td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
         </div>
@@ -2726,6 +2965,17 @@
           <div class="kv"><span>dont marchandises</span><span>${money(t.purchasesMerchandiseNet)}</span></div>
           <div class="kv"><span>Total TVA récupérable</span><span>${money(t.purchasesVat)}</span></div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <h3>Factures PDF d’achat sur Google Drive</h3>
+            <div class="hint">Liste des PDF ajoutés depuis les lignes d’achat. Tu peux les consulter ou les supprimer.</div>
+          </div>
+          <button type="button" onclick="loadPurchasePdfDriveFiles(true).then(() => render())">Actualiser</button>
+        </div>
+        ${renderPurchasePdfList()}
       </div>
     </section>
   `;
@@ -3369,7 +3619,6 @@
         printableDate(row.date),
         escapeHtml(row.supplier || '—'),
         escapeHtml(row.invoiceNumber || '—'),
-        escapeHtml(row.description || '—'),
         escapeHtml(row.category === 'marchandise' ? 'Marchandise' : 'Frais généraux'),
         `${num(row.rate)} %`,
         money(row.htva),
@@ -3566,7 +3815,7 @@
 
     <section class="section">
       <h2 class="section-title">Achats</h2>
-      ${reportTable(['Date', 'Fournisseur', 'N° facture', 'Description', 'Type', 'Taux TVA', 'HTVA', 'TVA déductible', 'TVA récup.', 'TVAC'], purchaseRows, { compact: true })}
+      ${reportTable(['Date', 'Fournisseur', 'N° facture', 'Type', 'Taux TVA', 'HTVA', 'TVA déductible', 'TVA récup.', 'TVAC'], purchaseRows, { compact: true })}
       <div style="margin-top:12px;">${reportKv([
         ['Total achats en charges', money(t.purchasesNet)],
         ['Dont frais généraux', money(t.purchasesGeneralNet)],
@@ -3712,7 +3961,7 @@
       if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
     }
 
-
+    
     function normalizeInvoiceImportRow(row) {
       return {
         date: String(row?.date || ''),
@@ -3770,6 +4019,7 @@
         try {
           await loadSyncDataFromDriveIfAvailable();
           await loadDriveFiles();
+          await loadPurchasePdfDriveFiles(false);
           render();
         } catch (error) {
           console.error(error);
