@@ -819,22 +819,21 @@
       alert(result?.message || 'Facture envoyée en comptabilité.');
     }
 
+async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
+  switchMainTab('devis');
 
-    async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
-      switchMainTab('devis');
+  await new Promise(resolve => setTimeout(resolve, 150));
 
-      await new Promise(resolve => setTimeout(resolve, 150));
+  const openPreview = getFrameApi(devisFrame, 'openInvoicePreviewByNumberFromDrive');
+  if (!openPreview) {
+    alert('Le module Devis & Facture n’est pas encore prêt.');
+    return false;
+  }
 
-      const openPreview = getFrameApi(devisFrame, 'openInvoicePreviewByNumberFromDrive');
-      if (!openPreview) {
-        alert('Le module Devis & Facture n’est pas encore prêt.');
-        return false;
-      }
+  return await openPreview(invoiceNumber, invoiceFileId);
+}
 
-      return await openPreview(invoiceNumber, invoiceFileId);
-    }
-
-    window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
+window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
 
     function broadcastDriveToken() {
       if (!isTokenFresh()) return;
