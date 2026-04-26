@@ -254,31 +254,20 @@
     /* VENTES */
     .table-sales td:nth-child(1),
     .table-sales td:nth-child(3),
-    .table-sales td:nth-child(4),
     .table-sales td:nth-child(5),
     .table-sales td:nth-child(6),
     .table-sales td:nth-child(7),
-    .table-sales td:nth-child(8),
-    .table-sales td:nth-child(9) {
+    .table-sales td:nth-child(8) {
       text-align: center;
     }
 
     .table-sales th:nth-child(1),
     .table-sales th:nth-child(3),
-    .table-sales th:nth-child(4),
     .table-sales th:nth-child(5),
     .table-sales th:nth-child(6),
     .table-sales th:nth-child(7),
-    .table-sales th:nth-child(8),
-    .table-sales th:nth-child(9) {
+    .table-sales th:nth-child(8) {
       text-align: center;
-    }
-
-    .invoice-preview-btn {
-      padding: 8px 10px;
-      border-radius: 10px;
-      box-shadow: none;
-      white-space: nowrap;
     }
 
     /* ACHATS */
@@ -675,7 +664,6 @@
 
     let googleAccessToken = null;
     let googleDriveFiles = [];
-    let invoiceDriveFiles = [];
     let selectedDriveFileId = '';
     let selectedDriveFileIds = [];
 
@@ -692,7 +680,6 @@
     function resetGoogleDriveSession() {
       googleAccessToken = null;
       googleDriveFiles = [];
-      invoiceDriveFiles = [];
       selectedDriveFileId = '';
       selectedDriveFileIds = [];
       if (window.gapi?.client) {
@@ -1148,108 +1135,6 @@
       render();
     }
 
-
-    function normalizeInvoiceNumberForDrive(value) {
-      return String(value || '').trim();
-    }
-
-    function invoiceDriveFileNameForNumber(invoiceNumber) {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      return normalized ? `facture-${normalized}.json` : '';
-    }
-
-    function getInvoiceDriveFileForNumber(invoiceNumber) {
-      const wanted = normalizeInvoiceNumberForDrive(invoiceNumber).toLowerCase();
-      if (!wanted) return null;
-
-      return invoiceDriveFiles.find(file => {
-        const fileName = String(file.name || '').toLowerCase();
-        const fileNumber = fileName
-          .replace(/^facture-/i, '')
-          .replace(/\.json$/i, '')
-          .trim();
-        return fileNumber === wanted || fileName.includes(wanted);
-      }) || null;
-    }
-
-    async function findInvoiceDriveFileForNumber(invoiceNumber, showAlert401 = false) {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      if (!normalized || !googleAccessToken || !window.gapi?.client) return null;
-
-      const cached = getInvoiceDriveFileForNumber(normalized);
-      if (cached) return cached;
-
-      try {
-        const list = await driveFilesList({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains '${normalized.replace(/'/g, "\\'")}'`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 20,
-          fields: 'files(id, name, modifiedTime)'
-        }, showAlert401);
-
-        if (!list) return null;
-        const files = list.result.files || [];
-        invoiceDriveFiles = [...invoiceDriveFiles, ...files].filter((file, index, all) =>
-          all.findIndex(item => item.id === file.id) === index
-        );
-        return getInvoiceDriveFileForNumber(normalized);
-      } catch (error) {
-        console.error(error);
-        return null;
-      }
-    }
-
-    async function loadInvoiceDriveFiles(showAlert401 = false) {
-      if (!googleAccessToken || !window.gapi?.client) return [];
-
-      try {
-        const list = await driveFilesList({
-          spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains 'F-'`,
-          orderBy: 'modifiedTime desc',
-          pageSize: 100,
-          fields: 'files(id, name, modifiedTime)'
-        }, showAlert401);
-
-        if (!list) return invoiceDriveFiles;
-        invoiceDriveFiles = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().endsWith('.json'));
-        return invoiceDriveFiles;
-      } catch (error) {
-        console.error(error);
-        return invoiceDriveFiles;
-      }
-    }
-
-    async function openSalesInvoicePreview(invoiceNumber) {
-      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
-      if (!normalized) {
-        alert('Aucun numéro de facture sur cette ligne.');
-        return;
-      }
-
-      if (!getInvoiceDriveFileForNumber(normalized)) {
-        await findInvoiceDriveFileForNumber(normalized, true);
-      }
-
-      if (!getInvoiceDriveFileForNumber(normalized)) {
-        alert(`Aucune facture trouvée dans Google Drive pour le numéro ${normalized}.`);
-        render();
-        return;
-      }
-
-      const invoiceFile = getInvoiceDriveFileForNumber(normalized);
-      const opener = window.parent?.openInvoicePrintPreviewFromAccounting;
-      if (typeof opener === 'function') {
-        await opener(normalized, invoiceFile?.id || '');
-        return;
-      }
-
-      alert('Ouvre le fichier via le portail BastCompta pour afficher l’aperçu d’impression de la facture.');
-    }
-
-    window.openSalesInvoicePreview = openSalesInvoicePreview;
-
     window.addEventListener('message', async (event) => {
       if (event.origin !== window.location.origin) return;
 
@@ -1269,7 +1154,6 @@
             gapi.client.setToken({ access_token: googleAccessToken });
             await loadCurrentYearJsonFromDriveIfAvailable();
             await loadDriveFiles();
-            await loadInvoiceDriveFiles(false);
           } catch (error) {
             console.error(error);
           }
@@ -2625,27 +2509,22 @@
         title: 'Journal des ventes',
         hint: '',
         addLabel: 'Ajouter une vente',
-        onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0 })`,
+        onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', description: '', rate: 21, tvac: 0 })`,
         tableAttrs: `class="table-sales"`,
-        headers: ['Date', 'Client', 'N° Facture', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
-        rows: data.sales.map((row, i) => {
-          const hasInvoiceNumber = String(row.invoiceNumber || '').trim();
-          const invoiceButton = hasInvoiceNumber
-            ? `<button type="button" class="invoice-preview-btn" onclick="openSalesInvoicePreview('${escapeAttr(row.invoiceNumber || '')}')">Aper\u00e7u</button>`
-            : '<span class="hint">&mdash;</span>';
-          return `
+        headers: ['Date', 'Client', 'N° Facture', 'Description', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', ''],
+        rows: data.sales.map((row, i) => `
       <tr>
         <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.sales[${i}].date=this.value; sortByDate(data.sales); saveData(false)"></td>
         <td><input value="${escapeAttr(row.client)}" onchange="data.sales[${i}].client=this.value; saveData(false)"></td>
         <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.sales[${i}].invoiceNumber=this.value; saveData(false)"></td>
+        <td><input value="${escapeAttr(row.description)}" onchange="data.sales[${i}].description=this.value; saveData(false)"></td>
         <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.sales[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
         <td><input type="number" step="0.01" value="${num(row.tvac)}" onchange="data.sales[${i}].tvac=parseFloat(this.value)||0; saveData(false)"></td>
         <td>${money(rowNetFromTvac(row.tvac, row.rate))}</td>
         <td>${money(rowVatFromTvac(row.tvac, row.rate))}</td>
-        <td>${invoiceButton}</td>
         <td><button class="danger" onclick="deleteRow('sales', ${i})">Suppr.</button></td>
       </tr>
-    `}).join(''),
+    `).join(''),
         footer: `
       <div class="kv"><span>Total ventes HTVA</span><span>${money(t.salesNet)}</span></div>
       <div class="kv"><span>Total TVA ventes</span><span>${money(t.salesVat)}</span></div>
@@ -3777,7 +3656,6 @@
         try {
           await loadSyncDataFromDriveIfAvailable();
           await loadDriveFiles();
-          await loadInvoiceDriveFiles(false);
           render();
         } catch (error) {
           console.error(error);
