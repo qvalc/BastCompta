@@ -1159,9 +1159,45 @@
     }
 
     function getInvoiceDriveFileForNumber(invoiceNumber) {
-      const expectedName = invoiceDriveFileNameForNumber(invoiceNumber).toLowerCase();
-      if (!expectedName) return null;
-      return invoiceDriveFiles.find(file => String(file.name || '').toLowerCase() === expectedName) || null;
+      const wanted = normalizeInvoiceNumberForDrive(invoiceNumber).toLowerCase();
+      if (!wanted) return null;
+
+      return invoiceDriveFiles.find(file => {
+        const fileName = String(file.name || '').toLowerCase();
+        const fileNumber = fileName
+          .replace(/^facture-/i, '')
+          .replace(/\.json$/i, '')
+          .trim();
+        return fileNumber === wanted || fileName.includes(wanted);
+      }) || null;
+    }
+
+    async function findInvoiceDriveFileForNumber(invoiceNumber, showAlert401 = false) {
+      const normalized = normalizeInvoiceNumberForDrive(invoiceNumber);
+      if (!normalized || !googleAccessToken || !window.gapi?.client) return null;
+
+      const cached = getInvoiceDriveFileForNumber(normalized);
+      if (cached) return cached;
+
+      try {
+        const list = await driveFilesList({
+          spaces: 'appDataFolder',
+          q: `mimeType='application/json' and trashed=false and name contains '${normalized.replace(/'/g, "\\'")}'`,
+          orderBy: 'modifiedTime desc',
+          pageSize: 20,
+          fields: 'files(id, name, modifiedTime)'
+        }, showAlert401);
+
+        if (!list) return null;
+        const files = list.result.files || [];
+        invoiceDriveFiles = [...invoiceDriveFiles, ...files].filter((file, index, all) =>
+          all.findIndex(item => item.id === file.id) === index
+        );
+        return getInvoiceDriveFileForNumber(normalized);
+      } catch (error) {
+        console.error(error);
+        return null;
+      }
     }
 
     async function loadInvoiceDriveFiles(showAlert401 = false) {
@@ -1170,14 +1206,14 @@
       try {
         const list = await driveFilesList({
           spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and name contains 'facture-'`,
+          q: `mimeType='application/json' and trashed=false and name contains 'F-'`,
           orderBy: 'modifiedTime desc',
           pageSize: 100,
           fields: 'files(id, name, modifiedTime)'
         }, showAlert401);
 
         if (!list) return invoiceDriveFiles;
-        invoiceDriveFiles = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().startsWith('facture-'));
+        invoiceDriveFiles = (list.result.files || []).filter(file => String(file.name || '').toLowerCase().endsWith('.json'));
         return invoiceDriveFiles;
       } catch (error) {
         console.error(error);
@@ -1193,11 +1229,11 @@
       }
 
       if (!getInvoiceDriveFileForNumber(normalized)) {
-        await loadInvoiceDriveFiles(true);
+        await findInvoiceDriveFileForNumber(normalized, true);
       }
 
       if (!getInvoiceDriveFileForNumber(normalized)) {
-        alert(`Aucun fichier facture-${normalized}.json trouvé dans Google Drive.`);
+        alert(`Aucune facture trouvée dans Google Drive pour le numéro ${normalized}.`);
         render();
         return;
       }
