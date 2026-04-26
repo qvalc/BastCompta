@@ -1238,9 +1238,10 @@
         return;
       }
 
+      const invoiceFile = getInvoiceDriveFileForNumber(normalized);
       const opener = window.parent?.openInvoicePrintPreviewFromAccounting;
       if (typeof opener === 'function') {
-        await opener(normalized);
+        await opener(normalized, invoiceFile?.id || '');
         return;
       }
 
