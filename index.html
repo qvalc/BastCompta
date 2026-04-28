@@ -2,6 +2,15 @@
 <html lang="fr">
 
 <head>
+  <script>
+    (function () {
+      try {
+        sessionStorage.setItem('bastcompta_portal_access', 'granted');
+      } catch (error) {
+        console.warn('SessionStorage indisponible pour BastCompta.', error);
+      }
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portail BastCompta</title>
