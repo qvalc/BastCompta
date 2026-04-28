@@ -1827,18 +1827,19 @@ Cordialement,
         if (description) group.descriptions.push(description);
       });
 
+      const isCreditNote = status === 'credit_note';
       const rows = Array.from(grouped.values()).map(group => ({
         date: invoice.date || '',
         client: invoice.clientName || '',
         invoiceNumber,
         linkedInvoiceNumber: invoice.linkedInvoiceNumber || '',
         documentStatus: status,
-        documentType: status === 'credit_note' ? 'credit_note' : 'invoice',
-        description: status === 'credit_note'
+        documentType: isCreditNote ? 'credit_note' : 'invoice',
+        description: isCreditNote
           ? `Note de crédit${invoice.linkedInvoiceNumber ? ' liée à ' + invoice.linkedInvoiceNumber : ''}`
           : '',
         rate: group.rate,
-        tvac: roundMoney(group.tvac)
+        tvac: isCreditNote ? -Math.abs(roundMoney(group.tvac)) : roundMoney(group.tvac)
       }));
 
       return {
