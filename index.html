@@ -612,11 +612,11 @@
           </div>
 
           <div id="panel-devis" class="tab-panel active">
-            <iframe id="devisFrame" src="devis-facture.html" title="Devis et Facture"></iframe>
+            <iframe id="devisFrame" src="about:blank" data-src="devis-facture.html" title="Devis et Facture"></iframe>
           </div>
 
           <div id="panel-compta" class="tab-panel">
-            <iframe id="comptaFrame" src="comptabilite.html" title="Comptabilité"></iframe>
+            <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
         </div>
       </div>
@@ -653,6 +653,8 @@
     const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
     const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
+    const PORTAL_ACCESS_KEY = 'bastcompta_portal_access';
+    const PORTAL_ACCESS_VALUE = 'granted';
     const TOKEN_EXPIRY_SAFETY_MS = 60 * 1000;
 
     let googleTokenClient = null;
@@ -743,7 +745,41 @@
       disconnectDriveBtn.disabled = !connected && !wasDrivePreviouslyConnected();
     }
 
+    function grantPortalAccess() {
+      try {
+        sessionStorage.setItem(PORTAL_ACCESS_KEY, PORTAL_ACCESS_VALUE);
+      } catch (error) {
+        console.warn('Impossible de mémoriser l’accès au portail.', error);
+      }
+    }
+
+    function revokePortalAccess() {
+      try {
+        sessionStorage.removeItem(PORTAL_ACCESS_KEY);
+      } catch (error) {
+        console.warn('Impossible de supprimer l’accès au portail.', error);
+      }
+    }
+
+    function loadProtectedFrames() {
+      [devisFrame, comptaFrame].forEach(frame => {
+        if (!frame) return;
+        const target = frame.dataset.src;
+        if (target && !String(frame.src || '').endsWith(target)) {
+          frame.src = target;
+        }
+      });
+    }
+
+    function unloadProtectedFrames() {
+      [devisFrame, comptaFrame].forEach(frame => {
+        if (frame) frame.src = 'about:blank';
+      });
+    }
+
     function showPortal(user) {
+      grantPortalAccess();
+      loadProtectedFrames();
       authScreen.classList.add('hidden');
       portalScreen.classList.remove('hidden');
       currentUserEl.innerHTML = '🟢 Connecté';
@@ -756,6 +792,8 @@
     }
 
     function showAuth() {
+      revokePortalAccess();
+      unloadProtectedFrames();
       portalScreen.classList.add('hidden');
       authScreen.classList.remove('hidden');
       loginForm.reset();
@@ -1134,6 +1172,8 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
     logoutBtn.addEventListener('click', async () => {
       try {
+        revokePortalAccess();
+        unloadProtectedFrames();
         disconnectGoogleDrive(true);
         await signOut(auth);
       } catch (error) {
