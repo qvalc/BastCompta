@@ -1387,16 +1387,16 @@ Cordialement,
       return 'devis-facture-sans-numero.json';
     }
 
-    async function loadDriveFiles() {
+    async function loadDriveFiles(showAlert = true) {
       if (!googleAccessToken) {
-        alert("Connecte Google Drive depuis le portail BastCompta.");
+        if (showAlert) alert("Connecte Google Drive depuis le portail BastCompta.");
         return;
       }
 
       try {
         const list = await driveFilesList({
           spaces: 'appDataFolder',
-          q: `mimeType='application/json' and trashed=false and (name contains 'devis-' or name contains 'facture-' or name contains 'rappel-')`,
+          q: `mimeType='application/json' and trashed=false and (name contains 'devis-' or name contains 'facture-' or name contains 'rappel-' or name contains 'NC-')`,
           orderBy: 'modifiedTime desc',
           pageSize: 100,
           fields: 'files(id, name, modifiedTime)'
@@ -1431,7 +1431,7 @@ Cordialement,
       } catch (error) {
         console.error(error);
 
-        alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Google Drive dans le portail.");
+        if (showAlert) alert("Impossible de charger la liste des sauvegardes Drive. Vérifie la connexion Google Drive dans le portail.");
       }
     }
 
@@ -1717,6 +1717,102 @@ Cordialement,
       return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
     }
 
+    const DOCUMENT_NUMBER_CONFIG = {
+      quote: { prefix: 'D', label: 'devis' },
+      invoice: { prefix: 'F', label: 'facture' },
+      reminder: { prefix: 'RF', label: 'rappel' },
+      credit_note: { prefix: 'NC', label: 'note de crédit' }
+    };
+
+    function getCurrentDocumentYear() {
+      return String(new Date().getFullYear());
+    }
+
+    function formatDocumentNumber(kind, year, sequence) {
+      const config = DOCUMENT_NUMBER_CONFIG[kind] || DOCUMENT_NUMBER_CONFIG.quote;
+      return `${config.prefix}-${year}-${String(sequence || 1).padStart(3, '0')}`;
+    }
+
+    function parseBusinessDocumentNumber(value) {
+      const text = String(value || '').trim().toUpperCase();
+      const match = text.match(/\b(RF|NC|D|F)-(\d{4})-(\d{1,})\b/);
+      if (!match) return null;
+
+      const prefixToKind = { D: 'quote', F: 'invoice', RF: 'reminder', NC: 'credit_note' };
+      return {
+        kind: prefixToKind[match[1]] || '',
+        prefix: match[1],
+        year: match[2],
+        sequence: parseInt(match[3], 10) || 0
+      };
+    }
+
+    function addDocumentNumberCandidate(candidates, value, source = '') {
+      const parsed = parseBusinessDocumentNumber(value);
+      if (!parsed || !parsed.kind || !parsed.sequence) return;
+      candidates.push({ ...parsed, source });
+    }
+
+    function collectDocumentNumberCandidates() {
+      const candidates = [];
+
+      addDocumentNumberCandidate(candidates, data.quote?.documentNumber, 'quote.current');
+      addDocumentNumberCandidate(candidates, data.invoice?.documentNumber, 'invoice.current');
+      addDocumentNumberCandidate(candidates, data.reminder?.documentNumber, 'reminder.current');
+
+      (googleDriveFiles || []).forEach(file => {
+        addDocumentNumberCandidate(candidates, file?.name, 'drive.name');
+      });
+
+      Object.values(driveFileIndex || {}).forEach(meta => {
+        addDocumentNumberCandidate(candidates, meta?.documentNumber, 'drive.index');
+      });
+
+      return candidates;
+    }
+
+    function getHighestDocumentSequence(kind, year = getCurrentDocumentYear()) {
+      return collectDocumentNumberCandidates()
+        .filter(item => item.kind === kind && item.year === String(year))
+        .reduce((max, item) => Math.max(max, item.sequence || 0), 0);
+    }
+
+    function generateNextDocumentNumber(kind, year = getCurrentDocumentYear()) {
+      return formatDocumentNumber(kind, year, getHighestDocumentSequence(kind, year) + 1);
+    }
+
+    async function refreshDocumentNumberSources() {
+      if (!googleAccessToken || !window.gapi?.client) return;
+      try {
+        await loadDriveFiles(false);
+        await ensureDriveFileIndex(true);
+      } catch (error) {
+        console.error('Impossible de rafraîchir les sources de numérotation.', error);
+      }
+    }
+
+    function setAutomaticDocumentNumber(docKey, kind = docKey, force = false) {
+      const doc = data[docKey];
+      if (!doc) return '';
+      if (!force && String(doc.documentNumber || '').trim()) return doc.documentNumber;
+      const nextNumber = generateNextDocumentNumber(kind);
+      doc.documentNumber = nextNumber;
+      return nextNumber;
+    }
+
+    function setDefaultDocumentDates(docKey) {
+      const doc = data[docKey];
+      if (!doc) return;
+      const today = new Date().toISOString().slice(0, 10);
+      if (!doc.date) doc.date = today;
+    }
+
+    async function prepareNewDocument(docKey, kind = docKey) {
+      await refreshDocumentNumberSources();
+      setAutomaticDocumentNumber(docKey, kind, true);
+      setDefaultDocumentDates(docKey);
+    }
+
     const INVOICE_STATUS_LABELS = {
       draft: 'Brouillon',
       sent: 'Envoyée',
@@ -1753,30 +1849,26 @@ Cordialement,
     }
 
     function makeCreditNoteNumber(originalNumber) {
-      const source = String(originalNumber || '').trim();
-      if (!source) return 'AVO-' + new Date().getFullYear() + '-001';
-      if (/^AVO[-_]/i.test(source)) return source;
-      return 'AVO-' + source.replace(/^FAC[-_]?/i, '');
+      return generateNextDocumentNumber('credit_note');
     }
 
-    function createCreditNoteFromInvoice() {
+    async function createCreditNoteFromInvoice() {
       const original = String(data.invoice.documentNumber || '').trim();
       if (!original) {
         alert('Indique d’abord un numéro de facture avant de créer une note de crédit.');
         return;
       }
-      if (!confirm(`Créer une note de crédit liée à la facture ${original} ?\n\nLes lignes seront reprises avec des quantités négatives pour corriger la vente et la TVA.`)) return;
+      if (!confirm(`Créer une note de crédit liée à la facture ${original} ?\n\nUn numéro NC sera attribué automatiquement et les lignes seront reprises en négatif pour corriger la vente et la TVA.`)) return;
 
-      const suggested = makeCreditNoteNumber(original);
-      const creditNumber = prompt('Numéro de la note de crédit :', suggested);
-      if (creditNumber === null) return;
+      await refreshDocumentNumberSources();
+      const creditNumber = makeCreditNoteNumber(original);
 
       const cloneLinesAsCredit = rows => (Array.isArray(rows) ? rows : defaultLines()).map(row => ({
         ...structuredClone(row),
         qty: -Math.abs(toNumber(row.qty) || 1)
       }));
 
-      data.invoice.documentNumber = String(creditNumber || suggested).trim() || suggested;
+      data.invoice.documentNumber = creditNumber;
       data.invoice.linkedInvoiceNumber = original;
       data.invoice.creditNoteReason = data.invoice.creditNoteReason || `Note de crédit liée à la facture ${original}`;
       data.invoice.status = 'credit_note';
@@ -1888,7 +1980,7 @@ Cordialement,
       saveData(false);
     }
 
-    function copyQuoteToInvoice() {
+    async function copyQuoteToInvoice() {
       if (!confirm('Reprendre les données du devis dans la facture ? Cela remplacera les données actuelles de la facture.')) return;
 
       data.invoice.clientId = data.quote.clientId || '';
@@ -1908,12 +2000,14 @@ Cordialement,
       data.invoice.suppliesEnabled = !!data.quote.suppliesEnabled;
       data.invoice.suppliesLines = structuredClone(data.quote.suppliesLines || defaultLines());
 
+      await prepareNewDocument('invoice', 'invoice');
+
       saveData(false);
       activePage = 'invoice';
       render();
     }
 
-    function copyInvoiceToReminder() {
+    async function copyInvoiceToReminder() {
       if (!confirm('Reprendre les données de la facture dans le rappel ? Cela remplacera les données actuelles du rappel.')) return;
 
       data.reminder.clientId = data.invoice.clientId || '';
@@ -1931,12 +2025,14 @@ Cordialement,
       data.reminder.suppliesEnabled = !!data.invoice.suppliesEnabled;
       data.reminder.suppliesLines = structuredClone(data.invoice.suppliesLines || defaultLines());
 
+      await prepareNewDocument('reminder', 'reminder');
+
       saveData(false);
       activePage = 'reminder';
       render();
     }
 
-    function resetDocumentLocal(docKey) {
+    async function resetDocumentLocal(docKey) {
       const labels = {
         quote: 'devis',
         invoice: 'facture',
@@ -1944,9 +2040,10 @@ Cordialement,
       };
       const label = labels[docKey] || 'document';
 
-      if (!confirm(`Vider localement ce ${label} ?`)) return;
+      if (!confirm(`Créer un nouveau ${label} ?\n\nLe document actuel sera vidé localement et un nouveau numéro sera attribué automatiquement.`)) return;
 
       data[docKey] = structuredClone(defaultData[docKey]);
+      await prepareNewDocument(docKey, docKey);
 
       if (docKey === 'invoice') {
         syncCommunicationFromInvoice(false);
@@ -2463,6 +2560,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
       const lower = String(fileName || '').toLowerCase();
       if (lower.startsWith('devis-')) return 'quote';
       if (lower.startsWith('facture-')) return 'invoice';
+      if (lower.startsWith('note-credit-') || lower.startsWith('credit-note-')) return 'invoice';
       if (lower.startsWith('rappel-')) return 'reminder';
       return '';
     }
@@ -3483,6 +3581,16 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
       `).join('');
     }
 
+    async function assignNextDocumentNumber(docKey) {
+      const kind = docKey === 'invoice' && getEffectiveInvoiceStatus(data.invoice) === 'credit_note'
+        ? 'credit_note'
+        : docKey;
+      await prepareNewDocument(docKey, kind);
+      if (docKey === 'invoice') syncCommunicationFromInvoice(false);
+      saveData(false);
+      render();
+    }
+
     function renderMetaTable(docKey, isQuote) {
       const doc = data[docKey];
       return `
@@ -3499,7 +3607,12 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
             </thead>
             <tbody>
               <tr>
-                <td><input value="${escapeAttr(doc.documentNumber)}" onchange="data.${docKey}.documentNumber=this.value; saveData(false)"></td>
+                <td>
+                  <div style="display:flex; gap:6px; align-items:center;">
+                    <input value="${escapeAttr(doc.documentNumber)}" onchange="data.${docKey}.documentNumber=this.value; saveData(false)">
+                    <button type="button" class="no-print" style="padding:7px 9px; box-shadow:none;" title="Attribuer le prochain numéro automatique" onclick="assignNextDocumentNumber('${docKey}')">↻</button>
+                  </div>
+                </td>
                 <td><input type="date" value="${escapeAttr(isQuote ? doc.validity : doc.dueDate)}" onchange="data.${docKey}.${isQuote ? 'validity' : 'dueDate'}=this.value; saveData(false)"></td>
                 <td><input value="${escapeAttr(doc.clientNumber)}" onchange="data.${docKey}.clientNumber=this.value; saveData(false)"></td>
                 <td><input value="${escapeAttr(doc.clientVat)}" onchange="data.${docKey}.clientVat=this.value; saveData(false)"></td>
@@ -3656,7 +3769,7 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
                     <button type="button" onclick="createCreditNoteFromInvoice(); closeToolbarMenus();">Créer une note de crédit</button>
                     <button type="button" onclick="cancelInvoice(); closeToolbarMenus();" class="danger-ghost">Annuler la facture</button>` : ''}
                     <button type="button" onclick="saveData(); closeToolbarMenus();">Sauvegarder maintenant</button>
-                    <button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Vider ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
+                    <button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Nouveau ${isQuote ? 'devis' : (isReminder ? 'rappel' : 'facture')}</button>
                   </div>
                 </div>
               </div>
