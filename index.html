@@ -2,15 +2,6 @@
 <html lang="fr">
 
 <head>
-  <script>
-    (function () {
-      try {
-        sessionStorage.setItem('bastcompta_portal_access', 'granted');
-      } catch (error) {
-        console.warn('SessionStorage indisponible pour BastCompta.', error);
-      }
-    })();
-  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portail BastCompta</title>
@@ -621,11 +612,11 @@
           </div>
 
           <div id="panel-devis" class="tab-panel active">
-            <iframe id="devisFrame" src="devis-facture.html" title="Devis et Facture"></iframe>
+            <iframe id="devisFrame" src="about:blank" data-src="devis-facture.html" title="Devis et Facture"></iframe>
           </div>
 
           <div id="panel-compta" class="tab-panel">
-            <iframe id="comptaFrame" src="comptabilite.html" title="Comptabilité"></iframe>
+            <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
         </div>
       </div>
@@ -752,7 +743,42 @@
       disconnectDriveBtn.disabled = !connected && !wasDrivePreviouslyConnected();
     }
 
+    function grantPortalModuleAccess() {
+      try {
+        sessionStorage.setItem('bastcompta_portal_access', 'granted');
+      } catch (error) {
+        console.warn('SessionStorage indisponible pour BastCompta.', error);
+      }
+    }
+
+    function revokePortalModuleAccess() {
+      try {
+        sessionStorage.removeItem('bastcompta_portal_access');
+      } catch (error) {
+        console.warn('SessionStorage indisponible pour BastCompta.', error);
+      }
+    }
+
+    function loadProtectedFrames() {
+      [devisFrame, comptaFrame].forEach(frame => {
+        if (!frame) return;
+        const targetSrc = frame.dataset.src || '';
+        if (targetSrc && (!frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank')) {
+          frame.setAttribute('src', targetSrc);
+        }
+      });
+    }
+
+    function unloadProtectedFrames() {
+      [devisFrame, comptaFrame].forEach(frame => {
+        if (!frame) return;
+        frame.setAttribute('src', 'about:blank');
+      });
+    }
+
     function showPortal(user) {
+      grantPortalModuleAccess();
+      loadProtectedFrames();
       authScreen.classList.add('hidden');
       portalScreen.classList.remove('hidden');
       currentUserEl.innerHTML = '🟢 Connecté';
@@ -765,6 +791,8 @@
     }
 
     function showAuth() {
+      revokePortalModuleAccess();
+      unloadProtectedFrames();
       portalScreen.classList.add('hidden');
       authScreen.classList.remove('hidden');
       loginForm.reset();
@@ -828,7 +856,20 @@
 
       if (!confirm(confirmText)) return;
 
-      const result = await importRows(payload);
+      let result;
+      try {
+        result = await importRows(payload);
+      } catch (error) {
+        console.error(error);
+        alert('Erreur lors de l’envoi vers la comptabilité.');
+        return;
+      }
+
+      if (result && result.ok === false) {
+        alert(result.message || 'Envoi refusé par la comptabilité.');
+        return;
+      }
+
       switchMainTab('compta');
 
       const openSales = getFrameApi(comptaFrame, 'goToPage');
