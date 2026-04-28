@@ -1094,6 +1094,9 @@
         dueDate: '',
         siteName: '',
         paidAmount: 0,
+        status: 'draft',
+        linkedInvoiceNumber: '',
+        creditNoteReason: '',
         lines: defaultLines(),
         suppliesEnabled: false,
         suppliesLines: defaultLines(),
@@ -1714,8 +1717,95 @@ Cordialement,
       return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
     }
 
+    const INVOICE_STATUS_LABELS = {
+      draft: 'Brouillon',
+      sent: 'Envoyée',
+      paid: 'Payée',
+      partial: 'Partiellement payée',
+      cancelled: 'Annulée',
+      credit_note: 'Note de crédit'
+    };
+
+    function getInvoiceStatusLabel(status) {
+      return INVOICE_STATUS_LABELS[status] || INVOICE_STATUS_LABELS.draft;
+    }
+
+    function getEffectiveInvoiceStatus(doc = data.invoice) {
+      const explicit = String(doc?.status || 'draft');
+      if (explicit === 'cancelled' || explicit === 'credit_note') return explicit;
+      const totals = totalsFor('invoice');
+      const paid = toNumber(doc?.paidAmount);
+      if (totals.tvac > 0 && paid >= totals.tvac - 0.009) return 'paid';
+      if (paid > 0.009) return 'partial';
+      return explicit || 'draft';
+    }
+
+    function setInvoiceStatus(status) {
+      data.invoice.status = status || 'draft';
+      saveData(false);
+    }
+
+    function cancelInvoice() {
+      const number = String(data.invoice.documentNumber || '').trim() || 'cette facture';
+      if (!confirm(`Marquer ${number} comme annulée ?\n\nElle ne sera plus envoyée comme vente en comptabilité. Si elle avait déjà été envoyée, l’envoi vers comptabilité supprimera/remplacera ses lignes existantes hors période TVA clôturée.`)) return;
+      data.invoice.status = 'cancelled';
+      saveData(false);
+    }
+
+    function makeCreditNoteNumber(originalNumber) {
+      const source = String(originalNumber || '').trim();
+      if (!source) return 'AVO-' + new Date().getFullYear() + '-001';
+      if (/^AVO[-_]/i.test(source)) return source;
+      return 'AVO-' + source.replace(/^FAC[-_]?/i, '');
+    }
+
+    function createCreditNoteFromInvoice() {
+      const original = String(data.invoice.documentNumber || '').trim();
+      if (!original) {
+        alert('Indique d’abord un numéro de facture avant de créer une note de crédit.');
+        return;
+      }
+      if (!confirm(`Créer une note de crédit liée à la facture ${original} ?\n\nLes lignes seront reprises avec des quantités négatives pour corriger la vente et la TVA.`)) return;
+
+      const suggested = makeCreditNoteNumber(original);
+      const creditNumber = prompt('Numéro de la note de crédit :', suggested);
+      if (creditNumber === null) return;
+
+      const cloneLinesAsCredit = rows => (Array.isArray(rows) ? rows : defaultLines()).map(row => ({
+        ...structuredClone(row),
+        qty: -Math.abs(toNumber(row.qty) || 1)
+      }));
+
+      data.invoice.documentNumber = String(creditNumber || suggested).trim() || suggested;
+      data.invoice.linkedInvoiceNumber = original;
+      data.invoice.creditNoteReason = data.invoice.creditNoteReason || `Note de crédit liée à la facture ${original}`;
+      data.invoice.status = 'credit_note';
+      data.invoice.paidAmount = 0;
+      data.invoice.lines = cloneLinesAsCredit(data.invoice.lines);
+      if (data.invoice.suppliesEnabled) {
+        data.invoice.suppliesLines = cloneLinesAsCredit(data.invoice.suppliesLines);
+      }
+      saveData(false);
+      activePage = 'invoice';
+      render();
+    }
+
     function getInvoiceAccountingRowsForComptabilite() {
       const invoice = data.invoice || {};
+      const status = getEffectiveInvoiceStatus(invoice);
+      const invoiceNumber = String(invoice.documentNumber || '').trim();
+
+      if (status === 'cancelled') {
+        return {
+          action: 'cancel',
+          documentType: 'cancelled_invoice',
+          documentStatus: status,
+          invoiceNumber,
+          rows: [],
+          message: `La facture ${invoiceNumber || ''} est annulée. L’envoi vers comptabilité retirera ses lignes existantes si la période TVA n’est pas clôturée.`
+        };
+      }
+
       const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
       const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines) ? invoice.suppliesLines : [];
       const allLines = [...mainLines, ...suppliesLines].filter(row => {
@@ -1740,14 +1830,23 @@ Cordialement,
       const rows = Array.from(grouped.values()).map(group => ({
         date: invoice.date || '',
         client: invoice.clientName || '',
-        invoiceNumber: invoice.documentNumber || '',
-        description: '',
+        invoiceNumber,
+        linkedInvoiceNumber: invoice.linkedInvoiceNumber || '',
+        documentStatus: status,
+        documentType: status === 'credit_note' ? 'credit_note' : 'invoice',
+        description: status === 'credit_note'
+          ? `Note de crédit${invoice.linkedInvoiceNumber ? ' liée à ' + invoice.linkedInvoiceNumber : ''}`
+          : '',
         rate: group.rate,
         tvac: roundMoney(group.tvac)
       }));
 
       return {
-        invoiceNumber: invoice.documentNumber || '',
+        action: 'upsert',
+        documentType: status === 'credit_note' ? 'credit_note' : 'invoice',
+        documentStatus: status,
+        invoiceNumber,
+        linkedInvoiceNumber: invoice.linkedInvoiceNumber || '',
         rows,
         message: rows.length + ' ligne(s) prête(s) pour la comptabilité.'
       };
@@ -1799,6 +1898,10 @@ Cordialement,
       data.invoice.address = data.quote.address;
       data.invoice.siteName = data.quote.siteName;
       data.invoice.notes = data.quote.notes;
+      data.invoice.status = 'draft';
+      data.invoice.linkedInvoiceNumber = '';
+      data.invoice.creditNoteReason = '';
+      data.invoice.paidAmount = 0;
 
       data.invoice.lines = structuredClone(data.quote.lines || defaultLines());
       data.invoice.suppliesEnabled = !!data.quote.suppliesEnabled;
@@ -3506,7 +3609,8 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
       const totals = totalsFor(docKey);
       const isQuote = docKey === 'quote';
       const isReminder = docKey === 'reminder';
-      const docLabel = isQuote ? 'DEVIS' : (isReminder ? 'RAPPEL' : 'FACTURE');
+      const invoiceStatus = docKey === 'invoice' ? getEffectiveInvoiceStatus(doc) : '';
+      const docLabel = isQuote ? 'DEVIS' : (isReminder ? 'RAPPEL' : (invoiceStatus === 'credit_note' ? 'NOTE DE CRÉDIT' : 'FACTURE'));
       const emailLabel = isQuote ? 'Envoyer le devis' : (isReminder ? 'Envoyer le rappel' : 'Envoyer la facture');
       const notesLabel = isQuote ? 'Remarques du devis' : (isReminder ? 'Remarques du rappel' : 'Remarques');
       const paidAmount = isQuote ? 0 : toNumber(doc.paidAmount);
@@ -3546,6 +3650,10 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
                 <div class="toolbar-menu" data-menu-root>
                   <button class="button-icon" type="button" title="Plus d’actions" onclick="toggleToolbarMenu(event, 'more-menu-${docKey}')">⋯</button>
                   <div class="menu-panel" id="more-menu-${docKey}">
+                    ${docKey === 'invoice' ? `<button type="button" onclick="setInvoiceStatus('sent'); closeToolbarMenus();">Marquer envoyée</button>
+                    <button type="button" onclick="setInvoiceStatus('paid'); closeToolbarMenus();">Marquer payée</button>
+                    <button type="button" onclick="createCreditNoteFromInvoice(); closeToolbarMenus();">Créer une note de crédit</button>
+                    <button type="button" onclick="cancelInvoice(); closeToolbarMenus();" class="danger-ghost">Annuler la facture</button>` : ''}
                     <button type="button" onclick="saveData(); closeToolbarMenus();">Sauvegarder maintenant</button>
                     <button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Vider ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
                   </div>
@@ -3560,6 +3668,23 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
 
   <div class="doc-head-right">
     <div class="doc-title-top">${docLabel}</div>
+    ${docKey === 'invoice' ? `
+      <div class="client-box no-print" style="margin-bottom:10px;">
+        <div class="box-title">Statut facture</div>
+        <div class="stack">
+          <select onchange="setInvoiceStatus(this.value)">
+            <option value="draft" ${invoiceStatus === 'draft' ? 'selected' : ''}>Brouillon</option>
+            <option value="sent" ${invoiceStatus === 'sent' ? 'selected' : ''}>Envoyée</option>
+            <option value="partial" ${invoiceStatus === 'partial' ? 'selected' : ''}>Partiellement payée</option>
+            <option value="paid" ${invoiceStatus === 'paid' ? 'selected' : ''}>Payée</option>
+            <option value="cancelled" ${invoiceStatus === 'cancelled' ? 'selected' : ''}>Annulée</option>
+            <option value="credit_note" ${invoiceStatus === 'credit_note' ? 'selected' : ''}>Note de crédit</option>
+          </select>
+          ${invoiceStatus === 'credit_note' ? `<input placeholder="Facture d’origine" value="${escapeAttr(doc.linkedInvoiceNumber || '')}" onchange="data.invoice.linkedInvoiceNumber=this.value; saveData(false)">` : ''}
+          <div class="hint">${escapeHtml(getInvoiceStatusLabel(invoiceStatus))}${invoiceStatus === 'cancelled' ? ' — exclue de la comptabilité' : ''}</div>
+        </div>
+      </div>
+    ` : ''}
 
     <div class="client-box">
       <div class="box-title">Client</div>
@@ -3576,6 +3701,7 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
 </div>
 
             ${renderMetaTable(docKey, isQuote)}
+            ${docKey === 'invoice' ? `<div class="simple-box" style="margin-bottom:12px;"><strong>Statut :</strong> ${escapeHtml(getInvoiceStatusLabel(invoiceStatus))}${doc.linkedInvoiceNumber ? ` · <strong>Facture liée :</strong> ${escapeHtml(doc.linkedInvoiceNumber)}` : ''}${doc.creditNoteReason ? `<br>${escapeHtml(doc.creditNoteReason)}` : ''}</div>` : ''}
 
             ${renderLinesTable(docKey, 'lines')}
 
