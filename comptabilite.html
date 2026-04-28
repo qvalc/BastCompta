@@ -2,24 +2,6 @@
 <html lang="fr">
 
 <head>
-  <script>
-    (function () {
-      const PORTAL_URL = 'index.html';
-      const ACCESS_KEY = 'bastcompta_portal_access';
-
-      let hasPortalAccess = false;
-      try {
-        hasPortalAccess = sessionStorage.getItem(ACCESS_KEY) === 'granted';
-      } catch (error) {
-        hasPortalAccess = false;
-      }
-
-      if (window.top === window.self || !hasPortalAccess) {
-        window.location.replace(PORTAL_URL);
-      }
-    })();
-  </script>
-
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Comptabilité</title>
@@ -1312,12 +1294,6 @@ async function loadPurchasePdfDriveFiles(showAlert401 = false) {
 }
 
 function pickPurchasePdf(rowIndex) {
-  const lockedDec = getClosedVatDeclarationForDate(data.purchases?.[rowIndex]?.date || '');
-  if (lockedDec) {
-    alert(getVatLockMessage(lockedDec));
-    return;
-  }
-
   if (!googleAccessToken) {
     alert('Connecte Google Drive depuis le portail BastCompta.');
     return;
@@ -2507,19 +2483,22 @@ window.deletePurchasePdf = deletePurchasePdf;
       return value >= startDate && value <= endDate;
     }
 
+    function isDateInRange(value, startDate, endDate) {
+      if (!value) return false;
+      return value >= startDate && value <= endDate;
+    }
+
     function getClosedVatDeclarationForDate(value) {
       if (!value || !data.vat || !Array.isArray(data.vat.declarations)) return null;
-      return data.vat.declarations.find(dec =>
-        dec && dec.closed && isDateInRange(value, dec.startDate || getQuarterBounds(dec.year, dec.quarter).start, dec.endDate || getQuarterBounds(dec.year, dec.quarter).end)
-      ) || null;
+      return data.vat.declarations.find(dec => {
+        if (!dec || !dec.closed) return false;
+        const bounds = getQuarterBounds(dec.year, dec.quarter);
+        return isDateInRange(value, dec.startDate || bounds.start, dec.endDate || bounds.end);
+      }) || null;
     }
 
     function getVatLockMessage(dec) {
       return `Cette ligne appartient à la période TVA ${quarterLabel(dec.year, dec.quarter)} clôturée. Décoche « Clôturé » dans l’onglet TVA pour modifier les ventes ou achats de cette période.`;
-    }
-
-    function isAccountingRowLocked(row) {
-      return !!getClosedVatDeclarationForDate(row?.date || '');
     }
 
     function updateAccountingRowField(collection, index, field, value, options = {}) {
@@ -2562,27 +2541,9 @@ window.deletePurchasePdf = deletePurchasePdf;
         alert(getVatLockMessage(lockedDec));
         return;
       }
-      deleteRow(collection, index);
-    }
-
-    function getVatSituationText(dec, computed, outstanding) {
-      const parts = [];
-      if (computed.dueAmount > 0) {
-        if (dec.paid && outstanding <= 0.009) {
-          parts.push(`TVA payée : ${money(toNumber(dec.paymentAmount) || computed.dueAmount)}`);
-        } else if (dec.paid && outstanding > 0.009) {
-          parts.push(`TVA partiellement payée : ${money(dec.paymentAmount)} / solde ${money(outstanding)}`);
-        } else {
-          parts.push(`TVA à payer : ${money(computed.dueAmount)}`);
-        }
-      }
-      if (computed.creditAmount > 0) {
-        parts.push(dec.reimbursementRequested
-          ? `Crédit TVA avec remboursement demandé : ${money(computed.creditAmount)}`
-          : `Crédit TVA à reporter : ${money(computed.creditAmount)}`);
-      }
-      if (!parts.length) parts.push('TVA équilibrée');
-      return parts.join(' · ');
+      if (!confirm('Supprimer cette ligne ?')) return;
+      data[collection].splice(index, 1);
+      saveData(false);
     }
 
     function getPeriodSales(startDate, endDate) {
@@ -2662,6 +2623,26 @@ window.deletePurchasePdf = deletePurchasePdf;
         dueAmount: boxes['71'],
         creditAmount: boxes['72']
       };
+    }
+
+    function getVatSituationText(dec, computed, outstanding) {
+      const parts = [];
+      if (computed.dueAmount > 0) {
+        if (dec.paid && outstanding <= 0.009) {
+          parts.push(`TVA payée : ${money(toNumber(dec.paymentAmount) || computed.dueAmount)}`);
+        } else if (dec.paid && outstanding > 0.009) {
+          parts.push(`TVA partiellement payée : ${money(dec.paymentAmount)} / solde ${money(outstanding)}`);
+        } else {
+          parts.push(`TVA à payer : ${money(computed.dueAmount)}`);
+        }
+      }
+      if (computed.creditAmount > 0) {
+        parts.push(dec.reimbursementRequested
+          ? `Crédit TVA avec remboursement demandé : ${money(computed.creditAmount)}`
+          : `Crédit TVA à reporter : ${money(computed.creditAmount)}`);
+      }
+      if (!parts.length) parts.push('TVA équilibrée');
+      return parts.join(' · ');
     }
 
     function computeVatLedger() {
@@ -2872,6 +2853,10 @@ window.deletePurchasePdf = deletePurchasePdf;
     }
 
     function deleteRow(key, index) {
+      if ((key === 'sales' || key === 'purchases') && getClosedVatDeclarationForDate(data[key]?.[index]?.date || '')) {
+        alert(getVatLockMessage(getClosedVatDeclarationForDate(data[key]?.[index]?.date || '')));
+        return;
+      }
       if (!confirm('Supprimer cette ligne ?')) return;
       data[key].splice(index, 1);
       saveData(false);
@@ -2950,9 +2935,9 @@ function renderSales() {
     title: 'Journal des ventes',
     hint: '',
     addLabel: 'Ajouter une vente',
-    onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0 })`,
+    onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0, documentType: 'invoice', documentStatus: 'sent' })`,
     tableAttrs: `class="table-sales"`,
-    headers: ['Date', 'Client', 'N° Facture', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
+    headers: ['Date', 'Client', 'N° Facture', 'Type', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
     rows: data.sales.map((row, i) => {
       const hasInvoiceNumber = String(row.invoiceNumber || '').trim();
       const invoiceButton = hasInvoiceNumber
@@ -2966,6 +2951,7 @@ function renderSales() {
     <td><input type="date" value="${escapeAttr(row.date)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'date', this.value, { sort: true })"></td>
     <td><input value="${escapeAttr(row.client)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'client', this.value)"></td>
     <td><input value="${escapeAttr(row.invoiceNumber || '')}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'invoiceNumber', this.value)"></td>
+    <td>${escapeHtml(getInvoiceImportTypeLabel(row))}</td>
     <td><input type="number" step="0.01" value="${num(row.rate)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'rate', this.value, { type: 'number' })"></td>
     <td><input type="number" step="0.01" value="${num(row.tvac)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'tvac', this.value, { type: 'number' })"></td>
     <td>${money(rowNetFromTvac(row.tvac, row.rate))}</td>
@@ -3030,24 +3016,21 @@ function renderSales() {
             <tbody>
               ${data.purchases.map((row, i) => {
                 const linkedPdf = getPurchasePdfFileById(row.pdfFileId) || (row.pdfFileId ? { id: row.pdfFileId, name: row.pdfFileName || 'PDF lié' } : null);
-                const lockedDec = getClosedVatDeclarationForDate(row.date || '');
-                const locked = !!lockedDec;
-                const lockAttr = locked ? 'disabled title="Période TVA clôturée"' : '';
                 return `
-                <tr ${locked ? 'title="Période TVA clôturée : ligne verrouillée"' : ''}>
-                  <td><input type="date" value="${escapeAttr(row.date)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'date', this.value, { sort: true })"></td>
-                  <td><input value="${escapeAttr(row.supplier)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'supplier', this.value)"></td>
-                  <td><input value="${escapeAttr(row.invoiceNumber || '')}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'invoiceNumber', this.value)"></td>
+                <tr>
+                  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.purchases[${i}].date=this.value; sortByDate(data.purchases); saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.supplier)}" onchange="data.purchases[${i}].supplier=this.value; saveData(false)"></td>
+                  <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.purchases[${i}].invoiceNumber=this.value; saveData(false)"></td>
                   <td>
-                    <select ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'category', this.value)">
+                    <select onchange="data.purchases[${i}].category=this.value; saveData(false)">
                       <option value="marchandise" ${row.category === 'marchandise' ? 'selected' : ''}>Marchandise</option>
                       <option value="frais_generaux" ${(row.category || 'frais_generaux') === 'frais_generaux' ? 'selected' : ''}>Frais généraux</option>
                     </select>
                   </td>
-                  <td><input type="number" step="0.01" value="${num(row.rate)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'rate', this.value, { type: 'number' })"></td>
-                  <td><input type="number" step="0.01" value="${num(row.htva)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'htva', this.value, { type: 'number' })"></td>
+                  <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.purchases[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.htva)}" onchange="data.purchases[${i}].htva=parseFloat(this.value)||0; saveData(false)"></td>
                   <td>
-                    <select ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'deductible', this.value, { type: 'boolean' })">
+                    <select onchange="data.purchases[${i}].deductible=this.value==='true'; saveData(false)">
                       <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
                       <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
                     </select>
@@ -3056,11 +3039,11 @@ function renderSales() {
                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
                   <td>
                     <div class="inline-actions">
-                      <button type="button" ${locked ? 'disabled' : ''} onclick="pickPurchasePdf(${i})">Ajouter</button>
+                      <button type="button" onclick="pickPurchasePdf(${i})">Ajouter</button>
                       ${linkedPdf ? `<button type="button" onclick='openPurchasePdf(${JSON.stringify(linkedPdf.id)})'>Voir</button>` : '<span class="hint">—</span>'}
                     </div>
                   </td>
-                  <td><button class="danger" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('purchases', ${i})">Suppr.</button></td>
+                  <td><button class="danger" onclick="deleteRow('purchases', ${i})">Suppr.</button></td>
                 </tr>
               `}).join('')}
             </tbody>
@@ -3411,17 +3394,14 @@ function renderSales() {
         const isExpanded = expandedVatDeclarationId === dec.id;
         const isClosed = !!dec.closed;
         const disableAttr = isClosed ? 'disabled' : '';
-        const netLabel = getVatSituationText(dec, c, row.outstanding);
+        const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
         const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
         const statusBadge = isClosed
           ? '<span class="vat-pill success">Clôturé</span>'
           : (dec.filed ? '<span class="vat-pill">Déclarée</span>' : '<span class="vat-pill muted">À déclarer</span>');
         const paymentBadge = dec.paid
           ? '<span class="vat-pill success">Payée</span>'
-          : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Aucun paiement dû</span>');
-        const creditBadge = c.creditAmount > 0
-          ? (dec.reimbursementRequested ? '<span class="vat-pill success">Remboursement demandé</span>' : '<span class="vat-pill">Crédit à reporter</span>')
-          : '';
+          : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Non payée</span>');
         return `
                 <div class="card vat-declaration-card compact">
                   <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${escapeAttr(dec.id)}')">
@@ -3431,7 +3411,6 @@ function renderSales() {
                       <div class="vat-summary-badges">
                         ${statusBadge}
                         ${paymentBadge}
-                        ${creditBadge}
                         <span class="vat-pill muted">${c.salesCount} vente(s)</span>
                         <span class="vat-pill muted">${c.purchaseCount} achat(s)</span>
                       </div>
@@ -3492,7 +3471,6 @@ function renderSales() {
                               <tr><td>Crédit reporté période précédente</td><td>${money(c.previousCredit)}</td></tr>
                               <tr><td>Solde déclaration (grille 71)</td><td>${money(c.boxes['71'])}</td></tr>
                               <tr><td>Crédit à reporter (grille 72)</td><td>${money(c.boxes['72'])}</td></tr>
-                              <tr><td>Situation TVA</td><td>${escapeHtml(getVatSituationText(dec, c, row.outstanding))}</td></tr>
                               <tr><td>Reste à payer</td><td class="${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${money(row.outstanding)}</td></tr>
                               <tr><td>Lignes ventes prises en compte</td><td>${c.salesCount}</td></tr>
                               <tr><td>Lignes achats prises en compte</td><td>${c.purchaseCount}</td></tr>
@@ -4080,26 +4058,80 @@ function renderSales() {
         date: String(row?.date || ''),
         client: String(row?.client || ''),
         invoiceNumber: String(row?.invoiceNumber || ''),
+        linkedInvoiceNumber: String(row?.linkedInvoiceNumber || ''),
+        documentStatus: String(row?.documentStatus || 'sent'),
+        documentType: String(row?.documentType || 'invoice'),
         description: String(row?.description || ''),
         rate: parseFloat(row?.rate) || 0,
         tvac: Math.round(((parseFloat(row?.tvac) || 0) + Number.EPSILON) * 100) / 100
       };
     }
 
-    async function importInvoiceSalesRowsFromPortal(rows) {
-      const incomingRows = (Array.isArray(rows) ? rows : [])
+    function getInvoiceImportTypeLabel(row) {
+      if (row.documentStatus === 'cancelled') return 'Annulée';
+      if (row.documentType === 'credit_note') return 'Note de crédit';
+      return 'Facture';
+    }
+
+    async function importInvoiceSalesRowsFromPortal(payloadOrRows) {
+      const payload = Array.isArray(payloadOrRows)
+        ? { action: 'upsert', rows: payloadOrRows }
+        : (payloadOrRows || {});
+
+      const action = String(payload.action || 'upsert');
+      const invoiceNumber = String(payload.invoiceNumber || '').trim();
+
+      const rawRows = Array.isArray(payload.rows) ? payload.rows : [];
+      const incomingRows = rawRows
         .map(normalizeInvoiceImportRow)
         .filter(row => row.tvac !== 0 || row.description || row.invoiceNumber || row.client);
+
+      const invoiceNumbers = [...new Set([
+        invoiceNumber,
+        ...incomingRows.map(row => row.invoiceNumber)
+      ].filter(Boolean))];
+
+      if (!invoiceNumbers.length) {
+        return { ok: false, count: 0, message: 'Aucun numéro de facture valide à traiter.' };
+      }
+
+      const existingRows = data.sales.filter(row => invoiceNumbers.includes(String(row.invoiceNumber || '')));
+      const lockedExisting = existingRows.find(row => getClosedVatDeclarationForDate(row.date || ''));
+      if (lockedExisting) {
+        const dec = getClosedVatDeclarationForDate(lockedExisting.date || '');
+        return { ok: false, count: 0, message: getVatLockMessage(dec) };
+      }
+
+      if (action === 'cancel') {
+        const before = data.sales.length;
+        data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
+        const removed = before - data.sales.length;
+        sortByDate(data.sales);
+        activePage = 'sales';
+        await saveData(false);
+        if (googleAccessToken) await saveCurrentYearJsonToDrive(false);
+        render();
+
+        return {
+          ok: true,
+          count: removed,
+          message: removed
+            ? `Facture annulée : ${removed} ligne(s) retirée(s) du journal des ventes.`
+            : 'Facture annulée : aucune ligne existante à retirer du journal des ventes.'
+        };
+      }
 
       if (!incomingRows.length) {
         return { ok: false, count: 0, message: 'Aucune donnée de facture valide à importer.' };
       }
 
-      const invoiceNumbers = [...new Set(incomingRows.map(row => row.invoiceNumber).filter(Boolean))];
-      if (invoiceNumbers.length) {
-        data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
+      const lockedIncoming = incomingRows.find(row => getClosedVatDeclarationForDate(row.date || ''));
+      if (lockedIncoming) {
+        const dec = getClosedVatDeclarationForDate(lockedIncoming.date || '');
+        return { ok: false, count: 0, message: getVatLockMessage(dec) };
       }
 
+      data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
       data.sales.push(...incomingRows);
       sortByDate(data.sales);
       activePage = 'sales';
@@ -4107,11 +4139,12 @@ function renderSales() {
       if (googleAccessToken) await saveCurrentYearJsonToDrive(false);
       render();
 
-      const replacedText = invoiceNumbers.length ? ' Les anciennes lignes avec le même N° facture ont été remplacées.' : '';
+      const hasCreditNote = incomingRows.some(row => row.documentType === 'credit_note');
+      const replacedText = invoiceNumbers.length ? ' Les anciennes lignes avec le même N° document ont été remplacées.' : '';
       return {
         ok: true,
         count: incomingRows.length,
-        message: incomingRows.length + ' ligne(s) ajoutée(s) dans le journal des ventes.' + replacedText
+        message: incomingRows.length + (hasCreditNote ? ' ligne(s) de note de crédit ajoutée(s) dans le journal des ventes.' : ' ligne(s) ajoutée(s) dans le journal des ventes.') + replacedText
       };
     }
 
