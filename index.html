@@ -612,11 +612,11 @@
           </div>
 
           <div id="panel-devis" class="tab-panel active">
-            <iframe id="devisFrame" src="about:blank" data-src="devis-facture.html" title="Devis et Facture"></iframe>
+            <iframe id="devisFrame" src="devis-facture.html" title="Devis et Facture"></iframe>
           </div>
 
           <div id="panel-compta" class="tab-panel">
-            <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
+            <iframe id="comptaFrame" src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
         </div>
       </div>
@@ -653,8 +653,6 @@
     const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
     const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
-    const PORTAL_ACCESS_KEY = 'bastcompta_portal_access';
-    const PORTAL_ACCESS_VALUE = 'granted';
     const TOKEN_EXPIRY_SAFETY_MS = 60 * 1000;
 
     let googleTokenClient = null;
@@ -745,41 +743,7 @@
       disconnectDriveBtn.disabled = !connected && !wasDrivePreviouslyConnected();
     }
 
-    function grantPortalAccess() {
-      try {
-        sessionStorage.setItem(PORTAL_ACCESS_KEY, PORTAL_ACCESS_VALUE);
-      } catch (error) {
-        console.warn('Impossible de mémoriser l’accès au portail.', error);
-      }
-    }
-
-    function revokePortalAccess() {
-      try {
-        sessionStorage.removeItem(PORTAL_ACCESS_KEY);
-      } catch (error) {
-        console.warn('Impossible de supprimer l’accès au portail.', error);
-      }
-    }
-
-    function loadProtectedFrames() {
-      [devisFrame, comptaFrame].forEach(frame => {
-        if (!frame) return;
-        const target = frame.dataset.src;
-        if (target && !String(frame.src || '').endsWith(target)) {
-          frame.src = target;
-        }
-      });
-    }
-
-    function unloadProtectedFrames() {
-      [devisFrame, comptaFrame].forEach(frame => {
-        if (frame) frame.src = 'about:blank';
-      });
-    }
-
     function showPortal(user) {
-      grantPortalAccess();
-      loadProtectedFrames();
       authScreen.classList.add('hidden');
       portalScreen.classList.remove('hidden');
       currentUserEl.innerHTML = '🟢 Connecté';
@@ -792,8 +756,6 @@
     }
 
     function showAuth() {
-      revokePortalAccess();
-      unloadProtectedFrames();
       portalScreen.classList.add('hidden');
       authScreen.classList.remove('hidden');
       loginForm.reset();
@@ -832,29 +794,39 @@
         return;
       }
 
-      const payload = getRows();
-      const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+      const payload = getRows() || {};
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      const action = payload.action || 'upsert';
 
-      if (!rows.length) {
-        alert(payload?.message || 'Aucune ligne de facture valide à envoyer en comptabilité.');
+      if (action !== 'cancel' && !rows.length) {
+        alert(payload.message || 'Aucune ligne de facture valide à envoyer en comptabilité.');
         return;
       }
 
       const invoiceNumber = payload.invoiceNumber || 'sans numéro';
-      const totalTvac = rows.reduce((sum, row) => sum + (Number(row.tvac) || 0), 0);
-      const totalText = totalTvac.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' });
-      const confirmText = 'Envoyer la facture ' + invoiceNumber + ' en comptabilité ?\n\n' + rows.length + ' ligne(s) de vente seront créée(s) ou remplacée(s).\nTotal TVAC : ' + totalText;
+      const docType = payload.documentType === 'credit_note'
+        ? 'note de crédit'
+        : (action === 'cancel' ? 'annulation de facture' : 'facture');
+
+      let confirmText = '';
+      if (action === 'cancel') {
+        confirmText = 'Traiter l’annulation de la facture ' + invoiceNumber + ' en comptabilité ?\n\nLes lignes existantes avec ce numéro seront retirées, sauf si la période TVA est clôturée.';
+      } else {
+        const totalTvac = rows.reduce((sum, row) => sum + (Number(row.tvac) || 0), 0);
+        const totalText = totalTvac.toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' });
+        confirmText = 'Envoyer la ' + docType + ' ' + invoiceNumber + ' en comptabilité ?\n\n' + rows.length + ' ligne(s) de vente seront créée(s) ou remplacée(s).\nTotal TVAC : ' + totalText;
+      }
 
       if (!confirm(confirmText)) return;
 
-      const result = await importRows(rows);
+      const result = await importRows(payload);
       switchMainTab('compta');
 
       const openSales = getFrameApi(comptaFrame, 'goToPage');
       if (openSales) openSales('sales');
 
       setTimeout(() => resizeIframeToContent(comptaFrame), 100);
-      alert(result?.message || 'Facture envoyée en comptabilité.');
+      alert(result?.message || 'Document envoyé en comptabilité.');
     }
 
 async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
@@ -1172,8 +1144,6 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
     logoutBtn.addEventListener('click', async () => {
       try {
-        revokePortalAccess();
-        unloadProtectedFrames();
         disconnectGoogleDrive(true);
         await signOut(auth);
       } catch (error) {
