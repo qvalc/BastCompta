@@ -1311,6 +1311,12 @@ async function loadPurchasePdfDriveFiles(showAlert401 = false) {
 }
 
 function pickPurchasePdf(rowIndex) {
+  const lockedDec = getClosedVatDeclarationForDate(data.purchases?.[rowIndex]?.date || '');
+  if (lockedDec) {
+    alert(getVatLockMessage(lockedDec));
+    return;
+  }
+
   if (!googleAccessToken) {
     alert('Connecte Google Drive depuis le portail BastCompta.');
     return;
@@ -1341,6 +1347,11 @@ async function handlePurchasePdfUpload(event) {
 
   try {
     const row = data.purchases[rowIndex] || {};
+    const lockedDec = getClosedVatDeclarationForDate(row.date || '');
+    if (lockedDec) {
+      alert(getVatLockMessage(lockedDec));
+      return;
+    }
     const fileName = getPurchasePdfFileName(row, file.name);
     const metadata = { name: fileName, parents: ['appDataFolder'] };
 
@@ -2425,6 +2436,10 @@ window.deletePurchasePdf = deletePurchasePdf;
           if (typeof dec.manualBoxes[code] === 'undefined') dec.manualBoxes[code] = 0;
         });
         if (typeof dec.closed === 'undefined') dec.closed = false;
+        if (typeof dec.filed === 'undefined') dec.filed = false;
+        if (typeof dec.paid === 'undefined') dec.paid = false;
+        if (typeof dec.paymentAmount === 'undefined') dec.paymentAmount = 0;
+        if (typeof dec.reimbursementRequested === 'undefined') dec.reimbursementRequested = false;
         const bounds = getQuarterBounds(dec.year, dec.quarter);
         dec.startDate = bounds.start;
         dec.endDate = bounds.end;
@@ -2493,11 +2508,6 @@ window.deletePurchasePdf = deletePurchasePdf;
         dec.showExtraCodes = false;
       }
       saveData(false);
-    }
-
-    function isDateInRange(value, startDate, endDate) {
-      if (!value) return false;
-      return value >= startDate && value <= endDate;
     }
 
     function isDateInRange(value, startDate, endDate) {
@@ -3033,21 +3043,24 @@ function renderSales() {
             <tbody>
               ${data.purchases.map((row, i) => {
                 const linkedPdf = getPurchasePdfFileById(row.pdfFileId) || (row.pdfFileId ? { id: row.pdfFileId, name: row.pdfFileName || 'PDF lié' } : null);
+                const lockedDec = getClosedVatDeclarationForDate(row.date || '');
+                const locked = !!lockedDec;
+                const lockAttr = locked ? 'disabled title="Période TVA clôturée"' : '';
                 return `
-                <tr>
-                  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.purchases[${i}].date=this.value; sortByDate(data.purchases); saveData(false)"></td>
-                  <td><input value="${escapeAttr(row.supplier)}" onchange="data.purchases[${i}].supplier=this.value; saveData(false)"></td>
-                  <td><input value="${escapeAttr(row.invoiceNumber || '')}" onchange="data.purchases[${i}].invoiceNumber=this.value; saveData(false)"></td>
+                <tr ${locked ? 'title="Période TVA clôturée : ligne verrouillée"' : ''}>
+                  <td><input type="date" value="${escapeAttr(row.date)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'date', this.value, { sort: true })"></td>
+                  <td><input value="${escapeAttr(row.supplier)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'supplier', this.value)"></td>
+                  <td><input value="${escapeAttr(row.invoiceNumber || '')}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'invoiceNumber', this.value)"></td>
                   <td>
-                    <select onchange="data.purchases[${i}].category=this.value; saveData(false)">
+                    <select ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'category', this.value)">
                       <option value="marchandise" ${row.category === 'marchandise' ? 'selected' : ''}>Marchandise</option>
                       <option value="frais_generaux" ${(row.category || 'frais_generaux') === 'frais_generaux' ? 'selected' : ''}>Frais généraux</option>
                     </select>
                   </td>
-                  <td><input type="number" step="0.01" value="${num(row.rate)}" onchange="data.purchases[${i}].rate=parseFloat(this.value)||0; saveData(false)"></td>
-                  <td><input type="number" step="0.01" value="${num(row.htva)}" onchange="data.purchases[${i}].htva=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.rate)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'rate', this.value, { type: 'number' })"></td>
+                  <td><input type="number" step="0.01" value="${num(row.htva)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'htva', this.value, { type: 'number' })"></td>
                   <td>
-                    <select onchange="data.purchases[${i}].deductible=this.value==='true'; saveData(false)">
+                    <select ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'deductible', this.value, { type: 'boolean' })">
                       <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
                       <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
                     </select>
@@ -3056,11 +3069,11 @@ function renderSales() {
                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
                   <td>
                     <div class="inline-actions">
-                      <button type="button" onclick="pickPurchasePdf(${i})">Ajouter</button>
+                      <button type="button" ${locked ? 'disabled' : ''} onclick="pickPurchasePdf(${i})">Ajouter</button>
                       ${linkedPdf ? `<button type="button" onclick='openPurchasePdf(${JSON.stringify(linkedPdf.id)})'>Voir</button>` : '<span class="hint">—</span>'}
                     </div>
                   </td>
-                  <td><button class="danger" onclick="deleteRow('purchases', ${i})">Suppr.</button></td>
+                  <td><button class="danger" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('purchases', ${i})">Suppr.</button></td>
                 </tr>
               `}).join('')}
             </tbody>
@@ -3416,15 +3429,27 @@ function renderSales() {
         const statusBadge = isClosed
           ? '<span class="vat-pill success">Clôturé</span>'
           : (dec.filed ? '<span class="vat-pill">Déclarée</span>' : '<span class="vat-pill muted">À déclarer</span>');
-        const paymentBadge = dec.paid
-          ? '<span class="vat-pill success">Payée</span>'
-          : (row.outstanding > 0.009 ? '<span class="vat-pill danger">Paiement ouvert</span>' : '<span class="vat-pill muted">Non payée</span>');
+        const paymentBadge = (() => {
+          if (c.dueAmount > 0) {
+            if (dec.paid && row.outstanding <= 0.009) return '<span class="vat-pill success">Payée</span>';
+            if (dec.paid && row.outstanding > 0.009) return '<span class="vat-pill danger">Solde TVA restant</span>';
+            return '<span class="vat-pill danger">TVA à payer</span>';
+          }
+          if (c.creditAmount > 0) {
+            return dec.reimbursementRequested
+              ? '<span class="vat-pill success">Remboursement demandé</span>'
+              : '<span class="vat-pill">Crédit à reporter</span>';
+          }
+          return '<span class="vat-pill muted">TVA équilibrée</span>';
+        })();
+        const situationText = getVatSituationText(dec, c, row.outstanding);
         return `
                 <div class="card vat-declaration-card compact">
                   <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${escapeAttr(dec.id)}')">
                     <div class="vat-summary-main">
                       <div class="vat-summary-title">${escapeHtml(quarterLabel(dec.year, dec.quarter))}</div>
                       <div class="hint">Période : ${printableDate(c.startDate)} au ${printableDate(c.endDate)} · Échéance : ${dueDateLabel}</div>
+                      <div class="hint"><strong>${escapeHtml(situationText)}</strong></div>
                       <div class="vat-summary-badges">
                         ${statusBadge}
                         ${paymentBadge}
