@@ -3424,7 +3424,27 @@ function renderSales() {
         const isExpanded = expandedVatDeclarationId === dec.id;
         const isClosed = !!dec.closed;
         const disableAttr = isClosed ? 'disabled' : '';
-        const netLabel = c.dueAmount > 0 ? `À payer : ${money(c.dueAmount)}` : `Crédit : ${money(c.creditAmount)}`;
+        const netLabel = (() => {
+          if (c.dueAmount > 0) {
+            if (dec.paid && row.outstanding <= 0.009) {
+              return `Payé : ${money(toNumber(dec.paymentAmount) || c.dueAmount)}`;
+            }
+            if (dec.paid && row.outstanding > 0.009) {
+              return `Solde restant : ${money(row.outstanding)}`;
+            }
+            return `À payer : ${money(c.dueAmount)}`;
+          }
+          if (c.creditAmount > 0) {
+            return dec.reimbursementRequested
+              ? `Remboursement demandé : ${money(c.creditAmount)}`
+              : `Crédit à reporter : ${money(c.creditAmount)}`;
+          }
+          return 'TVA équilibrée';
+        })();
+        const netLabelClass = (() => {
+          if (c.dueAmount > 0 && (!dec.paid || row.outstanding > 0.009)) return 'status-bad';
+          return 'status-good';
+        })();
         const dueDateLabel = dec.dueDate ? printableDate(dec.dueDate) : '—';
         const statusBadge = isClosed
           ? '<span class="vat-pill success">Clôturé</span>'
@@ -3457,7 +3477,7 @@ function renderSales() {
                         <span class="vat-pill muted">${c.purchaseCount} achat(s)</span>
                       </div>
                     </div>
-                    <div class="vat-summary-amount ${row.outstanding > 0.009 ? 'status-bad' : 'status-good'}">${netLabel}</div>
+                    <div class="vat-summary-amount ${netLabelClass}">${netLabel}</div>
                   </div>
 
                   <div class="vat-summary-details">
