@@ -821,6 +821,34 @@
       }
     }
 
+
+
+    body.backup-pdf-capture .no-print {
+      display: none !important;
+    }
+
+    body.backup-pdf-capture input,
+    body.backup-pdf-capture textarea,
+    body.backup-pdf-capture select {
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+    }
+
+    body.backup-pdf-capture textarea {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      resize: none !important;
+    }
+
+    body.backup-pdf-capture .sheet {
+      border: none !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+
     @media print {
       body {
         background: #fff;
@@ -3409,6 +3437,59 @@ window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive
       if (active) active.classList.remove('print-include');
     }
 
+
+
+    let bastComptaBackupPdfState = null;
+
+    function cloneForBackup(value) {
+      try {
+        return structuredClone(value);
+      } catch (error) {
+        return JSON.parse(JSON.stringify(value || null));
+      }
+    }
+
+    async function prepareBastComptaDocumentForBackupPdf(payload, docKey) {
+      if (!['quote', 'invoice', 'reminder'].includes(docKey)) return false;
+
+      if (!bastComptaBackupPdfState) {
+        bastComptaBackupPdfState = {
+          data: cloneForBackup(data),
+          activePage
+        };
+      }
+
+      data = mergeDeep(structuredClone(defaultData), cloneForBackup(payload || {}));
+      activePage = docKey;
+      render();
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      document.querySelectorAll('textarea').forEach(textarea => {
+        try { autoResize(textarea); } catch {}
+      });
+
+      return true;
+    }
+
+    async function restoreBastComptaAfterBackupPdf() {
+      if (!bastComptaBackupPdfState) return true;
+      data = cloneForBackup(bastComptaBackupPdfState.data);
+      activePage = bastComptaBackupPdfState.activePage || 'quote';
+      bastComptaBackupPdfState = null;
+      render();
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return true;
+    }
+
+    function getBastComptaCrmClientsForBackup() {
+      return getClients().map(client => ({ ...client }));
+    }
+
+    window.prepareBastComptaDocumentForBackupPdf = prepareBastComptaDocumentForBackupPdf;
+    window.restoreBastComptaAfterBackupPdf = restoreBastComptaAfterBackupPdf;
+    window.getBastComptaCrmClientsForBackup = getBastComptaCrmClientsForBackup;
+
     window.addEventListener('message', async (event) => {
       if (event.origin !== window.location.origin) return;
 
@@ -3942,8 +4023,12 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
             </div>
 
             <div class="simple-box no-print" style="margin-bottom:16px; line-height:1.7;">
-              <strong>Sauvegarde et restauration complètes</strong><br>
-              Les sauvegardes complètes ZIP, les PDF, le manifest.json et la restauration Google Drive se font maintenant depuis le portail BastCompta.
+              <strong>Sauvegarde complète de l'application</strong><br>
+              Ces boutons importent ou exportent l'intégralité des données locales : devis, facture, rappel, CRM, société et paramètres email.
+              <div class="inline-actions" style="margin-top:12px;">
+                <button type="button" onclick="exportDataLocal()">Sauvegarder toute l'application</button>
+                <button type="button" onclick="importDataLocal()">Restaurer une sauvegarde complète</button>
+              </div>
             </div>
 
             <div class="settings-grid">
