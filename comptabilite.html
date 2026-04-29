@@ -1617,12 +1617,11 @@
       nextData.investments = structuredClone(Array.isArray(data.investments) ? data.investments : []);
 
       nextData.settings = preservedSettings;
-      const previousRetainedEarnings = toNumber(preservedSettings.retainedEarnings);
       const currentYearProfit = toNumber(t.estimatedProfit);
 
-      nextData.settings.retainedEarnings = round2(
-        previousRetainedEarnings + Math.max(0, currentYearProfit)
-      );
+      nextData.settings.retainedEarnings = currentYearProfit > 0
+        ? round2(currentYearProfit)
+        : 0;
       nextData.settings.vatCarryover = Math.max(0, round2(toNumber(t.receivableVat)));
 
       nextData.purchases = [];
