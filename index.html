@@ -1221,22 +1221,38 @@
 
     async function makeRenderedDocumentPdfBlob(parsed, docKey) {
       if (!window.html2canvas || !window.jspdf?.jsPDF) return null;
+
+      // Important : html2canvas ne capture pas correctement une iframe cachée.
+      // Comme la sauvegarde se lance depuis l’onglet Sauvegarde, on affiche temporairement
+      // l’onglet Devis & Facture avant de capturer le document PDF.
+      const previousTab = document.querySelector(".main-tab.active")?.dataset.mainTab || "backup";
+      if (previousTab !== "devis") {
+        switchMainTab("devis");
+        await new Promise(resolve => setTimeout(resolve, 450));
+      }
+
       await waitForFrameReady(devisFrame);
-      const prepare = getFrameApi(devisFrame, 'prepareBastComptaDocumentForBackupPdf');
-      const restore = getFrameApi(devisFrame, 'restoreBastComptaAfterBackupPdf');
-      if (!prepare) return null;
+      const prepare = getFrameApi(devisFrame, "prepareBastComptaDocumentForBackupPdf");
+      const restore = getFrameApi(devisFrame, "restoreBastComptaAfterBackupPdf");
+      if (!prepare) {
+        if (previousTab !== "devis") switchMainTab(previousTab);
+        return null;
+      }
 
       try {
         await prepare(parsed, docKey);
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 350));
 
         const doc = devisFrame.contentDocument;
         const body = doc?.body;
-        if (body) body.classList.add('backup-pdf-capture');
+        if (body) body.classList.add("backup-pdf-capture");
 
-        const page = doc?.querySelector('.page[data-page="' + docKey + '"].active') || doc?.querySelector('.page.active');
-        const sheet = page?.querySelector('.sheet');
+        const page = doc?.querySelector(".page[data-page=\"" + docKey + "\"].active") || doc?.querySelector(".page.active");
+        const sheet = page?.querySelector(".sheet");
         if (!sheet) return null;
+
+        sheet.scrollIntoView({ block: "start", inline: "nearest" });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
         const canvas = await window.html2canvas(sheet, {
           scale: 2,
@@ -1283,6 +1299,9 @@
         try { devisFrame.contentDocument?.body?.classList.remove('backup-pdf-capture'); } catch { }
         if (restore) {
           try { await restore(); } catch (error) { console.warn('Restauration écran devis après PDF impossible.', error); }
+        }
+        if (previousTab !== 'devis') {
+          switchMainTab(previousTab);
         }
       }
     }
