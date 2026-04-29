@@ -479,100 +479,12 @@
         font-size: 24px;
       }
     }
-
-    .backup-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.52);
-      backdrop-filter: blur(4px);
-      z-index: 9999;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-
-    .backup-overlay.active {
-      display: flex;
-    }
-
-    .backup-overlay-card {
-      width: min(520px, 100%);
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 26px;
-      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
-      padding: 28px;
-      text-align: center;
-    }
-
-    .backup-spinner {
-      width: 44px;
-      height: 44px;
-      margin: 0 auto 16px;
-      border: 4px solid #dbeafe;
-      border-top-color: var(--primary);
-      border-radius: 50%;
-      animation: backupSpin 0.9s linear infinite;
-    }
-
-    @keyframes backupSpin {
-      to { transform: rotate(360deg); }
-    }
-
-    .backup-overlay-card h3 {
-      margin: 0 0 8px;
-      font-size: 24px;
-    }
-
-    .backup-overlay-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.6;
-      font-weight: 700;
-    }
-
-    .backup-actions-panel {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(220px, 1fr));
-      gap: 18px;
-      padding: 24px;
-      width: 100%;
-    }
-
-    .backup-action-card {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      padding: 22px;
-      box-shadow: var(--shadow-soft);
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
-
-    .backup-action-card h3 {
-      margin: 0;
-      font-size: 22px;
-    }
-
-    .backup-action-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    @media (max-width: 700px) {
-      .backup-actions-panel { grid-template-columns: 1fr; }
-    }
-
   </style>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 
 <body>
@@ -693,8 +605,10 @@
         <div class="main-tabs">
           <button class="main-tab active" data-main-tab="devis" type="button">Devis &amp; Facture</button>
           <button class="main-tab" data-main-tab="compta" type="button">Comptabilité</button>
-          <button class="main-tab" data-main-tab="backup" type="button">Sauvegarde</button>
-          <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
+          <button id="sendInvoiceToAccountingBtn" class="primary" type="button">Envoyer la facture en comptabilité</button>
+          <button id="fullBackupBtn" class="primary" type="button">Sauvegarde complète ZIP</button>
+          <button id="fullRestoreBtn" class="ghost" type="button">Restaurer une sauvegarde</button>
+          <input id="fullRestoreInput" type="file" accept=".zip,application/zip" class="hidden">
         </div>
 
         <div class="workspace">
@@ -709,32 +623,9 @@
           <div id="panel-compta" class="tab-panel">
             <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
-
-          <div id="panel-backup" class="tab-panel">
-            <div class="backup-actions-panel">
-              <div class="backup-action-card">
-                <h3>Sauvegarde complète ZIP</h3>
-                <p>Crée une archive complète sur ce PC : application, CRM, clients, devis, factures, rappels, PDF fidèles, comptabilité et fichiers Drive de l’application.</p>
-                <button id="fullBackupBtn" class="primary" type="button">Créer la sauvegarde ZIP</button>
-              </div>
-              <div class="backup-action-card">
-                <h3>Restaurer une sauvegarde</h3>
-                <p>Recharge une archive BastCompta complète et propose aussi la restauration Google Drive de l’application.</p>
-                <button id="fullRestoreBtn" class="ghost" type="button">Choisir un fichier ZIP</button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </section>
-  </div>
-
-  <div id="backupOverlay" class="backup-overlay" aria-live="polite" aria-busy="true">
-    <div class="backup-overlay-card">
-      <div class="backup-spinner"></div>
-      <h3 id="backupOverlayTitle">Sauvegarde en cours</h3>
-      <p id="backupOverlayText">Veuillez patienter…</p>
-    </div>
   </div>
 
   <script type="module">
@@ -787,12 +678,10 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const connectDriveBtn = document.getElementById('connectDriveBtn');
     const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
+    const sendInvoiceToAccountingBtn = document.getElementById('sendInvoiceToAccountingBtn');
     const fullBackupBtn = document.getElementById('fullBackupBtn');
     const fullRestoreBtn = document.getElementById('fullRestoreBtn');
     const fullRestoreInput = document.getElementById('fullRestoreInput');
-    const backupOverlay = document.getElementById('backupOverlay');
-    const backupOverlayTitle = document.getElementById('backupOverlayTitle');
-    const backupOverlayText = document.getElementById('backupOverlayText');
     const devisFrame = document.getElementById('devisFrame');
     const comptaFrame = document.getElementById('comptaFrame');
     const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
@@ -818,7 +707,6 @@
       mainTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.mainTab === tabName));
       document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
       document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
-      document.getElementById('panel-backup').classList.toggle('active', tabName === 'backup');
     }
 
     function humanizeAuthError(error) {
@@ -999,9 +887,6 @@
       alert(result?.message || 'Document envoyé en comptabilité.');
     }
 
-window.sendInvoiceToAccounting = sendInvoiceToAccounting;
-window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, { sendInvoiceToAccounting });
-
 async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
   switchMainTab('devis');
 
@@ -1019,130 +904,15 @@ async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileI
 window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
 
 
-
     const BAST_BACKUP_VERSION = 4;
     const LOCAL_DEVIS_KEY = 'devis-facture-style-vrai-document';
     const LOCAL_COMPTA_KEY = 'comptabilite-local-v1';
 
-    function backupStatus(text, type = '') {
-      setMessage(text || '', type);
-      if (backupOverlayText && backupOverlay?.classList.contains('active') && text) {
-        backupOverlayText.textContent = text;
-      }
-    }
-
-    function showBlockingProgress(title, text) {
-      if (backupOverlayTitle) backupOverlayTitle.textContent = title || 'Traitement en cours';
-      if (backupOverlayText) backupOverlayText.textContent = text || 'Veuillez patienter…';
-      if (backupOverlay) backupOverlay.classList.add('active');
-    }
-
-    function hideBlockingProgress() {
-      if (backupOverlay) backupOverlay.classList.remove('active');
-    }
-
-    function safeJsonParse(raw, fallback = null) {
-      try { return JSON.parse(raw); } catch { return fallback; }
-    }
-
+    function backupStatus(text, type = '') { setMessage(text || '', type); }
+    function safeJsonParse(raw, fallback = null) { try { return JSON.parse(raw); } catch { return fallback; } }
     function sanitizePathPart(value, fallback = 'Sans nom') {
-      return String(value || fallback)
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[\\/:*?"<>|#%{}~&]/g, '-')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 90) || fallback;
+      return String(value || fallback).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[\\/:*?"<>|#%{}~&]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 90) || fallback;
     }
-
-    function normalizeSearchText(value) {
-      return String(value || '')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9@.]+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    }
-
-    function nameIdentityKey(value) {
-      const tokens = normalizeSearchText(value).split(' ').filter(Boolean);
-      if (!tokens.length) return '';
-      return 'name:' + tokens.sort().join('|');
-    }
-
-    function clientKeys(client = {}) {
-      const keys = [];
-      const number = normalizeSearchText(client.clientNumber || client.number || '');
-      const email = normalizeSearchText(client.email || client.clientEmail || '');
-      const vat = normalizeSearchText(client.vat || client.clientVat || '');
-      const name = nameIdentityKey(client.name || client.clientName || client.client || '');
-      if (number) keys.push('number:' + number);
-      if (email) keys.push('email:' + email);
-      if (vat) keys.push('vat:' + vat);
-      if (name) keys.push(name);
-      return keys;
-    }
-
-    function buildClientRegistry(...clientLists) {
-      const byKey = new Map();
-      const clients = [];
-      const remember = (client = {}) => {
-        const name = String(client.name || client.clientName || '').trim();
-        const keys = clientKeys(client);
-        if (!name || !keys.length) return null;
-
-        let existing = null;
-        for (const key of keys) {
-          if (byKey.has(key)) {
-            existing = byKey.get(key);
-            break;
-          }
-        }
-
-        if (!existing) {
-          existing = {
-            ...client,
-            name,
-            canonicalName: name,
-            id: client.id || '',
-            email: client.email || client.clientEmail || '',
-            clientNumber: client.clientNumber || '',
-            vat: client.vat || client.clientVat || '',
-            address: client.address || ''
-          };
-          clients.push(existing);
-        } else {
-          existing.email = existing.email || client.email || client.clientEmail || '';
-          existing.clientNumber = existing.clientNumber || client.clientNumber || '';
-          existing.vat = existing.vat || client.vat || client.clientVat || '';
-          existing.address = existing.address || client.address || '';
-          existing.id = existing.id || client.id || '';
-        }
-
-        for (const key of keys) byKey.set(key, existing);
-        return existing;
-      };
-
-      clientLists.flat().filter(Boolean).forEach(remember);
-      return { byKey, clients, remember };
-    }
-
-    function resolveClientForDocument(doc = {}, registry) {
-      const candidates = [
-        { id: doc.clientId || '', name: doc.clientName || '', email: doc.clientEmail || '', clientNumber: doc.clientNumber || '', vat: doc.clientVat || '', address: doc.address || '' },
-        { name: doc.clientName || doc.client || '', email: doc.clientEmail || '', clientNumber: doc.clientNumber || '', vat: doc.clientVat || '' }
-      ];
-
-      for (const candidate of candidates) {
-        for (const key of clientKeys(candidate)) {
-          if (registry?.byKey?.has(key)) return registry.byKey.get(key);
-        }
-      }
-
-      const fallbackName = String(doc.clientName || doc.client || '').trim();
-      if (fallbackName && registry) return registry.remember({ name: fallbackName, email: doc.clientEmail || '', clientNumber: doc.clientNumber || '', vat: doc.clientVat || '', address: doc.address || '' });
-      return null;
-    }
-
     function downloadBlob(blob, fileName) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1153,421 +923,311 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       a.remove();
       URL.revokeObjectURL(url);
     }
-
     function getLocalBackupData() {
       return {
         devisFacture: safeJsonParse(localStorage.getItem(LOCAL_DEVIS_KEY), {}),
         comptabilite: safeJsonParse(localStorage.getItem(LOCAL_COMPTA_KEY), {})
       };
     }
-
-    function detectDocumentInfo(fileName, parsed, registry) {
+    function detectDocumentInfo(fileName, parsed) {
       const lower = String(fileName || '').toLowerCase();
       let docKey = '', folder = 'Autres', label = 'document';
       if (lower.startsWith('devis-')) { docKey = 'quote'; folder = 'Devis'; label = 'devis'; }
       else if (lower.startsWith('facture-')) { docKey = 'invoice'; folder = 'Factures'; label = 'facture'; }
       else if (lower.startsWith('rappel-')) { docKey = 'reminder'; folder = 'Rappels'; label = 'rappel'; }
       else if (lower.startsWith('comptabilite-') || lower.includes('comptabilite')) { folder = 'Comptabilite/Donnees'; label = 'comptabilite'; }
-
       const doc = docKey && parsed ? (parsed[docKey] || {}) : {};
-      if (docKey && doc.clientId && Array.isArray(parsed?.clients)) {
-        const found = parsed.clients.find(client => String(client.id || '') === String(doc.clientId || ''));
-        if (found && registry) registry.remember(found);
+      let clientName = doc.clientName || doc.client || '';
+      if (!clientName && doc.clientId && Array.isArray(parsed?.clients)) {
+        const found = parsed.clients.find(client => String(client.id) === String(doc.clientId));
+        clientName = found?.name || found?.clientName || '';
       }
-
-      const resolvedClient = docKey ? resolveClientForDocument(doc, registry) : null;
-      const clientName = sanitizePathPart(resolvedClient?.canonicalName || resolvedClient?.name || doc.clientName || 'Sans client');
-      const rawNumber = doc.documentNumber || String(fileName || '').replace(/\.json$/i, '');
-      return { docKey, folder, label, clientName, documentNumber: sanitizePathPart(rawNumber, 'sans-numero'), doc, resolvedClient };
+      return { docKey, folder, label, clientName: sanitizePathPart(clientName || 'Sans client'), documentNumber: sanitizePathPart(doc.documentNumber || String(fileName || '').replace(/\.json$/i, ''), 'sans-numero'), doc };
     }
-
-    function euro(value) {
-      return Number(value || 0).toLocaleString('fr-BE', { style:'currency', currency:'EUR' });
+    function euro(value) { return Number(value || 0).toLocaleString('fr-BE', { style: 'currency', currency: 'EUR' }); }
+    function getDocumentTotals(doc = {}) {
+      const rows = Array.isArray(doc.lines) ? [...doc.lines] : [];
+      if (doc.suppliesEnabled && Array.isArray(doc.suppliesLines)) rows.push(...doc.suppliesLines);
+      let ht = 0, vat = 0;
+      rows.forEach(line => { const total = Number(line.qty || 0) * Number(line.unitPrice || 0) * (1 - Number(line.discount || 0) / 100); ht += total; vat += total * Number(line.vatRate || 0) / 100; });
+      return { ht, vat, ttc: ht + vat };
     }
-
-    function makeComptaReportPdfBlob(comptaData) {
-      if (!window.jspdf?.jsPDF) return null;
-      const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4' });
-      const d = comptaData || {};
-      const sum = (arr, key) => (Array.isArray(arr) ? arr : []).reduce((s, row) => s + Number(row?.[key] || 0), 0);
-      const salesHt = sum(d.sales, 'htva'), purchasesHt = sum(d.purchases, 'htva');
-      const vatSales = sum(d.sales, 'vat'), vatPurchases = sum(d.purchases, 'vat');
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(18); pdf.text('Rapport comptable BastCompta', 14, 18);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.text('Période : ' + String(d.company?.period || new Date().getFullYear()), 14, 28);
-      let y = 42;
-      [['Ventes HTVA', salesHt], ['Achats HTVA', purchasesHt], ['TVA ventes', vatSales], ['TVA achats', vatPurchases], ['TVA nette', vatSales - vatPurchases], ['Résultat estimé', salesHt - purchasesHt]].forEach(([label, value]) => {
-        pdf.setFont('helvetica', 'bold'); pdf.text(label, 14, y);
-        pdf.setFont('helvetica', 'normal'); pdf.text(euro(value), 80, y);
-        y += 8;
-      });
-      return pdf.output('blob');
-    }
-
-    async function waitForFrameReady(frame, timeoutMs = 8000) {
-      const start = Date.now();
-      while (Date.now() - start < timeoutMs) {
-        try {
-          if (frame?.contentWindow && frame.contentDocument?.readyState === 'complete') return true;
-        } catch {}
-        await new Promise(resolve => setTimeout(resolve, 120));
-      }
-      return false;
-    }
-
     async function makeRenderedDocumentPdfBlob(parsed, docKey) {
       if (!window.html2canvas || !window.jspdf?.jsPDF) return null;
-      await waitForFrameReady(devisFrame);
-      const prepare = getFrameApi(devisFrame, 'prepareBastComptaDocumentForBackupPdf');
-      const restore = getFrameApi(devisFrame, 'restoreBastComptaAfterBackupPdf');
-      if (!prepare) return null;
+      const frame = devisFrame;
+      const frameWindow = frame?.contentWindow;
+      const frameDocument = frame?.contentDocument;
+      if (!frameWindow || !frameDocument) return null;
+
+      const previousState = {
+        data: frameWindow.data ? structuredClone(frameWindow.data) : null,
+        activePage: frameWindow.activePage || ''
+      };
+
+      const pageByDocKey = { quote: 'quote', invoice: 'invoice', reminder: 'reminder' };
+      const targetPage = pageByDocKey[docKey] || docKey;
 
       try {
-        await prepare(parsed, docKey);
-        await new Promise(resolve => setTimeout(resolve, 250));
+        if (parsed && typeof parsed === 'object') {
+          frameWindow.data = structuredClone(parsed);
+        }
+        frameWindow.activePage = targetPage;
+        if (typeof frameWindow.render === 'function') frameWindow.render();
+        await new Promise(resolve => setTimeout(resolve, 220));
 
-        const doc = devisFrame.contentDocument;
-        const body = doc?.body;
-        if (body) body.classList.add('backup-pdf-capture');
+        const page = frameDocument.querySelector('.page.active')
+          || frameDocument.querySelector('#page-' + targetPage)
+          || frameDocument.querySelector('[data-page="' + targetPage + '"]')
+          || frameDocument.body;
+        const sourceSheet = page.querySelector('.sheet') || page.querySelector('.comm-panel') || page;
+        if (!sourceSheet) return null;
 
-        const page = doc?.querySelector('.page[data-page="' + docKey + '"].active') || doc?.querySelector('.page.active');
-        const sheet = page?.querySelector('.sheet');
-        if (!sheet) return null;
-
-        const canvas = await window.html2canvas(sheet, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          windowWidth: Math.max(sheet.scrollWidth, 1100),
-          windowHeight: Math.max(sheet.scrollHeight, 1500)
+        const clone = sourceSheet.cloneNode(true);
+        clone.querySelectorAll('.no-print, button, .toolbar, .tabs').forEach(el => el.remove());
+        clone.querySelectorAll('input, textarea, select').forEach(field => {
+          const span = frameDocument.createElement('span');
+          span.className = 'backup-pdf-value';
+          let value = '';
+          if (field.tagName === 'SELECT') {
+            value = field.options?.[field.selectedIndex]?.text || field.value || '';
+          } else {
+            value = field.value || field.textContent || '';
+          }
+          span.textContent = value;
+          span.style.cssText = 'display:block;width:100%;min-height:14px;font:inherit;font-size:inherit;line-height:1.35;color:inherit;white-space:pre-wrap;overflow-wrap:anywhere;background:transparent;border:none;box-shadow:none;padding:0;margin:0;';
+          field.replaceWith(span);
         });
 
-        const pdf = new window.jspdf.jsPDF({ orientation:'portrait', unit:'pt', format:'a4' });
+        const captureWrap = frameDocument.createElement('div');
+        captureWrap.className = 'backup-pdf-capture-wrap';
+        captureWrap.style.cssText = 'position:absolute;left:-10000px;top:0;width:794px;background:#fff;color:#111827;padding:0;z-index:-1;';
+        clone.style.width = '794px';
+        clone.style.maxWidth = '794px';
+        clone.style.background = '#fff';
+        clone.style.boxShadow = 'none';
+        captureWrap.appendChild(clone);
+        frameDocument.body.appendChild(captureWrap);
+
+        const canvas = await window.html2canvas(clone, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          windowWidth: 794
+        });
+        captureWrap.remove();
+
+        const pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
         const margin = 24;
         const imgWidth = pageWidth - margin * 2;
         const imgHeight = canvas.height * imgWidth / canvas.width;
+        const usableHeight = pageHeight - margin * 2;
 
-        if (imgHeight <= pageHeight - margin * 2) {
+        if (imgHeight <= usableHeight) {
           pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', margin, margin, imgWidth, imgHeight);
         } else {
           const pageCanvas = document.createElement('canvas');
           const ctx = pageCanvas.getContext('2d');
-          const sliceHeight = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+          const sliceHeight = Math.floor(canvas.width * usableHeight / imgWidth);
           pageCanvas.width = canvas.width;
-          pageCanvas.height = sliceHeight;
-          let y = 0;
+          let rendered = 0;
           let pageIndex = 0;
-          while (y < canvas.height) {
-            const currentSliceHeight = Math.min(sliceHeight, canvas.height - y);
+          while (rendered < canvas.height) {
+            const currentSliceHeight = Math.min(sliceHeight, canvas.height - rendered);
             pageCanvas.height = currentSliceHeight;
             ctx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-            ctx.drawImage(canvas, 0, y, canvas.width, currentSliceHeight, 0, 0, canvas.width, currentSliceHeight);
+            ctx.drawImage(canvas, 0, rendered, canvas.width, currentSliceHeight, 0, 0, pageCanvas.width, currentSliceHeight);
             if (pageIndex > 0) pdf.addPage();
             const h = currentSliceHeight * imgWidth / canvas.width;
             pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.96), 'JPEG', margin, margin, imgWidth, h);
-            y += currentSliceHeight;
+            rendered += currentSliceHeight;
             pageIndex += 1;
           }
         }
 
         return pdf.output('blob');
+      } catch (error) {
+        console.warn('PDF fidèle non généré pour ' + docKey, error);
+        return null;
       } finally {
-        try { devisFrame.contentDocument?.body?.classList.remove('backup-pdf-capture'); } catch {}
-        if (restore) {
-          try { await restore(); } catch (error) { console.warn('Restauration écran devis après PDF impossible.', error); }
+        try {
+          if (previousState.data) frameWindow.data = previousState.data;
+          if (previousState.activePage) frameWindow.activePage = previousState.activePage;
+          if (typeof frameWindow.render === 'function') frameWindow.render();
+        } catch (error) {
+          console.warn('Restauration écran devis après capture PDF impossible.', error);
         }
       }
     }
-
+    function makeComptaReportPdfBlob(comptaData) {
+      if (!window.jspdf?.jsPDF) return null;
+      const pdf = new window.jspdf.jsPDF({ unit:'mm', format:'a4' }), d = comptaData || {};
+      const sum = (arr,key) => (Array.isArray(arr) ? arr : []).reduce((s,row)=>s+Number(row?.[key]||0),0);
+      const salesHt=sum(d.sales,'htva'), purchasesHt=sum(d.purchases,'htva'), vatSales=sum(d.sales,'vat'), vatPurchases=sum(d.purchases,'vat');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(18); pdf.text('Rapport comptable BastCompta',14,18); pdf.setFont('helvetica','normal'); pdf.setFontSize(11); pdf.text('Période : '+String(d.company?.period || new Date().getFullYear()),14,28);
+      let y=42; [['Ventes HTVA',salesHt],['Achats HTVA',purchasesHt],['TVA ventes',vatSales],['TVA achats',vatPurchases],['TVA nette',vatSales-vatPurchases],['Résultat estimé',salesHt-purchasesHt]].forEach(([label,value])=>{ pdf.setFont('helvetica','bold'); pdf.text(label,14,y); pdf.setFont('helvetica','normal'); pdf.text(euro(value),80,y); y+=8; });
+      return pdf.output('blob');
+    }
     async function ensureBackupLibraries() {
       if (!window.JSZip) throw new Error('La librairie ZIP n’est pas chargée. Vérifie la connexion internet puis recharge la page.');
+      if (!window.jspdf?.jsPDF) throw new Error('La librairie PDF n’est pas chargée. Vérifie la connexion internet puis recharge la page.');
+      if (!window.html2canvas) throw new Error('La librairie de capture PDF n’est pas chargée. Vérifie la connexion internet puis recharge la page.');
     }
-
     async function listAllAppDriveFiles() {
-      await ensureFreshGoogleToken(true);
-      let pageToken = null;
-      const files = [];
+      await ensureFreshGoogleToken(true); let pageToken = null; const files = [];
       do {
         const response = await gapi.client.drive.files.list({ spaces:'appDataFolder', q:'trashed=false', pageSize:1000, pageToken:pageToken || undefined, fields:'nextPageToken, files(id, name, mimeType, modifiedTime, size)' });
-        files.push(...(response.result.files || []));
-        pageToken = response.result.nextPageToken || null;
+        files.push(...(response.result.files || [])); pageToken = response.result.nextPageToken || null;
       } while (pageToken);
       return files;
     }
-
     async function downloadDriveFileBlob(file) {
       const response = await fetch('https://www.googleapis.com/drive/v3/files/' + file.id + '?alt=media', { headers:{ Authorization:'Bearer ' + googleAccessToken } });
       if (!response.ok) throw new Error(await response.text());
       return await response.blob();
     }
-
-    function backupZipPathForDriveFile(file, parsed = null, registry = null) {
-      const name = sanitizePathPart(file.name || 'fichier-drive');
-      const lower = name.toLowerCase();
-      if (lower.endsWith('.json') && parsed) {
-        const info = detectDocumentInfo(name, parsed, registry);
-        if (info.docKey) return 'Clients/' + info.clientName + '/' + info.folder + '/' + name;
-        if (info.label === 'comptabilite') return 'Comptabilite/Donnees/' + name;
-      }
-      if (lower.endsWith('.pdf')) {
-        if (lower.includes('achat') || lower.includes('fournisseur')) return 'Comptabilite/Achats-PDF/' + name;
-        if (lower.startsWith('devis-')) return 'Clients/Sans client/Devis/' + name;
-        if (lower.startsWith('facture-')) return 'Clients/Sans client/Factures/' + name;
-        if (lower.startsWith('rappel-')) return 'Clients/Sans client/Rappels/' + name;
-      }
+    function backupZipPathForDriveFile(file, parsed = null) {
+      const name = sanitizePathPart(file.name || 'fichier-drive'), lower = name.toLowerCase();
+      if (lower.endsWith('.json') && parsed) { const info = detectDocumentInfo(name, parsed); if (info.docKey) return 'Clients/' + info.clientName + '/' + info.folder + '/' + name; if (info.label === 'comptabilite') return 'Comptabilite/Donnees/' + name; }
+      if (lower.endsWith('.pdf')) { if (lower.includes('achat') || lower.includes('fournisseur')) return 'Comptabilite/Achats-PDF/' + name; if (lower.startsWith('devis-')) return 'Clients/Sans client/Devis/' + name; if (lower.startsWith('facture-')) return 'Clients/Sans client/Factures/' + name; if (lower.startsWith('rappel-')) return 'Clients/Sans client/Rappels/' + name; }
       return 'Google-Drive-AppData/' + name;
     }
-
     async function addApplicationSourceFiles(zip) {
-      for (const fileName of ['index.html', 'devis-facture.html', 'comptabilite.html']) {
-        try {
-          const res = await fetch(fileName, { cache:'no-store' });
-          if (res.ok) zip.file('Application/' + fileName, await res.text());
-        } catch (error) {
-          console.warn('Impossible d’ajouter le fichier application :', fileName, error);
-        }
+      for (const fileName of ['index.html','devis-facture.html','comptabilite.html']) {
+        try { const res = await fetch(fileName, { cache:'no-store' }); if (res.ok) zip.file('Application/' + fileName, await res.text()); } catch (error) { console.warn('Impossible d’ajouter le fichier application :', fileName, error); }
       }
     }
-
     async function createFullBackupZip() {
       await ensureBackupLibraries();
-      await waitForFrameReady(devisFrame);
-      await waitForFrameReady(comptaFrame);
+      const zip = new JSZip(), now = new Date(), stamp = now.toISOString().slice(0,19).replace(/[T:]/g,'-'), localData = getLocalBackupData(), driveFilesManifest = [];
+      const manifest = { app:'BastCompta', version:BAST_BACKUP_VERSION, createdAt:now.toISOString(), backupType:'complete-local-drive-pdf-crm-faithful', modules:['devis-facture','comptabilite'], restore:{ localStorage:true, googleDrive:true, pdfFiles:true, clients:true, crm:true, mode:'complete-reconstruction' }, restoreHints:{ localStorage:{ devisFacture:LOCAL_DEVIS_KEY, comptabilite:LOCAL_COMPTA_KEY }, driveSpace:'appDataFolder', conflictPolicy:'replace-existing-by-name-after-confirmation' }, crm:{ clients:[], count:0, exports:[] }, clients:[], files:[] };
+      const addFile = (path, category, meta={}) => manifest.files.push({ path, category, ...meta });
+      const addClientDoc = (info, type, jsonPath='', pdfPath='', source='local') => { const clientName = sanitizePathPart(info?.clientName || 'Sans client'); let client = manifest.clients.find(item => item.name === clientName); if (!client) { client = { name:clientName, documents:[] }; manifest.clients.push(client); } client.documents.push({ type, documentNumber:info?.documentNumber || '', json:jsonPath, pdf:pdfPath, source }); };
+      backupStatus('Préparation de la sauvegarde complète avec manifest…','warning');
 
-      const zip = new JSZip();
-      const now = new Date();
-      const stamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      const localData = getLocalBackupData();
+      const devisPath='01-donnees-locales/devis-facture-local.json', comptaPath='01-donnees-locales/comptabilite-local.json', comptaOrg='Comptabilite/Donnees/comptabilite-local.json';
+      zip.file(devisPath, JSON.stringify(localData.devisFacture || {}, null, 2)); zip.file(comptaPath, JSON.stringify(localData.comptabilite || {}, null, 2)); zip.file(comptaOrg, JSON.stringify(localData.comptabilite || {}, null, 2));
+      addFile(devisPath,'localStorage',{module:'devis-facture', storageKey:LOCAL_DEVIS_KEY}); addFile(comptaPath,'localStorage',{module:'comptabilite', storageKey:LOCAL_COMPTA_KEY}); addFile(comptaOrg,'comptabilite-json',{module:'comptabilite'});
+      const comptaPdf = makeComptaReportPdfBlob(localData.comptabilite || {}); if (comptaPdf) { const path='Comptabilite/Rapports/rapport-comptable-local.pdf'; zip.file(path, comptaPdf); addFile(path,'pdf',{module:'comptabilite', documentType:'rapport'}); }
+
       const localDevis = localData.devisFacture || {};
-      const localCompta = localData.comptabilite || {};
-      const registry = buildClientRegistry(Array.isArray(localDevis.clients) ? localDevis.clients : []);
-      const driveFilesManifest = [];
-
-      const manifest = {
-        app:'BastCompta',
-        version:BAST_BACKUP_VERSION,
-        createdAt:now.toISOString(),
-        backupType:'complete-local-drive-pdf-crm-faithful',
-        modules:['devis-facture','comptabilite'],
-        restore:{ localStorage:true, googleDrive:true, pdfFiles:true, clients:true, crm:true, mode:'complete-reconstruction' },
-        restoreHints:{ localStorage:{ devisFacture:LOCAL_DEVIS_KEY, comptabilite:LOCAL_COMPTA_KEY }, driveSpace:'appDataFolder', conflictPolicy:'replace-existing-by-name-after-confirmation' },
-        crm:{ clients:[], count:0, exports:[] },
-        clients:[],
-        files:[]
-      };
-
-      const addFile = (path, category, meta = {}) => manifest.files.push({ path, category, ...meta });
-      const addClientDoc = (info, type, jsonPath = '', pdfPath = '', source = 'local') => {
-        const clientName = sanitizePathPart(info?.clientName || 'Sans client');
-        let client = manifest.clients.find(item => item.name === clientName);
-        if (!client) { client = { name:clientName, documents:[] }; manifest.clients.push(client); }
-        client.documents.push({ type, documentNumber:info?.documentNumber || '', json:jsonPath, pdf:pdfPath, source });
-      };
-
-      backupStatus('Préparation de la sauvegarde complète fidèle…', 'warning');
-      zip.file('01-donnees-locales/devis-facture-local.json', JSON.stringify(localDevis, null, 2));
-      zip.file('01-donnees-locales/comptabilite-local.json', JSON.stringify(localCompta, null, 2));
-      addFile('01-donnees-locales/devis-facture-local.json', 'localStorage', { module:'devis-facture' });
-      addFile('01-donnees-locales/comptabilite-local.json', 'localStorage', { module:'comptabilite' });
-
-      const crmClients = registry.clients;
-      manifest.crm.clients = crmClients.map(client => ({ id:client.id || '', name:client.canonicalName || client.name || '', email:client.email || '', phone:client.phone || '', vat:client.vat || client.clientVat || '', address:client.address || '', clientNumber:client.clientNumber || '' }));
+      const crmClients = Array.isArray(localDevis.clients) ? localDevis.clients : [];
+      manifest.crm.clients = crmClients.map(client => ({ id:client.id || '', name:client.name || '', email:client.email || '', phone:client.phone || '', vat:client.vat || client.clientVat || '', address:client.address || '' }));
       manifest.crm.count = crmClients.length;
-
       const crmJsonPath = 'CRM/clients-complet.json';
-      zip.file(crmJsonPath, JSON.stringify(manifest.crm.clients, null, 2));
-      addFile(crmJsonPath, 'crm-json', { module:'devis-facture', clientCount:crmClients.length });
+      zip.file(crmJsonPath, JSON.stringify(crmClients, null, 2));
+      addFile(crmJsonPath,'crm-json',{module:'devis-facture', clientCount:crmClients.length});
       manifest.crm.exports.push(crmJsonPath);
-
+      const csvEscape = value => '"' + String(value ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+      const crmCsvRows = [['id','nom','email','telephone','tva','adresse','notes'], ...crmClients.map(client => [client.id, client.name, client.email, client.phone, client.vat || client.clientVat, client.address, client.notes])];
       const crmCsvPath = 'CRM/clients.csv';
-      const csvRows = [['Nom','Email','Téléphone','TVA','N° client','Adresse']].concat(manifest.crm.clients.map(c => [c.name, c.email, c.phone, c.vat, c.clientNumber, c.address]));
-      zip.file(crmCsvPath, csvRows.map(row => row.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(';')).join('\n'));
-      addFile(crmCsvPath, 'crm-csv', { module:'devis-facture', clientCount:crmClients.length });
+      zip.file(crmCsvPath, crmCsvRows.map(row => row.map(csvEscape).join(';')).join('\n'));
+      addFile(crmCsvPath,'crm-csv',{module:'devis-facture', clientCount:crmClients.length});
       manifest.crm.exports.push(crmCsvPath);
-
       for (const client of crmClients) {
-        const clientName = sanitizePathPart(client.canonicalName || client.name || 'Sans client');
-        const ficheJsonPath = 'Clients/' + clientName + '/00-CRM/fiche-client.json';
-        const ficheTxtPath = 'Clients/' + clientName + '/00-CRM/fiche-client.txt';
+        const clientName = sanitizePathPart(client.name || client.clientName || 'Sans client');
+        const clientFolder = 'Clients/' + clientName + '/00-CRM/';
+        const ficheJsonPath = clientFolder + 'fiche-client.json';
+        const ficheTxtPath = clientFolder + 'fiche-client.txt';
         zip.file(ficheJsonPath, JSON.stringify(client, null, 2));
-        zip.file(ficheTxtPath, ['Client : ' + (client.canonicalName || client.name || ''), 'N° client : ' + (client.clientNumber || ''), 'Email : ' + (client.email || ''), 'Téléphone : ' + (client.phone || ''), 'TVA : ' + (client.vat || client.clientVat || ''), 'Adresse : ' + (client.address || ''), 'Notes : ' + (client.notes || '')].join('\n'));
-        addFile(ficheJsonPath, 'crm-client-json', { module:'devis-facture', client:clientName });
-        addFile(ficheTxtPath, 'crm-client-fiche', { module:'devis-facture', client:clientName });
+        zip.file(ficheTxtPath, ['Nom : ' + (client.name || ''), 'Email : ' + (client.email || ''), 'Téléphone : ' + (client.phone || ''), 'TVA : ' + (client.vat || client.clientVat || ''), 'Adresse : ' + (client.address || ''), 'Notes : ' + (client.notes || '')].join('\n'));
+        addFile(ficheJsonPath,'crm-client-json',{module:'devis-facture', client:clientName});
+        addFile(ficheTxtPath,'crm-client-fiche',{module:'devis-facture', client:clientName});
         let manifestClient = manifest.clients.find(item => item.name === clientName);
         if (!manifestClient) { manifestClient = { name:clientName, crm:ficheJsonPath, documents:[] }; manifest.clients.push(manifestClient); }
         else { manifestClient.crm = manifestClient.crm || ficheJsonPath; }
       }
 
-      for (const docKey of ['quote', 'invoice', 'reminder']) {
+      for (const docKey of ['quote','invoice','reminder']) {
         const doc = localDevis[docKey] || {};
         if (!doc.documentNumber && !doc.clientName) continue;
         const names = { quote:'devis', invoice:'facture', reminder:'rappel' };
         const folders = { quote:'Devis', invoice:'Factures', reminder:'Rappels' };
-        const info = detectDocumentInfo(names[docKey] + '-' + (doc.documentNumber || 'local') + '.json', localDevis, registry);
+        const info = detectDocumentInfo(names[docKey] + '-' + (doc.documentNumber || 'local') + '.json', localDevis);
         const number = sanitizePathPart(doc.documentNumber || docKey, docKey);
         const jsonPath = 'Clients/' + info.clientName + '/' + folders[docKey] + '/' + names[docKey] + '-' + number + '-local.json';
         const pdfPath = 'Clients/' + info.clientName + '/' + folders[docKey] + '/' + names[docKey] + '-' + number + '-local.pdf';
         zip.file(jsonPath, JSON.stringify(localDevis, null, 2));
         addFile(jsonPath, 'client-json', { module:'devis-facture', documentType:names[docKey], client:info.clientName });
+        backupStatus('Génération du PDF ' + names[docKey] + '…', 'warning');
         const pdf = await makeRenderedDocumentPdfBlob(localDevis, docKey);
-        if (pdf) { zip.file(pdfPath, pdf); addFile(pdfPath, 'pdf-fidele', { module:'devis-facture', documentType:names[docKey], client:info.clientName }); }
+        if (pdf) {
+          zip.file(pdfPath, pdf);
+          addFile(pdfPath, 'pdf-fidele', { module:'devis-facture', documentType:names[docKey], client:info.clientName });
+        } else {
+          addFile(pdfPath, 'pdf-fidele-manquant', { module:'devis-facture', documentType:names[docKey], client:info.clientName, warning:'PDF non généré' });
+        }
         addClientDoc(info, names[docKey], jsonPath, pdf ? pdfPath : '', 'localStorage');
       }
 
-      const comptaReportPath = 'Comptabilite/Rapports/rapport-comptable.pdf';
-      const comptaPdf = makeComptaReportPdfBlob(localCompta);
-      if (comptaPdf) { zip.file(comptaReportPath, comptaPdf); addFile(comptaReportPath, 'pdf', { module:'comptabilite' }); }
-
-      await addApplicationSourceFiles(zip);
-      ['index.html','devis-facture.html','comptabilite.html'].forEach(fileName => addFile('Application/' + fileName, 'application-source', { module:fileName.replace('.html','') }));
+      await addApplicationSourceFiles(zip); ['index.html','devis-facture.html','comptabilite.html'].forEach(fileName => addFile('Application/' + fileName,'application-source',{ module:fileName.replace('.html','') }));
 
       if (isTokenFresh() || wasDrivePreviouslyConnected()) {
-        await ensureFreshGoogleToken(true);
-        backupStatus('Récupération des fichiers Google Drive de l’application…', 'warning');
+        await ensureFreshGoogleToken(true); backupStatus('Récupération des fichiers Google Drive de l’application…','warning');
         const files = await listAllAppDriveFiles();
-        const parsedJsonByName = new Map();
-
         for (const file of files) {
           try {
-            const blob = await downloadDriveFileBlob(file);
-            let parsed = null;
-            if (String(file.name || '').toLowerCase().endsWith('.json')) {
-              parsed = safeJsonParse(await blob.text(), null);
-              if (parsed?.clients && Array.isArray(parsed.clients)) parsed.clients.forEach(client => registry.remember(client));
-              parsedJsonByName.set(String(file.name || '').toLowerCase(), parsed);
-            }
-          } catch (error) {
-            console.warn('Prélecture Drive ignorée :', file.name, error);
-          }
-        }
-
-        for (const file of files) {
-          try {
-            const blob = await downloadDriveFileBlob(file);
-            const originalPath = 'Google-Drive-AppData/_originaux/' + sanitizePathPart(file.name || file.id);
-            zip.file(originalPath, blob);
-            addFile(originalPath, 'drive-original', { driveId:file.id, name:file.name, mimeType:file.mimeType, modifiedTime:file.modifiedTime });
-
-            let parsed = parsedJsonByName.get(String(file.name || '').toLowerCase()) || null;
-            const organizedPath = backupZipPathForDriveFile(file, parsed, registry);
-            if (organizedPath !== originalPath) { zip.file(organizedPath, blob); addFile(organizedPath, 'drive-organized', { driveId:file.id, name:file.name, mimeType:file.mimeType, modifiedTime:file.modifiedTime }); }
+            const blob = await downloadDriveFileBlob(file), originalPath='Google-Drive-AppData/_originaux/' + sanitizePathPart(file.name || file.id);
+            zip.file(originalPath, blob); addFile(originalPath,'drive-original',{driveId:file.id, name:file.name, mimeType:file.mimeType, modifiedTime:file.modifiedTime});
+            let parsed = null; if (String(file.name || '').toLowerCase().endsWith('.json')) parsed = safeJsonParse(await blob.text(), null);
+            const organizedPath = backupZipPathForDriveFile(file, parsed); if (organizedPath !== originalPath) { zip.file(organizedPath, blob); addFile(organizedPath,'drive-organized',{driveId:file.id, name:file.name, mimeType:file.mimeType, modifiedTime:file.modifiedTime}); }
             driveFilesManifest.push({ ...file, backupPath:originalPath, organizedPath });
-
             if (parsed) {
               if (Array.isArray(parsed.clients) && String(file.name || '').toLowerCase().includes('crm')) {
                 const crmDrivePath = 'CRM/google-drive-' + sanitizePathPart(file.name || 'crm.json');
                 zip.file(crmDrivePath, JSON.stringify(parsed.clients, null, 2));
-                addFile(crmDrivePath, 'crm-json-from-drive', { driveId:file.id, module:'devis-facture', clientCount:parsed.clients.length });
+                addFile(crmDrivePath,'crm-json-from-drive',{driveId:file.id, module:'devis-facture', clientCount:parsed.clients.length});
                 manifest.crm.exports.push(crmDrivePath);
+                parsed.clients.forEach(client => {
+                  const clientName = sanitizePathPart(client.name || client.clientName || 'Sans client');
+                  let manifestClient = manifest.clients.find(item => item.name === clientName);
+                  if (!manifestClient) { manifestClient = { name:clientName, crm:'', documents:[] }; manifest.clients.push(manifestClient); }
+                });
               }
-              const info = detectDocumentInfo(file.name, parsed, registry);
-              if (info.docKey) {
-                const pdf = await makeRenderedDocumentPdfBlob(parsed, info.docKey);
-                const pdfName = sanitizePathPart(String(file.name || info.documentNumber).replace(/\.json$/i, '.pdf'));
-                const pdfPath = 'Clients/' + info.clientName + '/' + info.folder + '/' + pdfName;
-                if (pdf) { zip.file(pdfPath, pdf); addFile(pdfPath, 'pdf-fidele-from-drive-json', { driveId:file.id, documentType:info.label, client:info.clientName }); }
-                addClientDoc(info, info.label, organizedPath, pdf ? pdfPath : '', 'googleDrive');
-              }
+              const info=detectDocumentInfo(file.name, parsed); if (info.docKey) { backupStatus('Génération PDF Drive : ' + (file.name || info.label) + '…','warning'); const pdf=await makeRenderedDocumentPdfBlob(parsed, info.docKey); const pdfPath='Clients/' + info.clientName + '/' + info.folder + '/' + sanitizePathPart(String(file.name || info.documentNumber).replace(/\.json$/i,'.pdf')); if (pdf) { zip.file(pdfPath,pdf); addFile(pdfPath,'pdf-fidele-from-drive-json',{driveId:file.id, documentType:info.label, client:info.clientName}); } else { addFile(pdfPath,'pdf-fidele-manquant-from-drive-json',{driveId:file.id, documentType:info.label, client:info.clientName, warning:'PDF non généré'}); } addClientDoc(info, info.label, organizedPath, pdf ? pdfPath : '', 'googleDrive'); }
             }
-          } catch (error) {
-            console.warn('Fichier Drive ignoré pendant la sauvegarde :', file.name, error);
-            driveFilesManifest.push({ ...file, error:String(error?.message || error) });
-          }
+          } catch (error) { console.warn('Fichier Drive ignoré pendant la sauvegarde :', file.name, error); driveFilesManifest.push({ ...file, error:String(error?.message || error) }); }
         }
       }
-
-      const driveManifestPath = 'Google-Drive-AppData/manifest-drive.json';
-      zip.file(driveManifestPath, JSON.stringify(driveFilesManifest, null, 2));
-      addFile(driveManifestPath, 'drive-manifest');
+      const driveManifestPath='Google-Drive-AppData/manifest-drive.json'; zip.file(driveManifestPath, JSON.stringify(driveFilesManifest, null, 2)); addFile(driveManifestPath,'drive-manifest');
       manifest.summary = { clientCount:manifest.clients.length, crmClientCount:manifest.crm.count, fileCount:manifest.files.length, driveFileCount:driveFilesManifest.length, createdBy:'BastCompta portal' };
-      const manifestJson = JSON.stringify(manifest, null, 2);
-      zip.file('manifest.json', manifestJson);
-      zip.file('00-manifest.json', manifestJson);
-      const blob = await zip.generateAsync({ type:'blob' });
-      downloadBlob(blob, 'Sauvegarde-BastCompta-' + stamp + '.zip');
-      backupStatus('Sauvegarde complète ZIP téléchargée sur ce PC avec manifest.json et PDF fidèles.', 'success');
+      const manifestJson = JSON.stringify(manifest, null, 2); zip.file('manifest.json', manifestJson); zip.file('00-manifest.json', manifestJson);
+      const blob = await zip.generateAsync({ type:'blob' }); downloadBlob(blob, 'Sauvegarde-BastCompta-' + stamp + '.zip'); backupStatus('Sauvegarde complète ZIP téléchargée sur ce PC avec manifest.json et PDF fidèles.','success');
     }
-
     async function uploadBlobToAppDataFolder(blob, fileName, mimeType, existingId = '') {
-      await ensureFreshGoogleToken(true);
-      const metadata = existingId ? { name:fileName } : { name:fileName, parents:['appDataFolder'] };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type:'application/json' }));
-      form.append('file', blob, fileName);
-      let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', method = 'POST';
-      if (existingId) { url = 'https://www.googleapis.com/upload/drive/v3/files/' + existingId + '?uploadType=multipart&fields=id,name'; method = 'PATCH'; }
-      const res = await fetch(url, { method, headers:{ Authorization:'Bearer ' + googleAccessToken }, body:form });
-      if (!res.ok) throw new Error(await res.text());
-      return await res.json();
+      await ensureFreshGoogleToken(true); const metadata = existingId ? { name:fileName } : { name:fileName, parents:['appDataFolder'] };
+      const form = new FormData(); form.append('metadata', new Blob([JSON.stringify(metadata)], { type:'application/json' })); form.append('file', blob, fileName);
+      let url='https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', method='POST';
+      if (existingId) { url='https://www.googleapis.com/upload/drive/v3/files/' + existingId + '?uploadType=multipart&fields=id,name'; method='PATCH'; }
+      const res = await fetch(url, { method, headers:{ Authorization:'Bearer ' + googleAccessToken }, body:form }); if (!res.ok) throw new Error(await res.text()); return await res.json();
     }
-
     async function findDriveFileByName(fileName) {
-      await ensureFreshGoogleToken(true);
-      const escaped = String(fileName).replace(/'/g, "\\'");
+      await ensureFreshGoogleToken(true); const escaped = String(fileName).replace(/'/g, "\\'");
       const res = await gapi.client.drive.files.list({ spaces:'appDataFolder', q:"name='" + escaped + "' and trashed=false", pageSize:1, fields:'files(id,name)' });
       return (res.result.files || [])[0] || null;
     }
-
     async function restoreFullBackupFromZip(file) {
-      await ensureBackupLibraries();
-      const zip = await JSZip.loadAsync(file);
-      const manifestEntry = zip.file('manifest.json') || zip.file('00-manifest.json');
+      await ensureBackupLibraries(); const zip = await JSZip.loadAsync(file); const manifestEntry = zip.file('manifest.json') || zip.file('00-manifest.json');
       if (!manifestEntry) { alert('Ce ZIP ne semble pas être une sauvegarde BastCompta complète : manifest.json manquant.'); return; }
-      const manifest = safeJsonParse(await manifestEntry.async('string'), {});
-      if (manifest.app !== 'BastCompta') { alert('Ce ZIP ne correspond pas à une sauvegarde BastCompta reconnue.'); return; }
+      const manifest = safeJsonParse(await manifestEntry.async('string'), {}); if (manifest.app !== 'BastCompta') { alert('Ce ZIP ne correspond pas à une sauvegarde BastCompta reconnue.'); return; }
       const restoreDrive = confirm('Restaurer aussi les fichiers Google Drive de l’application ?\n\nOK = données locales + Drive\nAnnuler = données locales uniquement');
       if (!confirm('Confirmer la restauration complète ?\n\nLes données locales actuelles seront remplacées.')) return;
-      backupStatus('Restauration des données locales…', 'warning');
-      const devisEntry = zip.file('01-donnees-locales/devis-facture-local.json');
-      const comptaEntry = zip.file('01-donnees-locales/comptabilite-local.json');
-      if (devisEntry) localStorage.setItem(LOCAL_DEVIS_KEY, await devisEntry.async('string'));
-      if (comptaEntry) localStorage.setItem(LOCAL_COMPTA_KEY, await comptaEntry.async('string'));
+      backupStatus('Restauration des données locales…','warning');
+      const devisEntry = zip.file('01-donnees-locales/devis-facture-local.json'), comptaEntry = zip.file('01-donnees-locales/comptabilite-local.json');
+      if (devisEntry) localStorage.setItem(LOCAL_DEVIS_KEY, await devisEntry.async('string')); if (comptaEntry) localStorage.setItem(LOCAL_COMPTA_KEY, await comptaEntry.async('string'));
       if (restoreDrive) {
-        backupStatus('Restauration des fichiers Google Drive…', 'warning');
-        await ensureFreshGoogleToken(true);
-        const driveManifestEntry = zip.file('Google-Drive-AppData/manifest-drive.json');
-        const driveManifest = driveManifestEntry ? safeJsonParse(await driveManifestEntry.async('string'), []) : [];
-        for (const item of driveManifest) {
-          if (!item.backupPath) continue;
-          const entry = zip.file(item.backupPath);
-          if (!entry) continue;
-          const name = item.name || item.backupPath.split('/').pop();
-          const blob = await entry.async('blob');
-          const existing = await findDriveFileByName(name);
-          await uploadBlobToAppDataFolder(blob, name, item.mimeType || blob.type || 'application/octet-stream', existing?.id || '');
-        }
+        backupStatus('Restauration des fichiers Google Drive…','warning'); await ensureFreshGoogleToken(true);
+        const driveManifestEntry = zip.file('Google-Drive-AppData/manifest-drive.json'), driveManifest = driveManifestEntry ? safeJsonParse(await driveManifestEntry.async('string'), []) : [];
+        for (const item of driveManifest) { if (!item.backupPath) continue; const entry = zip.file(item.backupPath); if (!entry) continue; const name = item.name || item.backupPath.split('/').pop(); const blob = await entry.async('blob'); const existing = await findDriveFileByName(name); await uploadBlobToAppDataFolder(blob, name, item.mimeType || blob.type || 'application/octet-stream', existing?.id || ''); }
       }
-      backupStatus('Restauration terminée. Les modules sont rechargés.', 'success');
-      loadProtectedFrames();
-      devisFrame.contentWindow?.location?.reload();
-      comptaFrame.contentWindow?.location?.reload();
-      if (isTokenFresh()) setTimeout(broadcastDriveToken, 800);
-      alert('Restauration complète terminée.');
+      backupStatus('Restauration terminée. Les modules sont rechargés.','success'); loadProtectedFrames(); devisFrame.contentWindow?.location?.reload(); comptaFrame.contentWindow?.location?.reload(); if (isTokenFresh()) setTimeout(broadcastDriveToken, 800); alert('Restauration complète terminée.');
     }
-
-    async function handleFullBackupClick() {
-      showBlockingProgress('Sauvegarde en cours', 'Préparation de la sauvegarde complète… Veuillez patienter.');
-      try { await createFullBackupZip(); }
-      catch(error) { console.error(error); backupStatus('La sauvegarde complète a échoué.', 'error'); alert(error?.message || 'La sauvegarde complète a échoué.'); }
-      finally { hideBlockingProgress(); }
-    }
-
-    function handleFullRestoreClick() {
-      if (fullRestoreInput) fullRestoreInput.click();
-    }
-
-    async function handleFullRestoreFile(event) {
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      if (!file) return;
-      showBlockingProgress('Restauration en cours', 'Restauration de la sauvegarde… Veuillez patienter.');
-      try { await restoreFullBackupFromZip(file); }
-      catch(error) { console.error(error); backupStatus('La restauration a échoué.', 'error'); alert(error?.message || 'La restauration a échoué.'); }
-      finally { hideBlockingProgress(); }
-    }
+    async function handleFullBackupClick() { try { await createFullBackupZip(); } catch(error) { console.error(error); backupStatus('La sauvegarde complète a échoué.','error'); alert(error?.message || 'La sauvegarde complète a échoué.'); } }
+    function handleFullRestoreClick() { if (fullRestoreInput) fullRestoreInput.click(); }
+    async function handleFullRestoreFile(event) { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; try { await restoreFullBackupFromZip(file); } catch(error) { console.error(error); backupStatus('La restauration a échoué.','error'); alert(error?.message || 'La restauration a échoué.'); } }
 
     function broadcastDriveToken() {
       if (!isTokenFresh()) return;
@@ -1786,13 +1446,6 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       broadcastDriveDisconnected();
     }
 
-    window.addEventListener('message', event => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type === 'BASTCOMPTA_SEND_INVOICE_TO_ACCOUNTING') {
-        sendInvoiceToAccounting();
-      }
-    });
-
     authTabs.forEach(btn => {
       btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
     });
@@ -1803,9 +1456,10 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
     connectDriveBtn.addEventListener('click', connectGoogleDrive);
     disconnectDriveBtn.addEventListener('click', () => disconnectGoogleDrive(true));
-    if (fullBackupBtn) fullBackupBtn.addEventListener('click', handleFullBackupClick);
-    if (fullRestoreBtn) fullRestoreBtn.addEventListener('click', handleFullRestoreClick);
-    if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRestoreFile);
+    if (sendInvoiceToAccountingBtn) sendInvoiceToAccountingBtn.addEventListener('click', sendInvoiceToAccounting);
+    fullBackupBtn?.addEventListener('click', handleFullBackupClick);
+    fullRestoreBtn?.addEventListener('click', handleFullRestoreClick);
+    fullRestoreInput?.addEventListener('change', handleFullRestoreFile);
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
