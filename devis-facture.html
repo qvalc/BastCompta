@@ -821,6 +821,67 @@
       }
     }
 
+
+    /* Mode spécial pour générer les PDF fidèles dans la sauvegarde ZIP */
+    body.backup-pdf-capture .no-print {
+      display: none !important;
+    }
+
+    body.backup-pdf-capture input,
+    body.backup-pdf-capture textarea,
+    body.backup-pdf-capture select {
+      border: none !important;
+      background: transparent !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+    }
+
+    body.backup-pdf-capture textarea {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      resize: none !important;
+    }
+
+    body.backup-pdf-capture .backup-pdf-value {
+      display: block;
+      width: 100%;
+      min-height: 14px;
+      font: inherit;
+      font-size: inherit;
+      line-height: 1.35;
+      color: inherit;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: normal;
+      padding: 0 !important;
+      margin: 0 !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    body.backup-pdf-capture .client-box .stack {
+      gap: 4px !important;
+    }
+
+    body.backup-pdf-capture .doc-table .backup-pdf-value,
+    body.backup-pdf-capture .meta-table .backup-pdf-value {
+      text-align: inherit;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    body.backup-pdf-capture .pay-block .field {
+      display: none !important;
+    }
+
+    body.backup-pdf-capture .sheet {
+      border: none !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+
     @media print {
       body {
         background: #fff;
@@ -4100,6 +4161,90 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
         closeToolbarMenus();
       }
     });
+
+
+    // API appelée par index.html pour générer les PDF dans la sauvegarde ZIP
+    let bastComptaBackupPdfState = null;
+
+    function cloneForBackup(value) {
+      try {
+        return structuredClone(value);
+      } catch (error) {
+        return JSON.parse(JSON.stringify(value || null));
+      }
+    }
+
+    function getBackupControlText(control) {
+      if (!control) return '';
+      const tag = String(control.tagName || '').toLowerCase();
+      if (tag === 'select') {
+        const selected = control.options && control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
+        return selected ? selected.textContent.trim() : String(control.value || '').trim();
+      }
+      return String(control.value || '').trim();
+    }
+
+    function materializeBackupPdfControls(docKey) {
+      const page = document.querySelector(`.page[data-page="${docKey}"].active`);
+      if (!page) return;
+
+      page.querySelectorAll('input:not(.no-print), textarea:not(.no-print), select:not(.no-print)').forEach(control => {
+        if (control.closest('.no-print')) return;
+        const tag = String(control.tagName || '').toLowerCase();
+        const value = getBackupControlText(control);
+        const replacement = document.createElement(tag === 'textarea' ? 'div' : 'span');
+        replacement.className = 'backup-pdf-value';
+        replacement.textContent = value || ' ';
+        control.replaceWith(replacement);
+      });
+    }
+
+    async function prepareBastComptaDocumentForBackupPdf(payload, docKey) {
+      if (!['quote', 'invoice', 'reminder'].includes(docKey)) return false;
+
+      if (!bastComptaBackupPdfState) {
+        bastComptaBackupPdfState = {
+          data: cloneForBackup(data),
+          activePage
+        };
+      }
+
+      data = mergeDeep(structuredClone(defaultData), cloneForBackup(payload || {}));
+      activePage = docKey;
+      render();
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      document.body.classList.add('backup-pdf-capture');
+
+      document.querySelectorAll('textarea').forEach(textarea => {
+        try { autoResize(textarea); } catch {}
+      });
+
+      materializeBackupPdfControls(docKey);
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      return true;
+    }
+
+    async function restoreBastComptaAfterBackupPdf() {
+      if (!bastComptaBackupPdfState) return true;
+
+      document.body.classList.remove('backup-pdf-capture');
+      data = cloneForBackup(bastComptaBackupPdfState.data);
+      activePage = bastComptaBackupPdfState.activePage || 'quote';
+      bastComptaBackupPdfState = null;
+      render();
+
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      return true;
+    }
+
+    window.prepareBastComptaDocumentForBackupPdf = prepareBastComptaDocumentForBackupPdf;
+    window.restoreBastComptaAfterBackupPdf = restoreBastComptaAfterBackupPdf;
+
 
     window.addEventListener('load', async () => {
       render();
