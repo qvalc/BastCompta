@@ -1,0 +1,11 @@
+{
+  "app": "BastCompta",
+  "version": 2,
+  "packageType": "application-files",
+  "contains": [
+    "index.html",
+    "devis-facture.html",
+    "comptabilite.html"
+  ],
+  "feature": "Sauvegarde complète ZIP avec manifest.json, PDF, tri clients, restauration locale et Google Drive"
+}
