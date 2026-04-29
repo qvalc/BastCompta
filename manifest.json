@@ -1,7 +1,19 @@
 {
   "app": "BastCompta",
-  "version": 3,
-  "backupType": "complete-local-drive-pdf-crm",
-  "contains": ["application", "localStorage", "googleDriveAppData", "crm", "clients", "devis", "factures", "rappels", "pdf", "comptabilite", "manifest"],
-  "note": "Le manifest réel de chaque sauvegarde ZIP est généré dynamiquement par index.html et contient la liste des clients CRM, documents, fichiers PDF et fichiers Drive restaurables."
+  "version": 4,
+  "backupType": "complete-local-drive-pdf-crm-faithful",
+  "contains": [
+    "application",
+    "localStorage",
+    "googleDriveAppData",
+    "crm",
+    "clients",
+    "devis",
+    "factures",
+    "rappels",
+    "pdf-fideles",
+    "comptabilite",
+    "manifest"
+  ],
+  "note": "Le manifest réel de chaque sauvegarde ZIP est généré dynamiquement par index.html. Cette version corrige le rattachement CRM des noms inversés et génère les PDF à partir du rendu réel du module Devis & Facture."
 }
