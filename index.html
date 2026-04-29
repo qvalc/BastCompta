@@ -1022,13 +1022,10 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       zip.file(crmJsonPath, JSON.stringify(crmClients, null, 2));
       addFile(crmJsonPath,'crm-json',{module:'devis-facture', clientCount:crmClients.length});
       manifest.crm.exports.push(crmJsonPath);
-      const csvEscape = value => '"' + String(value ?? '').replace(/"/g, '""').replace(/
-?
-/g, ' ') + '"';
+      const csvEscape = value => '"' + String(value ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
       const crmCsvRows = [['id','nom','email','telephone','tva','adresse','notes'], ...crmClients.map(client => [client.id, client.name, client.email, client.phone, client.vat || client.clientVat, client.address, client.notes])];
       const crmCsvPath = 'CRM/clients.csv';
-      zip.file(crmCsvPath, crmCsvRows.map(row => row.map(csvEscape).join(';')).join('
-'));
+      zip.file(crmCsvPath, crmCsvRows.map(row => row.map(csvEscape).join(';')).join('\n'));
       addFile(crmCsvPath,'crm-csv',{module:'devis-facture', clientCount:crmClients.length});
       manifest.crm.exports.push(crmCsvPath);
       for (const client of crmClients) {
@@ -1037,8 +1034,7 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
         const ficheJsonPath = clientFolder + 'fiche-client.json';
         const ficheTxtPath = clientFolder + 'fiche-client.txt';
         zip.file(ficheJsonPath, JSON.stringify(client, null, 2));
-        zip.file(ficheTxtPath, ['Nom : ' + (client.name || ''), 'Email : ' + (client.email || ''), 'Téléphone : ' + (client.phone || ''), 'TVA : ' + (client.vat || client.clientVat || ''), 'Adresse : ' + (client.address || ''), 'Notes : ' + (client.notes || '')].join('
-'));
+        zip.file(ficheTxtPath, ['Nom : ' + (client.name || ''), 'Email : ' + (client.email || ''), 'Téléphone : ' + (client.phone || ''), 'TVA : ' + (client.vat || client.clientVat || ''), 'Adresse : ' + (client.address || ''), 'Notes : ' + (client.notes || '')].join('\n'));
         addFile(ficheJsonPath,'crm-client-json',{module:'devis-facture', client:clientName});
         addFile(ficheTxtPath,'crm-client-fiche',{module:'devis-facture', client:clientName});
         let manifestClient = manifest.clients.find(item => item.name === clientName);
