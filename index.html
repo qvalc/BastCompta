@@ -1004,7 +1004,7 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
     async function createFullBackupZip() {
       await ensureBackupLibraries();
       const zip = new JSZip(), now = new Date(), stamp = now.toISOString().slice(0,19).replace(/[T:]/g,'-'), localData = getLocalBackupData(), driveFilesManifest = [];
-      const manifest = { app:'BastCompta', version:BAST_BACKUP_VERSION, createdAt:now.toISOString(), backupType:'complete-local-drive-pdf', modules:['devis-facture','comptabilite'], restore:{ localStorage:true, googleDrive:true, pdfFiles:true, clients:true, mode:'complete-reconstruction' }, restoreHints:{ localStorage:{ devisFacture:LOCAL_DEVIS_KEY, comptabilite:LOCAL_COMPTA_KEY }, driveSpace:'appDataFolder', conflictPolicy:'replace-existing-by-name-after-confirmation' }, clients:[], files:[] };
+      const manifest = { app:'BastCompta', version:BAST_BACKUP_VERSION, createdAt:now.toISOString(), backupType:'complete-local-drive-pdf-crm', modules:['devis-facture','comptabilite'], restore:{ localStorage:true, googleDrive:true, pdfFiles:true, clients:true, crm:true, mode:'complete-reconstruction' }, restoreHints:{ localStorage:{ devisFacture:LOCAL_DEVIS_KEY, comptabilite:LOCAL_COMPTA_KEY }, driveSpace:'appDataFolder', conflictPolicy:'replace-existing-by-name-after-confirmation' }, crm:{ clients:[], count:0, exports:[] }, clients:[], files:[] };
       const addFile = (path, category, meta={}) => manifest.files.push({ path, category, ...meta });
       const addClientDoc = (info, type, jsonPath='', pdfPath='', source='local') => { const clientName = sanitizePathPart(info?.clientName || 'Sans client'); let client = manifest.clients.find(item => item.name === clientName); if (!client) { client = { name:clientName, documents:[] }; manifest.clients.push(client); } client.documents.push({ type, documentNumber:info?.documentNumber || '', json:jsonPath, pdf:pdfPath, source }); };
       backupStatus('Préparation de la sauvegarde complète avec manifest…','warning');
@@ -1015,6 +1015,37 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       const comptaPdf = makeComptaReportPdfBlob(localData.comptabilite || {}); if (comptaPdf) { const path='Comptabilite/Rapports/rapport-comptable-local.pdf'; zip.file(path, comptaPdf); addFile(path,'pdf',{module:'comptabilite', documentType:'rapport'}); }
 
       const localDevis = localData.devisFacture || {};
+      const crmClients = Array.isArray(localDevis.clients) ? localDevis.clients : [];
+      manifest.crm.clients = crmClients.map(client => ({ id:client.id || '', name:client.name || '', email:client.email || '', phone:client.phone || '', vat:client.vat || client.clientVat || '', address:client.address || '' }));
+      manifest.crm.count = crmClients.length;
+      const crmJsonPath = 'CRM/clients-complet.json';
+      zip.file(crmJsonPath, JSON.stringify(crmClients, null, 2));
+      addFile(crmJsonPath,'crm-json',{module:'devis-facture', clientCount:crmClients.length});
+      manifest.crm.exports.push(crmJsonPath);
+      const csvEscape = value => '"' + String(value ?? '').replace(/"/g, '""').replace(/
+?
+/g, ' ') + '"';
+      const crmCsvRows = [['id','nom','email','telephone','tva','adresse','notes'], ...crmClients.map(client => [client.id, client.name, client.email, client.phone, client.vat || client.clientVat, client.address, client.notes])];
+      const crmCsvPath = 'CRM/clients.csv';
+      zip.file(crmCsvPath, crmCsvRows.map(row => row.map(csvEscape).join(';')).join('
+'));
+      addFile(crmCsvPath,'crm-csv',{module:'devis-facture', clientCount:crmClients.length});
+      manifest.crm.exports.push(crmCsvPath);
+      for (const client of crmClients) {
+        const clientName = sanitizePathPart(client.name || client.clientName || 'Sans client');
+        const clientFolder = 'Clients/' + clientName + '/00-CRM/';
+        const ficheJsonPath = clientFolder + 'fiche-client.json';
+        const ficheTxtPath = clientFolder + 'fiche-client.txt';
+        zip.file(ficheJsonPath, JSON.stringify(client, null, 2));
+        zip.file(ficheTxtPath, ['Nom : ' + (client.name || ''), 'Email : ' + (client.email || ''), 'Téléphone : ' + (client.phone || ''), 'TVA : ' + (client.vat || client.clientVat || ''), 'Adresse : ' + (client.address || ''), 'Notes : ' + (client.notes || '')].join('
+'));
+        addFile(ficheJsonPath,'crm-client-json',{module:'devis-facture', client:clientName});
+        addFile(ficheTxtPath,'crm-client-fiche',{module:'devis-facture', client:clientName});
+        let manifestClient = manifest.clients.find(item => item.name === clientName);
+        if (!manifestClient) { manifestClient = { name:clientName, crm:ficheJsonPath, documents:[] }; manifest.clients.push(manifestClient); }
+        else { manifestClient.crm = manifestClient.crm || ficheJsonPath; }
+      }
+
       ['quote','invoice','reminder'].forEach(docKey => {
         const doc = localDevis[docKey] || {}; if (!doc.documentNumber && !doc.clientName) return;
         const names={quote:'devis', invoice:'facture', reminder:'rappel'}, folders={quote:'Devis', invoice:'Factures', reminder:'Rappels'};
@@ -1037,12 +1068,25 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
             let parsed = null; if (String(file.name || '').toLowerCase().endsWith('.json')) parsed = safeJsonParse(await blob.text(), null);
             const organizedPath = backupZipPathForDriveFile(file, parsed); if (organizedPath !== originalPath) { zip.file(organizedPath, blob); addFile(organizedPath,'drive-organized',{driveId:file.id, name:file.name, mimeType:file.mimeType, modifiedTime:file.modifiedTime}); }
             driveFilesManifest.push({ ...file, backupPath:originalPath, organizedPath });
-            if (parsed) { const info=detectDocumentInfo(file.name, parsed); if (info.docKey) { const pdf=makeDocumentPdfBlob(parsed, info.docKey, info.label.toUpperCase()); const pdfPath='Clients/' + info.clientName + '/' + info.folder + '/' + sanitizePathPart(String(file.name || info.documentNumber).replace(/\.json$/i,'.pdf')); if (pdf) { zip.file(pdfPath,pdf); addFile(pdfPath,'pdf-generated-from-drive-json',{driveId:file.id, documentType:info.label, client:info.clientName}); } addClientDoc(info, info.label, organizedPath, pdf ? pdfPath : '', 'googleDrive'); } }
+            if (parsed) {
+              if (Array.isArray(parsed.clients) && String(file.name || '').toLowerCase().includes('crm')) {
+                const crmDrivePath = 'CRM/google-drive-' + sanitizePathPart(file.name || 'crm.json');
+                zip.file(crmDrivePath, JSON.stringify(parsed.clients, null, 2));
+                addFile(crmDrivePath,'crm-json-from-drive',{driveId:file.id, module:'devis-facture', clientCount:parsed.clients.length});
+                manifest.crm.exports.push(crmDrivePath);
+                parsed.clients.forEach(client => {
+                  const clientName = sanitizePathPart(client.name || client.clientName || 'Sans client');
+                  let manifestClient = manifest.clients.find(item => item.name === clientName);
+                  if (!manifestClient) { manifestClient = { name:clientName, crm:'', documents:[] }; manifest.clients.push(manifestClient); }
+                });
+              }
+              const info=detectDocumentInfo(file.name, parsed); if (info.docKey) { const pdf=makeDocumentPdfBlob(parsed, info.docKey, info.label.toUpperCase()); const pdfPath='Clients/' + info.clientName + '/' + info.folder + '/' + sanitizePathPart(String(file.name || info.documentNumber).replace(/\.json$/i,'.pdf')); if (pdf) { zip.file(pdfPath,pdf); addFile(pdfPath,'pdf-generated-from-drive-json',{driveId:file.id, documentType:info.label, client:info.clientName}); } addClientDoc(info, info.label, organizedPath, pdf ? pdfPath : '', 'googleDrive'); }
+            }
           } catch (error) { console.warn('Fichier Drive ignoré pendant la sauvegarde :', file.name, error); driveFilesManifest.push({ ...file, error:String(error?.message || error) }); }
         }
       }
       const driveManifestPath='Google-Drive-AppData/manifest-drive.json'; zip.file(driveManifestPath, JSON.stringify(driveFilesManifest, null, 2)); addFile(driveManifestPath,'drive-manifest');
-      manifest.summary = { clientCount:manifest.clients.length, fileCount:manifest.files.length, driveFileCount:driveFilesManifest.length, createdBy:'BastCompta portal' };
+      manifest.summary = { clientCount:manifest.clients.length, crmClientCount:manifest.crm.count, fileCount:manifest.files.length, driveFileCount:driveFilesManifest.length, createdBy:'BastCompta portal' };
       const manifestJson = JSON.stringify(manifest, null, 2); zip.file('manifest.json', manifestJson); zip.file('00-manifest.json', manifestJson);
       const blob = await zip.generateAsync({ type:'blob' }); downloadBlob(blob, 'Sauvegarde-BastCompta-' + stamp + '.zip'); backupStatus('Sauvegarde complète ZIP téléchargée sur ce PC avec manifest.json.','success');
     }
