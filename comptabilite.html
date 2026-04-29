@@ -2826,8 +2826,7 @@
 
       const liquidities =
         toNumber(data.settings.bankBalance) +
-        toNumber(data.settings.cashBalance) -
-        totalVatPaid;
+        toNumber(data.settings.cashBalance);
 
       const receivableVat = realVat < 0 ? Math.abs(realVat) : 0;
       const payableVat = realVat > 0 ? realVat : 0;
