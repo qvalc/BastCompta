@@ -15,5 +15,5 @@
     "comptabilite",
     "manifest"
   ],
-  "note": "Le manifest réel de chaque sauvegarde ZIP est généré dynamiquement par index.html. Cette version corrige le rattachement CRM des noms inversés et génère les PDF à partir du rendu réel du module Devis & Facture."
+  "note": "Le manifest réel de chaque sauvegarde ZIP est généré dynamiquement par index.html. Cette version corrige le rattachement CRM des noms inversés, génère les PDF à partir du rendu réel du module Devis & Facture, place la sauvegarde dans un onglet dédié et affiche une fenêtre bloquante pendant la sauvegarde."
 }
