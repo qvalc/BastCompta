@@ -479,6 +479,93 @@
         font-size: 24px;
       }
     }
+
+    .backup-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.52);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .backup-overlay.active {
+      display: flex;
+    }
+
+    .backup-overlay-card {
+      width: min(520px, 100%);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24);
+      padding: 28px;
+      text-align: center;
+    }
+
+    .backup-spinner {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 16px;
+      border: 4px solid #dbeafe;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: backupSpin 0.9s linear infinite;
+    }
+
+    @keyframes backupSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    .backup-overlay-card h3 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+
+    .backup-overlay-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-weight: 700;
+    }
+
+    .backup-actions-panel {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 18px;
+      padding: 24px;
+      width: 100%;
+    }
+
+    .backup-action-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: var(--shadow-soft);
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .backup-action-card h3 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .backup-action-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    @media (max-width: 700px) {
+      .backup-actions-panel { grid-template-columns: 1fr; }
+    }
+
   </style>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -606,9 +693,7 @@
         <div class="main-tabs">
           <button class="main-tab active" data-main-tab="devis" type="button">Devis &amp; Facture</button>
           <button class="main-tab" data-main-tab="compta" type="button">Comptabilité</button>
-          <button id="sendInvoiceToAccountingBtn" class="primary" type="button">Envoyer la facture en comptabilité</button>
-          <button id="fullBackupBtn" class="primary" type="button">Sauvegarde complète ZIP</button>
-          <button id="fullRestoreBtn" class="ghost" type="button">Restaurer une sauvegarde</button>
+          <button class="main-tab" data-main-tab="backup" type="button">Sauvegarde</button>
           <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
         </div>
 
@@ -624,9 +709,32 @@
           <div id="panel-compta" class="tab-panel">
             <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
           </div>
+
+          <div id="panel-backup" class="tab-panel">
+            <div class="backup-actions-panel">
+              <div class="backup-action-card">
+                <h3>Sauvegarde complète ZIP</h3>
+                <p>Crée une archive complète sur ce PC : application, CRM, clients, devis, factures, rappels, PDF fidèles, comptabilité et fichiers Drive de l’application.</p>
+                <button id="fullBackupBtn" class="primary" type="button">Créer la sauvegarde ZIP</button>
+              </div>
+              <div class="backup-action-card">
+                <h3>Restaurer une sauvegarde</h3>
+                <p>Recharge une archive BastCompta complète et propose aussi la restauration Google Drive de l’application.</p>
+                <button id="fullRestoreBtn" class="ghost" type="button">Choisir un fichier ZIP</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
+  </div>
+
+  <div id="backupOverlay" class="backup-overlay" aria-live="polite" aria-busy="true">
+    <div class="backup-overlay-card">
+      <div class="backup-spinner"></div>
+      <h3 id="backupOverlayTitle">Sauvegarde en cours</h3>
+      <p id="backupOverlayText">Veuillez patienter…</p>
+    </div>
   </div>
 
   <script type="module">
@@ -679,10 +787,12 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const connectDriveBtn = document.getElementById('connectDriveBtn');
     const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
-    const sendInvoiceToAccountingBtn = document.getElementById('sendInvoiceToAccountingBtn');
     const fullBackupBtn = document.getElementById('fullBackupBtn');
     const fullRestoreBtn = document.getElementById('fullRestoreBtn');
     const fullRestoreInput = document.getElementById('fullRestoreInput');
+    const backupOverlay = document.getElementById('backupOverlay');
+    const backupOverlayTitle = document.getElementById('backupOverlayTitle');
+    const backupOverlayText = document.getElementById('backupOverlayText');
     const devisFrame = document.getElementById('devisFrame');
     const comptaFrame = document.getElementById('comptaFrame');
     const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
@@ -708,6 +818,7 @@
       mainTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.mainTab === tabName));
       document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
       document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
+      document.getElementById('panel-backup').classList.toggle('active', tabName === 'backup');
     }
 
     function humanizeAuthError(error) {
@@ -888,6 +999,9 @@
       alert(result?.message || 'Document envoyé en comptabilité.');
     }
 
+window.sendInvoiceToAccounting = sendInvoiceToAccounting;
+window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, { sendInvoiceToAccounting });
+
 async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileId = '') {
   switchMainTab('devis');
 
@@ -912,6 +1026,19 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
     function backupStatus(text, type = '') {
       setMessage(text || '', type);
+      if (backupOverlayText && backupOverlay?.classList.contains('active') && text) {
+        backupOverlayText.textContent = text;
+      }
+    }
+
+    function showBlockingProgress(title, text) {
+      if (backupOverlayTitle) backupOverlayTitle.textContent = title || 'Traitement en cours';
+      if (backupOverlayText) backupOverlayText.textContent = text || 'Veuillez patienter…';
+      if (backupOverlay) backupOverlay.classList.add('active');
+    }
+
+    function hideBlockingProgress() {
+      if (backupOverlay) backupOverlay.classList.remove('active');
     }
 
     function safeJsonParse(raw, fallback = null) {
@@ -1422,8 +1549,10 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
     }
 
     async function handleFullBackupClick() {
+      showBlockingProgress('Sauvegarde en cours', 'Préparation de la sauvegarde complète… Veuillez patienter.');
       try { await createFullBackupZip(); }
       catch(error) { console.error(error); backupStatus('La sauvegarde complète a échoué.', 'error'); alert(error?.message || 'La sauvegarde complète a échoué.'); }
+      finally { hideBlockingProgress(); }
     }
 
     function handleFullRestoreClick() {
@@ -1434,8 +1563,10 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       const file = event.target.files?.[0];
       event.target.value = '';
       if (!file) return;
+      showBlockingProgress('Restauration en cours', 'Restauration de la sauvegarde… Veuillez patienter.');
       try { await restoreFullBackupFromZip(file); }
       catch(error) { console.error(error); backupStatus('La restauration a échoué.', 'error'); alert(error?.message || 'La restauration a échoué.'); }
+      finally { hideBlockingProgress(); }
     }
 
     function broadcastDriveToken() {
@@ -1655,6 +1786,13 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
       broadcastDriveDisconnected();
     }
 
+    window.addEventListener('message', event => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'BASTCOMPTA_SEND_INVOICE_TO_ACCOUNTING') {
+        sendInvoiceToAccounting();
+      }
+    });
+
     authTabs.forEach(btn => {
       btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
     });
@@ -1665,7 +1803,6 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
     connectDriveBtn.addEventListener('click', connectGoogleDrive);
     disconnectDriveBtn.addEventListener('click', () => disconnectGoogleDrive(true));
-    if (sendInvoiceToAccountingBtn) sendInvoiceToAccountingBtn.addEventListener('click', sendInvoiceToAccounting);
     if (fullBackupBtn) fullBackupBtn.addEventListener('click', handleFullBackupClick);
     if (fullRestoreBtn) fullRestoreBtn.addEventListener('click', handleFullRestoreClick);
     if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRestoreFile);
