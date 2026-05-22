@@ -217,7 +217,24 @@
     const lossesTotal = losses.reduce((sum, row) => sum + toNumber(row.quantity || 1) * toNumber(row.unitPrice || row.amount || 0), 0);
     const kmTotal = km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
     const kmFiscal = kmTotal * toNumber(settings.kmAllowance);
-    const amortInvestments = investments.map(row => ({ ...row, ...computeAmortization(row.amount, row.date, row.durationMonths || 60, incomeYear) }));
+    const amortInvestments = investments.map(row => {
+      const computed = computeAmortization(
+        row.amount,
+        row.date,
+        row.durationMonths || 60,
+        incomeYear
+      );
+
+      return {
+        ...row,
+        ...computed,
+        amortYear: toNumber(
+          row.amortYear ??
+          row.yearlyAmort ??
+          computed.amortYear
+        )
+      };
+    });
     const amortAssets = assets.map(row => ({ ...row, ...computeAmortization(row.amount, row.date, row.durationMonths || 60, incomeYear) }));
     const yearlyAmort = amortInvestments.reduce((sum, row) => sum + row.amortYear, 0);
     const assetsAmort = amortAssets.reduce((sum, row) => sum + row.amortYear, 0);
