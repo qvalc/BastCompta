@@ -168,19 +168,57 @@
   function computeAmortization(amount, date, durationMonths, year) {
     amount = toNumber(amount);
     durationMonths = Math.max(1, parseInt(durationMonths || 60, 10));
+
     const start = String(date || '').slice(0, 10);
-    const startYear = parseInt(start.slice(0, 4), 10);
-    const startMonth = parseInt(start.slice(5, 7), 10) || 1;
-    if (!startYear || startYear > year) return { amortYear: 0, amortTotal: 0, netValue: amount };
+    const purchaseDate = new Date(start + 'T00:00:00');
+
+    if (!start || isNaN(purchaseDate)) {
+      return { amortYear: 0, amortTotal: 0, netValue: amount };
+    }
+
+    const purchaseYear = purchaseDate.getFullYear();
+    const purchaseMonth = purchaseDate.getMonth() + 1;
+
+    const firstAmortYear = purchaseMonth === 12 ? purchaseYear + 1 : purchaseYear;
+    const firstAmortMonth = purchaseMonth === 12 ? 1 : purchaseMonth + 1;
+
+    if (year < firstAmortYear) {
+      return { amortYear: 0, amortTotal: 0, netValue: amount };
+    }
 
     const monthly = amount / durationMonths;
-    const elapsedBeforeYear = Math.max(0, (year - startYear) * 12 + (1 - startMonth));
-    const remainingAtYearStart = Math.max(0, durationMonths - elapsedBeforeYear);
-    const monthsInYear = Math.min(12, remainingAtYearStart);
+
+    const monthsUntilEndOfYear =
+      (year - firstAmortYear) * 12 + (12 - firstAmortMonth + 1);
+
+    const amortizedMonthsTotal = Math.max(
+      0,
+      Math.min(durationMonths, monthsUntilEndOfYear)
+    );
+
+    const amortTotal = round2(monthly * amortizedMonthsTotal);
+
+    let monthsInYear = 0;
+
+    if (year === firstAmortYear) {
+      monthsInYear = 12 - firstAmortMonth + 1;
+    } else {
+      const monthsBeforeThisYear =
+        (year - firstAmortYear) * 12 - (firstAmortMonth - 1);
+
+      const remainingMonths = Math.max(0, durationMonths - monthsBeforeThisYear);
+      monthsInYear = Math.min(12, remainingMonths);
+    }
+
+    monthsInYear = Math.max(0, Math.min(durationMonths, monthsInYear));
+
     const amortYear = round2(monthly * monthsInYear);
-    const elapsedToYearEnd = Math.max(0, (year - startYear) * 12 + (12 - startMonth + 1));
-    const amortTotal = round2(monthly * Math.min(durationMonths, elapsedToYearEnd));
-    return { amortYear, amortTotal, netValue: round2(Math.max(0, amount - amortTotal)) };
+
+    return {
+      amortYear,
+      amortTotal,
+      netValue: round2(Math.max(0, amount - amortTotal))
+    };
   }
 
   function categoryAmount(rows, matcher) {
@@ -217,24 +255,10 @@
     const lossesTotal = losses.reduce((sum, row) => sum + toNumber(row.quantity || 1) * toNumber(row.unitPrice || row.amount || 0), 0);
     const kmTotal = km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
     const kmFiscal = kmTotal * toNumber(settings.kmAllowance);
-    const amortInvestments = investments.map(row => {
-      const computed = computeAmortization(
-        row.amount,
-        row.date,
-        row.durationMonths || 60,
-        incomeYear
-      );
-
-      return {
-        ...row,
-        ...computed,
-        amortYear: toNumber(
-          row.amortYear ??
-          row.yearlyAmort ??
-          computed.amortYear
-        )
-      };
-    });
+    const amortInvestments = investments.map(row => ({
+      ...row,
+      ...computeAmortization(row.amount, row.date, row.durationMonths || 60, incomeYear)
+    }));
     const amortAssets = assets.map(row => ({ ...row, ...computeAmortization(row.amount, row.date, row.durationMonths || 60, incomeYear) }));
     const yearlyAmort = amortInvestments.reduce((sum, row) => sum + row.amortYear, 0);
     const assetsAmort = amortAssets.reduce((sum, row) => sum + row.amortYear, 0);
