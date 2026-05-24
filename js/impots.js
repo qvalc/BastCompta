@@ -225,11 +225,30 @@
     return (Array.isArray(rows) ? rows : []).filter(inIncomeYear).reduce((sum, row) => matcher(row) ? sum + toNumber(row.htva || row.amount || 0) : sum, 0);
   }
 
+  function isSocialContributionRow(row) {
+    const label = normalizeText([
+      row.label,
+      row.description,
+      row.supplier,
+      row.category
+    ].join(' '));
+
+    return (
+      label.includes('cotisation') ||
+      label.includes('caisse sociale') ||
+      label.includes('securex') ||
+      label.includes('xerius') ||
+      label.includes('partena') ||
+      label.includes('acerta') ||
+      label.includes('liantis') ||
+      label.includes('ucm')
+    );
+  }
+
   function detectSocialContributions(compta) {
     const rows = [...(Array.isArray(compta.losses) ? compta.losses : []), ...(Array.isArray(compta.purchases) ? compta.purchases : [])].filter(inIncomeYear);
     return rows.reduce((sum, row) => {
-      const label = normalizeText([row.label, row.description, row.supplier, row.category].join(' '));
-      if (label.includes('cotisation') || label.includes('caisse sociale') || label.includes('securex') || label.includes('xerius') || label.includes('partena') || label.includes('acerta') || label.includes('liantis')) {
+      if (isSocialContributionRow(row)) {
         return sum + toNumber(row.htva || row.amount || (toNumber(row.quantity || 1) * toNumber(row.unitPrice || 0)));
       }
       return sum;
@@ -252,7 +271,9 @@
     const purchasesVat = purchases.reduce((sum, row) => sum + (row.deductible === false ? 0 : round2(toNumber(row.htva) * toNumber(row.rate || row.vatRate || 21) / 100)), 0);
     const purchasesMerchandiseNet = categoryAmount(purchases, row => row.category === 'marchandise');
     const purchasesGeneralNet = categoryAmount(purchases, row => row.category !== 'marchandise');
-    const lossesTotal = losses.reduce((sum, row) => sum + toNumber(row.quantity || 1) * toNumber(row.unitPrice || row.amount || 0), 0);
+    const lossesTotal = losses
+      .filter(row => !isSocialContributionRow(row))
+      .reduce((sum, row) => sum + toNumber(row.quantity || 1) * toNumber(row.unitPrice || row.amount || 0), 0);
     const kmTotal = km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
     const kmFiscal = kmTotal * toNumber(settings.kmAllowance);
     const amortInvestments = investments.map(row => ({
