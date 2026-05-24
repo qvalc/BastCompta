@@ -2485,6 +2485,15 @@ function totals() {
 
   const totalCharges = purchasesNet + yearlyAmort + lossesTotal;
   const estimatedProfit = salesNet - totalCharges;
+
+  const socialExemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
+
+  const socialContributionRecovered = estimatedProfit <= socialExemptionThreshold
+    ? lossesTotal
+    : 0;
+
+  const taxableEstimatedProfit = estimatedProfit + socialContributionRecovered;
+
   const netVat = salesVat - purchasesVat - carryover;
 
   const totalVatPaid = data.vat.declarations
@@ -2526,6 +2535,8 @@ function totals() {
     kmTotal,
     totalCharges,
     estimatedProfit,
+    socialContributionRecovered,
+    taxableEstimatedProfit,
     netVat,
     realVat,
     netFixedAssets,
@@ -3802,7 +3813,7 @@ function render() {
   if (metricSales) metricSales.textContent = money(t.salesNet);
   if (metricPurchases) metricPurchases.textContent = money(t.purchasesNet);
   if (metricVat) metricVat.textContent = money(t.netVat);
-  if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
+  if (metricProfit) metricProfit.textContent = money(t.taxableEstimatedProfit);
 }
 
 
