@@ -300,7 +300,16 @@
     const professionalShare = Math.max(0, Math.min(100, toNumber(settings.privateProfessionalShare || 100))) / 100;
     const rawCosts = purchasesNet + lossesTotal + yearlyAmort + kmFiscal + extraManualCosts;
     const fiscalCosts = round2(rawCosts * professionalShare);
-    const taxableProfit = round2(salesNet - fiscalCosts - socialContributions - toNumber(settings.plci) - toNumber(settings.priorLosses));
+    const exemptedSocial = salesNet <= 1881.76 ? socialContributions : 0;
+
+    const taxableProfit = round2(
+      salesNet
+      - fiscalCosts
+      - socialContributions
+      + exemptedSocial
+      - toNumber(settings.plci)
+      - toNumber(settings.priorLosses)
+    );
     const netVat = round2(salesVat - purchasesVat - toNumber(compta.settings?.vatCarryover || 0));
 
     return {
