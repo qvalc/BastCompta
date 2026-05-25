@@ -733,63 +733,89 @@ iframe {
     display: flex;
 }
 
+.subscription-modal {
+    padding: 14px;
+    background: rgba(15, 23, 42, 0.46);
+}
+
 .subscription-modal-card {
-    width: min(560px, 100%);
+    width: min(500px, 100%);
+    max-height: calc(100vh - 28px);
+    overflow-y: auto;
     background: #fff;
     border: 1px solid var(--line);
-    border-radius: 26px;
+    border-radius: 20px;
     box-shadow: var(--shadow);
-    padding: 28px;
+    padding: 18px;
 }
 
 .subscription-modal-card h3 {
-    margin: 0 0 10px;
-    font-size: 26px;
+    margin: 0 0 8px;
+    font-size: 22px;
 }
 
 .subscription-modal-card p {
     color: var(--muted);
-    line-height: 1.6;
+    line-height: 1.45;
+    margin: 6px 0;
 }
 
 .subscription-plans {
     display: grid;
-    gap: 10px;
-    margin: 18px 0;
+    gap: 8px;
+    margin: 12px 0;
 }
 
 .subscription-plans div {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    padding: 14px;
+    gap: 10px;
+    padding: 10px 12px;
     border: 1px solid var(--line);
-    border-radius: 16px;
+    border-radius: 13px;
     background: #f8fafc;
 }
 
 .subscription-payment {
-    padding: 14px;
-    border-radius: 16px;
+    padding: 12px;
+    border-radius: 14px;
     background: var(--primary-soft);
     border: 1px solid #bfd4ff;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
 }
 
 .subscription-payment p {
-    margin: 4px 0;
+    margin: 3px 0;
     color: var(--text);
 }
 
 .subscription-extra {
-    margin-top: 14px;
-    padding: 14px;
-    border-radius: 14px;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 13px;
     background: #fff7ed;
     border: 1px solid #fed7aa;
     color: #9a3412;
-    line-height: 1.6;
-    font-size: 14px;
+    line-height: 1.45;
+    font-size: 13px;
+}
+
+@media (max-width: 700px) {
+    .subscription-modal {
+        padding: 10px;
+        align-items: flex-start;
+    }
+
+    .subscription-modal-card {
+        width: 100%;
+        max-height: calc(100vh - 20px);
+        padding: 14px;
+        border-radius: 18px;
+    }
+
+    .subscription-modal-card h3 {
+        font-size: 20px;
+    }
 }
 
 /* Tri des fichiers Drive cachés */
