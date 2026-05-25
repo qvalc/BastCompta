@@ -84,12 +84,90 @@ const subscriptionModalTitle = document.getElementById('subscriptionModalTitle')
 const subscriptionModalText = document.getElementById('subscriptionModalText');
 const subscriptionCommunication = document.getElementById('subscriptionCommunication');
 const closeSubscriptionModalBtn = document.getElementById('closeSubscriptionModalBtn');
+let activateTrialBtn = null;
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
 const FREE_MAIN_TABS = ['devis'];
 const PAID_MAIN_TABS = ['compta', 'chantier', 'impots'];
 let currentSubscriptionState = { allowed: false, status: 'unknown', data: null };
+
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"]/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;'
+  }[char]));
+}
+
+function ensureSubscriptionModalStyles() {
+  if (document.getElementById('bastcompta-subscription-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'bastcompta-subscription-styles';
+  style.textContent = `
+    .subscription-status-box {
+      float: right;
+      max-width: 280px;
+      margin: 0 0 16px 20px;
+      padding: 14px 16px;
+      border: 1px solid #bfdbfe;
+      border-radius: 14px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      text-align: left;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.10);
+    }
+    .subscription-status-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #1d4ed8;
+      font-size: 1.05rem;
+    }
+    .subscription-info-text {
+      margin: 0 0 18px;
+      line-height: 1.65;
+    }
+    .trial-activation-box {
+      clear: both;
+      margin: 18px 0 8px;
+      padding: 16px;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      background: #ffffff;
+    }
+    .trial-activation-box h3 {
+      margin: 0 0 8px;
+      font-size: 1.05rem;
+    }
+    .trial-activation-box p {
+      margin: 0 0 12px;
+    }
+    .trial-activation-box button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 16px;
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .trial-activation-box button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    @media (max-width: 720px) {
+      .subscription-status-box {
+        float: none;
+        max-width: none;
+        margin: 0 0 14px;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 function getUserPseudo(user = auth.currentUser, data = null) {
   const raw =
@@ -1852,9 +1930,6 @@ async function createUserDocument(user) {
   }
 
   const now = new Date();
-  const trialEnd = new Date(now);
-  trialEnd.setDate(now.getDate() + 30);
-
   const isOwner = (user.email || '').toLowerCase() === 'seb-n@hotmail.com';
 
   const userData = {
@@ -1863,14 +1938,18 @@ async function createUserDocument(user) {
     displayName: user.displayName || '',
     createdAt: now.toISOString(),
 
-    subscriptionStatus: isOwner ? 'owner' : 'trial',
-    subscriptionActive: true,
+    // Par défaut, un nouveau compte reste en statut gratuit.
+    // L’essai de 30 jours ne démarre que lorsque l’utilisateur clique sur
+    // le bouton "Activer l’essai gratuit 30 jours".
+    subscriptionStatus: isOwner ? 'owner' : 'free',
+    subscriptionActive: isOwner,
 
-    trialStartedAt: isOwner ? null : now.toISOString(),
-    trialEndsAt: isOwner ? null : trialEnd.toISOString(),
+    trialUsed: false,
+    trialStartedAt: null,
+    trialEndsAt: null,
 
     role: isOwner ? 'admin' : 'user',
-    plan: isOwner ? 'owner' : 'monthly',
+    plan: isOwner ? 'owner' : 'free',
 
     monthlyPrice: isOwner ? 0 : 4.99,
     currency: 'EUR',
@@ -1961,6 +2040,56 @@ async function checkSubscription(user) {
   return { allowed: false, reason: data.subscriptionStatus || 'inactive', data };
 }
 
+
+async function activateTrial() {
+  const user = auth.currentUser;
+  if (!user?.uid) return;
+
+  const data = currentSubscriptionState?.data || {};
+  if (data.trialUsed === true) {
+    alert('L’essai gratuit a déjà été utilisé sur ce compte.');
+    return;
+  }
+
+  const now = new Date();
+  const trialEnd = new Date(now);
+  trialEnd.setDate(now.getDate() + 30);
+
+  const userRef = doc(db, 'users', user.uid);
+  const update = {
+    subscriptionStatus: 'trial',
+    subscriptionActive: true,
+    trialUsed: true,
+    trialStartedAt: now.toISOString(),
+    trialEndsAt: trialEnd.toISOString(),
+    plan: 'trial',
+    updatedAt: now.toISOString()
+  };
+
+  try {
+    if (activateTrialBtn) {
+      activateTrialBtn.disabled = true;
+      activateTrialBtn.textContent = 'Activation...';
+    }
+
+    await updateDoc(userRef, update);
+
+    const fresh = await checkSubscription(user);
+    currentSubscriptionState = fresh;
+    updateCurrentUserDisplay(user, fresh);
+    loadProtectedFrames(fresh);
+    switchMainTab('devis');
+    showSubscriptionModal(fresh);
+  } catch (error) {
+    console.error('Impossible d’activer l’essai gratuit.', error);
+    alert('Impossible d’activer l’essai gratuit. Vérifie ta connexion puis réessaie.');
+    if (activateTrialBtn) {
+      activateTrialBtn.disabled = false;
+      activateTrialBtn.textContent = 'Activer l’essai gratuit 30 jours';
+    }
+  }
+}
+
 function subscriptionMessageFromResult(result) {
   const email = result?.data?.email || auth.currentUser?.email || '';
 
@@ -2010,13 +2139,43 @@ function showSubscriptionModal(result = currentSubscriptionState) {
 
   if (!subscriptionModal) return;
 
+  ensureSubscriptionModalStyles();
+
+  const label = statusLabel(result);
+  const canActivateTrial =
+    result?.status !== 'owner' &&
+    result?.status !== 'active' &&
+    result?.status !== 'trial' &&
+    data.trialUsed !== true;
+
+  const trialUsedText = data.trialUsed === true
+    ? 'Essai gratuit déjà utilisé sur ce compte.'
+    : 'Aucun essai actif.';
+
   subscriptionModalTitle.textContent = getUserPseudo(user, data);
 
-  subscriptionModalText.textContent =
-    `Statut : ${statusLabel(result)}. ` +
-    'Le module Devis & Facture est gratuit. ' +
-    'Les modules Comptabilité, Suivi client et Impôts IPP sont inclus pendant l’essai gratuit de 30 jours, puis nécessitent un abonnement. ' +
-    'Formules : mensuel 4,99 €, trimestriel 12,99 €, annuel 49,99 €.';
+  subscriptionModalText.innerHTML = `
+    <div class="subscription-status-box">
+      <strong>Statut : ${escapeHtml(label)}</strong>
+      <span>${hasFullAccess(result) ? 'Accès complet actif.' : 'Accès gratuit limité à Devis & Facture.'}</span>
+    </div>
+
+    <p class="subscription-info-text">
+      <strong>Le module Devis & Facture est gratuit.</strong><br>
+      Les modules Comptabilité, Suivi client et Impôts IPP sont inclus pendant l’essai gratuit de 30 jours, puis nécessitent un abonnement.
+    </p>
+
+    <div class="trial-activation-box">
+      <h3>Essai gratuit de 30 jours</h3>
+      <p>Activez l’essai uniquement quand vous souhaitez tester les modules Comptabilité, Suivi client et Impôts IPP.</p>
+      <button id="activateTrialBtn" type="button" ${canActivateTrial ? '' : 'disabled'}>
+        ${canActivateTrial ? 'Activer l’essai gratuit 30 jours' : escapeHtml(trialUsedText)}
+      </button>
+    </div>
+  `;
+
+  activateTrialBtn = document.getElementById('activateTrialBtn');
+  activateTrialBtn?.addEventListener('click', activateTrial);
 
   subscriptionCommunication.textContent = email ? `bastcompta ${email}` : 'bastcompta';
 
@@ -2232,9 +2391,10 @@ onAuthStateChanged(auth, async (user) => {
 
       if (!subscription.allowed) {
         // L’utilisateur garde l’accès gratuit au module Devis & Facture.
+        // La fenêtre abonnement ne s’ouvre plus automatiquement :
+        // l’utilisateur l’ouvre en cliquant sur son pseudo/statut.
         showPortal(freshUser, subscription);
         setMessage('');
-        showSubscriptionModal(subscription);
         return;
       }
 
