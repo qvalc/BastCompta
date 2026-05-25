@@ -87,6 +87,66 @@ const closeSubscriptionModalBtn = document.getElementById('closeSubscriptionModa
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
+const FREE_MAIN_TABS = ['devis'];
+const PAID_MAIN_TABS = ['compta', 'chantier', 'impots'];
+let currentSubscriptionState = { allowed: false, status: 'unknown', data: null };
+
+function getUserPseudo(user = auth.currentUser, data = null) {
+  const raw =
+    data?.pseudo ||
+    data?.displayName ||
+    user?.displayName ||
+    user?.email ||
+    'Utilisateur';
+
+  return String(raw).includes('@')
+    ? String(raw).split('@')[0]
+    : String(raw);
+}
+
+function hasFullAccess(subscription = currentSubscriptionState) {
+  return ['owner', 'active', 'trial'].includes(subscription?.status);
+}
+
+function isFreeTab(tabName) {
+  return FREE_MAIN_TABS.includes(tabName);
+}
+
+function statusLabel(subscription = currentSubscriptionState) {
+  const data = subscription?.data || {};
+
+  if (subscription?.status === 'owner' || data.subscriptionStatus === 'owner') {
+    return 'Propriétaire';
+  }
+
+  if (subscription?.status === 'active' || data.subscriptionStatus === 'active') {
+    return 'Abonnement actif';
+  }
+
+  if (subscription?.status === 'trial' || data.subscriptionStatus === 'trial') {
+    const end = new Date(data.trialEndsAt || 0);
+    if (!Number.isNaN(end.getTime())) {
+      const daysLeft = Math.max(0, Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24)));
+      return `Essai gratuit 30 jours · ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
+    }
+    return 'Essai gratuit 30 jours';
+  }
+
+  return 'Gratuit';
+}
+
+function updateCurrentUserDisplay(user = auth.currentUser, subscription = currentSubscriptionState) {
+  if (!currentUserEl) return;
+  currentUserEl.textContent = getUserPseudo(user, subscription?.data);
+  currentUserEl.title = 'Voir mon statut et les abonnements';
+  currentUserEl.style.cursor = 'pointer';
+}
+
+function showLockedPaidFeatureMessage() {
+  showSubscriptionModal(currentSubscriptionState);
+}
+
+
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -104,7 +164,23 @@ function switchAuthTab(tabName) {
 }
 
 function switchMainTab(tabName) {
-  mainTabs.forEach(btn => btn.classList.toggle('active', btn.dataset.mainTab === tabName));
+  if (!isFreeTab(tabName) && !hasFullAccess()) {
+    showLockedPaidFeatureMessage();
+    tabName = 'devis';
+  }
+
+  mainTabs.forEach(btn => {
+    const isActive = btn.dataset.mainTab === tabName;
+    const isLocked = !isFreeTab(btn.dataset.mainTab) && !hasFullAccess();
+
+    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('locked', isLocked);
+    btn.disabled = false;
+    btn.title = isLocked
+      ? 'Module disponible pendant l’essai gratuit 30 jours ou avec abonnement'
+      : '';
+  });
+
   document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
   document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
   document.getElementById('panel-chantier').classList.toggle('active', tabName === 'chantier');
@@ -221,10 +297,25 @@ function revokePortalModuleAccess() {
   }
 }
 
-function loadProtectedFrames() {
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach(frame => {
+function loadProtectedFrames(subscription = currentSubscriptionState) {
+  const canLoadPaidModules = hasFullAccess(subscription);
+
+  [
+    { tab: 'devis', frame: devisFrame },
+    { tab: 'compta', frame: comptaFrame },
+    { tab: 'chantier', frame: chantierFrame },
+    { tab: 'impots', frame: impotsFrame }
+  ].forEach(({ tab, frame }) => {
     if (!frame) return;
+
     const targetSrc = frame.dataset.src || '';
+    const canLoad = isFreeTab(tab) || canLoadPaidModules;
+
+    if (!canLoad) {
+      frame.setAttribute('src', 'about:blank');
+      return;
+    }
+
     if (targetSrc && (!frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank')) {
       frame.setAttribute('src', targetSrc);
     }
@@ -238,13 +329,17 @@ function unloadProtectedFrames() {
   });
 }
 
-function showPortal(user) {
+function showPortal(user, subscription = currentSubscriptionState) {
+  currentSubscriptionState = subscription || currentSubscriptionState;
+
   grantPortalModuleAccess();
-  loadProtectedFrames();
+  loadProtectedFrames(currentSubscriptionState);
   authScreen.classList.add('hidden');
   portalScreen.classList.remove('hidden');
-  currentUserEl.innerHTML = '🟢 Connecté';
-  showTrialInfo(user);
+
+  updateCurrentUserDisplay(user, currentSubscriptionState);
+  switchMainTab('devis');
+
   sendVerificationBtn.style.display = user.emailVerified ? 'none' : 'inline-flex';
   updateDriveButtons();
 
@@ -1758,12 +1853,14 @@ async function createUserDocument(user) {
 
   const now = new Date();
   const trialEnd = new Date(now);
-  trialEnd.setDate(now.getDate() + 90);
+  trialEnd.setDate(now.getDate() + 30);
 
   const isOwner = (user.email || '').toLowerCase() === 'seb-n@hotmail.com';
 
   const userData = {
     email: user.email || '',
+    pseudo: getUserPseudo(user),
+    displayName: user.displayName || '',
     createdAt: now.toISOString(),
 
     subscriptionStatus: isOwner ? 'owner' : 'trial',
@@ -1868,9 +1965,9 @@ function subscriptionMessageFromResult(result) {
   const email = result?.data?.email || auth.currentUser?.email || '';
 
   if (result?.reason === 'trial_expired') {
-    return `Votre période d’essai gratuite de 3 mois est terminée.
+    return `Votre période d’essai gratuite de 30 jours est terminée.
 
-Pour continuer à utiliser BastCompta, merci d’effectuer un virement bancaire :
+Le module Devis & Facture reste gratuit. Pour continuer à utiliser les autres modules BastCompta, merci d’effectuer un virement bancaire :
 
 Compte : BE62 0013 1811 9761
 Communication : bastcompta ${email}
@@ -1906,24 +2003,28 @@ Votre accès sera réactivé après validation du paiement.`;
   return 'Accès BastCompta non autorisé pour ce compte.';
 }
 
-function showSubscriptionModal(result) {
-  const email = result?.data?.email || auth.currentUser?.email || '';
+function showSubscriptionModal(result = currentSubscriptionState) {
+  const user = auth.currentUser;
+  const data = result?.data || currentSubscriptionState?.data || {};
+  const email = data.email || user?.email || '';
 
   if (!subscriptionModal) return;
 
-  subscriptionModalTitle.textContent =
-    result?.reason === 'trial_expired'
-      ? 'Votre essai gratuit est terminé'
-      : 'Votre abonnement est expiré';
+  subscriptionModalTitle.textContent = getUserPseudo(user, data);
 
   subscriptionModalText.textContent =
-    'Pour continuer à utiliser BastCompta, choisissez une formule et effectuez le virement bancaire.';
+    `Statut : ${statusLabel(result)}. ` +
+    'Le module Devis & Facture est gratuit. ' +
+    'Les modules Comptabilité, Suivi client et Impôts IPP sont inclus pendant l’essai gratuit de 30 jours, puis nécessitent un abonnement. ' +
+    'Formules : mensuel 4,99 €, trimestriel 12,99 €, annuel 49,99 €.';
 
-  subscriptionCommunication.textContent = `bastcompta ${email}`;
+  subscriptionCommunication.textContent = email ? `bastcompta ${email}` : 'bastcompta';
 
   subscriptionModal.classList.add('open');
   subscriptionModal.setAttribute('aria-hidden', 'false');
 }
+
+currentUserEl?.addEventListener('click', () => showSubscriptionModal(currentSubscriptionState));
 
 closeSubscriptionModalBtn?.addEventListener('click', () => {
   subscriptionModal?.classList.remove('open');
@@ -2019,7 +2120,7 @@ registerForm.addEventListener('submit', async (event) => {
 
   try {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(credential.user, { displayName: email });
+    await updateProfile(credential.user, { displayName: email.split('@')[0] });
     await sendEmailVerification(credential.user);
     setMessage('Compte créé. Un email de vérification a été envoyé.', 'success');
   } catch (error) {
@@ -2106,30 +2207,15 @@ async function showTrialInfo(user) {
     if (!snap.exists()) return;
 
     const data = snap.data();
+    currentSubscriptionState = {
+      allowed: hasFullAccess({ status: data.subscriptionStatus, data }),
+      status: data.subscriptionStatus || 'free',
+      data
+    };
 
-    if (data.subscriptionStatus === 'owner') {
-      currentUserEl.innerHTML = '👑 Propriétaire';
-      return;
-    }
-
-    if (data.subscriptionStatus === 'active') {
-      currentUserEl.innerHTML = '🟢 Abonnement actif';
-      return;
-    }
-
-    if (data.subscriptionStatus !== 'trial') return;
-
-    const end = new Date(data.trialEndsAt);
-    const now = new Date();
-
-    const diffMs = end - now;
-    const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-
-    currentUserEl.innerHTML =
-      `🟢 Essai gratuit : ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
-
+    updateCurrentUserDisplay(user, currentSubscriptionState);
   } catch (error) {
-    console.warn('Impossible d’afficher l’essai gratuit.', error);
+    console.warn('Impossible d’afficher le statut utilisateur.', error);
   }
 }
 
@@ -2142,17 +2228,17 @@ onAuthStateChanged(auth, async (user) => {
       await createUserDocument(freshUser);
       const subscription = await checkSubscription(freshUser);
 
+      currentSubscriptionState = subscription;
+
       if (!subscription.allowed) {
-        revokePortalModuleAccess();
-        unloadProtectedFrames();
-        portalScreen.classList.add('hidden');
-        authScreen.classList.remove('hidden');
-        setMessage(subscriptionMessageFromResult(subscription), 'warning');
+        // L’utilisateur garde l’accès gratuit au module Devis & Facture.
+        showPortal(freshUser, subscription);
+        setMessage('');
         showSubscriptionModal(subscription);
         return;
       }
 
-      showPortal(freshUser);
+      showPortal(freshUser, subscription);
     } catch (error) {
       console.error('Vérification abonnement impossible :', error);
       revokePortalModuleAccess();
