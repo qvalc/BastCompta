@@ -746,6 +746,18 @@ function sanitizePathPart(value, fallback = 'Sans nom') {
 
 
 
+const HIDDEN_DRIVE_CATEGORIES = [
+  { key: 'all', label: 'Tous' },
+  { key: 'devis', label: 'Devis' },
+  { key: 'factures', label: 'Factures' },
+  { key: 'rappels', label: 'Rappels' },
+  { key: 'comptabilite', label: 'Comptabilité' },
+  { key: 'clients', label: 'Clients / chantiers' },
+  { key: 'impots', label: 'Impôts' },
+  { key: 'sauvegardes', label: 'Sauvegardes' },
+  { key: 'autres', label: 'Autres' }
+];
+
 function detectHiddenDriveCategory(file = {}) {
   const name = normalizeSearchText(file.name || '');
   const mime = normalizeSearchText(file.mimeType || '');
