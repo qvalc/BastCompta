@@ -198,6 +198,28 @@ function statusLabel(subscription = currentSubscriptionState) {
   }
 
   if (subscription?.status === 'active' || data.subscriptionStatus === 'active') {
+
+    const end = new Date(data.subscriptionEndsAt || 0);
+
+    if (!Number.isNaN(end.getTime())) {
+
+      const daysLeft = Math.max(
+        0,
+        Math.ceil(
+          (end - new Date()) / (1000 * 60 * 60 * 24)
+        )
+      );
+
+      const planLabel =
+        data.plan === 'yearly'
+          ? 'Abonnement annuel'
+          : data.plan === 'quarterly'
+            ? 'Abonnement trimestriel'
+            : 'Abonnement mensuel';
+
+      return `${planLabel} actif · ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
+    }
+
     return 'Abonnement actif';
   }
 
