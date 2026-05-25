@@ -1301,12 +1301,18 @@ async function refreshHiddenDriveList() {
   hiddenDriveList.innerHTML = '';
 
   try {
-    await ensureGoogleAccessToken(false);
+    // Ici on force une demande interactive si le token Google n'est plus frais.
+    // Sans ça, le bouton peut indiquer Drive connecté via Firestore/localStorage,
+    // mais l'accès à appDataFolder échoue parce que le token OAuth en mémoire est expiré.
+    await ensureGoogleAccessToken(true);
+
     hiddenDriveFilesCache = await listDriveAppDataFiles();
     renderHiddenDriveList();
   } catch (error) {
     console.error(error);
-    hiddenDriveStatus.textContent = 'Impossible de charger les fichiers cachés Drive. Connecte Google Drive puis réessaie.';
+    hiddenDriveStatus.textContent =
+      'Impossible de charger les fichiers cachés Drive. Reconnecte Google Drive puis réessaie. Détail : ' +
+      (error?.message || error);
   }
 }
 
