@@ -49,6 +49,7 @@
 
   let settings = loadSettings();
   let activePage = 'summary';
+  let fiscalComptaData = null;
   let snapshot = buildSnapshot();
 
   function safeJson(raw, fallback) {
@@ -116,7 +117,6 @@
     return true;
   }
 
-  let fiscalComptaData = null;
 
   function readSources() {
     return {
