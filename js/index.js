@@ -1273,6 +1273,11 @@ async function readDriveJsonFile(file) {
   return JSON.parse(text);
 }
 
+window.BastComptaDrive = {
+  listDriveAppDataFiles,
+  readDriveJsonFile
+};
+
 async function deleteHiddenDriveFile(file) {
   const token = await ensureGoogleAccessToken(false);
   const res = await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(file.id), {

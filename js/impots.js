@@ -116,12 +116,32 @@
     return true;
   }
 
+  let fiscalComptaData = null;
+
   function readSources() {
     return {
-      compta: safeJson(localStorage.getItem(COMPTA_KEY), {}),
+      compta: fiscalComptaData || safeJson(localStorage.getItem(COMPTA_KEY), {}),
       devis: safeJson(localStorage.getItem(DEVIS_KEY), {}),
       chantiers: safeJson(localStorage.getItem(CHANTIERS_KEY), { version: 1, projects: [] })
     };
+  }
+
+  async function loadFiscalComptaFromDrive() {
+    const drive = window.parent?.BastComptaDrive;
+    if (!drive?.listDriveAppDataFiles || !drive?.readDriveJsonFile) return false;
+
+    const incomeYear = String(settings.incomeYear);
+    const files = await drive.listDriveAppDataFiles();
+
+    const file = files.find(f => {
+      const name = String(f.name || '').toLowerCase();
+      return name.includes('comptabilite') && name.includes(incomeYear) && name.endsWith('.json');
+    });
+
+    if (!file) return false;
+
+    fiscalComptaData = await drive.readDriveJsonFile(file);
+    return true;
   }
 
   function isCreditNoteSalesRow(row) {
@@ -576,5 +596,8 @@
     if ([COMPTA_KEY, DEVIS_KEY, CHANTIERS_KEY, SETTINGS_KEY].includes(event.key)) refreshAll(false);
   });
 
-  window.addEventListener('load', () => refreshAll(false));
+  window.addEventListener('load', async () => {
+    await loadFiscalComptaFromDrive();
+    refreshAll(false);
+  });
 })();
