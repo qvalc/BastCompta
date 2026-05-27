@@ -2651,7 +2651,12 @@ function renderDashboard() {
             <div class="kv"><span>Actif simplifié</span><span>${money(t.assetsSide)}</span></div>
             <div class="kv"><span>Passif simplifié</span><span>${money(t.liabilitiesSide)}</span></div>
             <div class="kv"><span>Écart bilan</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
-            <div class="kv"><span>Résultat estimé</span><span class="${t.estimatedProfit >= 0 ? 'status-good' : 'status-bad'}">${money(t.estimatedProfit)}</span></div>
+            <div class="kv">
+  <span>Résultat estimé</span>
+  <span class="${t.taxableEstimatedProfit >= 0 ? 'status-good' : 'status-bad'}">
+    ${money(t.taxableEstimatedProfit)}
+  </span>
+</div>
           </div>
         </section>
       `;
