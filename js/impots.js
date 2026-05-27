@@ -597,7 +597,13 @@
   });
 
   window.addEventListener('load', async () => {
-    await loadFiscalComptaFromDrive();
     refreshAll(false);
+
+    try {
+      const loaded = await loadFiscalComptaFromDrive();
+      if (loaded) refreshAll(false);
+    } catch (e) {
+      console.warn('Impossible de charger automatiquement la comptabilité fiscale depuis Drive :', e);
+    }
   });
 })();
