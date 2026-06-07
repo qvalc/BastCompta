@@ -688,7 +688,9 @@ async function autoLoadClientDocuments(showToast = false) {
   const driveDocs = await getDriveCrmDocumentsForProject(hydrated);
   crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs]);
   if (crmDocumentLinkCache.length) {
-    for (const doc of crmDocumentLinkCache) await toggleCrmDocumentLink(doc.key, doc.ref, true);
+    for (const doc of crmDocumentLinkCache) {
+      await toggleCrmDocumentLink(doc.key, doc.ref, true, project.id, doc);
+    }
     if (showToast) notify('Documents client chargés / mis à jour.');
   }
 }
@@ -2181,16 +2183,57 @@ function isMoneyLinked(project, type, ref) {
   });
 }
 
-async function toggleCrmDocumentLink(type, ref, checked) {
-  const project = getProject();
+function crmDocStableKey(type, ref) {
+  return `${type}:${normalizeLinkKey(ref || '')}`;
+}
+
+function removeDocumentFromOtherProjects(currentProjectId, type, ref) {
+  const stableKey = crmDocStableKey(type, ref);
+
+  const listName = type === 'quote'
+    ? 'linkedQuotes'
+    : type === 'invoice'
+      ? 'linkedInvoices'
+      : 'linkedReminders';
+
+  data.projects.forEach(project => {
+    if (!project || project.id === currentProjectId) return;
+    if (!Array.isArray(project[listName])) return;
+
+    project[listName] = project[listName].filter(item => {
+      const itemType = String(item.docKey || type || '').trim();
+      const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
+      return `${itemType}:${itemRef}` !== stableKey;
+    });
+  });
+}
+
+async function toggleCrmDocumentLink(type, ref, checked, targetProjectId = selectedProjectId, forcedDoc = null) {
+  const project = data.projects.find(item => item.id === targetProjectId);
   if (!project) return;
-  const doc = crmDocumentLinkCache.find(item => item.key === type && String(item.ref) === String(ref));
+
+  const doc = forcedDoc || crmDocumentLinkCache.find(item =>
+    item.key === type && String(item.ref) === String(ref)
+  );
+
   if (!doc) return;
+
+  if (!clientMatchesProject(project, doc)) {
+    console.warn('Document refusé : client différent', { project, doc });
+    return;
+  }
+
   const listName = doc.list;
   if (!Array.isArray(project[listName])) project[listName] = [];
+
+  const stableKey = crmDocStableKey(type, doc.ref || ref || '');
+
   if (checked) {
+    removeDocumentFromOtherProjects(project.id, type, doc.ref || ref);
+
     const payload = {
       id: `${type}-${doc.ref}`,
+      documentUid: stableKey,
       date: doc.date,
       ref: doc.ref,
       description: doc.description,
@@ -2213,19 +2256,22 @@ async function toggleCrmDocumentLink(type, ref, checked) {
       fileName: doc.fileName,
       docKey: type,
       suiviClientId: project.id,
+      chantierId: project.id,
       clientId: doc.clientId,
       clientName: doc.clientName,
       clientRef: doc.clientRef,
-      siteName: project.title
+      siteName: doc.siteName || project.title,
+      rawDocument: doc.rawDocument || null
     };
-    const stableKey = `${type}:${normalizeLinkKey(doc.ref || payload.ref || '')}`;
+
     const existing = project[listName].find(item => {
       const itemType = String(item.docKey || type || '').trim();
       const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
       return `${itemType}:${itemRef}` === stableKey;
     });
-    if (existing) Object.assign(existing, payload, { documentUid: stableKey });
-    else project[listName].push(Object.assign(payload, { documentUid: stableKey }));
+
+    if (existing) Object.assign(existing, payload);
+    else project[listName].push(payload);
 
     project[listName] = dedupeMoneyList(project[listName]);
 
@@ -2234,8 +2280,6 @@ async function toggleCrmDocumentLink(type, ref, checked) {
     project.clientRef = project.clientRef || doc.clientRef || '';
     addTimeline(project, `${doc.description} lié au client.`);
   } else {
-    const stableKey = `${type}:${normalizeLinkKey(doc.ref || ref || '')}`;
-
     project[listName] = project[listName].filter(item => {
       const itemType = String(item.docKey || type || '').trim();
       const itemRef = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
@@ -2244,6 +2288,7 @@ async function toggleCrmDocumentLink(type, ref, checked) {
 
     addTimeline(project, `${doc.description} retiré du client.`);
   }
+
   project.updatedAt = new Date().toISOString();
   await saveData(false);
   renderMain();
