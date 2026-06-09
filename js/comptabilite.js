@@ -191,13 +191,43 @@ const defaultData = {
   }
 };
 
+
+const LOSS_TYPE_OPTIONS = [
+  { value: 'cotisations_sociales', label: 'Cotisations sociales' },
+  { value: 'taxe_circulation', label: 'Taxe de circulation' },
+  { value: 'taxe_mise_circulation', label: 'Taxe de mise en circulation' },
+  { value: 'taxe_communale', label: 'Taxe communale' },
+  { value: 'precompte_immobilier_pro', label: 'Précompte immobilier pro' },
+  { value: 'redevance_spw', label: 'Redevance SPW / administration' },
+  { value: 'autre_taxe_sans_tva', label: 'Autre taxe sans TVA' }
+];
+
+function getLossType(row) {
+  return row?.type || 'cotisations_sociales';
+}
+
+function getLossTypeLabel(type) {
+  return LOSS_TYPE_OPTIONS.find(option => option.value === type)?.label || 'Cotisations sociales';
+}
+
+function renderLossTypeSelect(row, index) {
+  const currentType = getLossType(row);
+  return `
+            <select onchange="data.losses[${index}].type=this.value; saveData(false)">
+              ${LOSS_TYPE_OPTIONS.map(option => `
+                <option value="${escapeAttr(option.value)}" ${currentType === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>
+              `).join('')}
+            </select>
+          `;
+}
+
 const pageDefs = [
   { key: 'dashboard', label: 'Tableau de bord' },
   { key: 'sales', label: 'Ventes' },
   { key: 'purchases', label: 'Achats' },
   { key: 'investments', label: 'Investissements' },
   { key: 'assets', label: 'Immobilisations' },
-  { key: 'losses', label: 'Pertes & charges' },
+  { key: 'losses', label: 'Taxes & cotisations' },
   { key: 'stock', label: 'Stock' },
   { key: 'km', label: 'Kilomètres' },
   { key: 'result', label: 'Compte de résultat' },
@@ -2479,6 +2509,12 @@ function totals() {
 
   const stockValue = data.stock.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
   const lossesTotal = data.losses.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
+  const socialContributionsTotal = data.losses.reduce((sum, row) => {
+    return sum + (getLossType(row) === 'cotisations_sociales' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
+  }, 0);
+  const otherTaxesTotal = data.losses.reduce((sum, row) => {
+    return sum + (getLossType(row) !== 'cotisations_sociales' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
+  }, 0);
   const kmTotal = data.km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
 
   const carryover = toNumber(data.settings.vatCarryover);
@@ -2489,7 +2525,7 @@ function totals() {
   const socialExemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
 
   const socialContributionRecovered = estimatedProfit <= socialExemptionThreshold
-    ? lossesTotal
+    ? socialContributionsTotal
     : 0;
 
   const taxableEstimatedProfit = estimatedProfit + socialContributionRecovered;
@@ -2532,6 +2568,8 @@ function totals() {
     totalAmortized,
     stockValue,
     lossesTotal,
+    socialContributionsTotal,
+    otherTaxesTotal,
     kmTotal,
     totalCharges,
     estimatedProfit,
@@ -2922,14 +2960,15 @@ function renderLosses() {
   const t = totals();
   return renderTablePage({
     key: 'losses',
-    title: 'Pertes et charges diverses',
-    hint: 'Pour les charges non reprises dans les achats classiques : cotisations sociales, pertes ou autres frais spécifiques.',
-    addLabel: 'Ajouter une charge',
-    onAdd: `addRow('losses', { date: '', label: '', quantity: 1, unitPrice: 0 })`,
-    headers: ['Date', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
+    title: 'Taxes et cotisations',
+    hint: 'Cotisations sociales : gardent la mécanique d’exonération. Autres taxes : taxes sans TVA récupérable, reprises en 64 – Taxes.',
+    addLabel: 'Ajouter une taxe / cotisation',
+    onAdd: `addRow('losses', { date: '', type: 'cotisations_sociales', label: '', quantity: 1, unitPrice: 0 })`,
+    headers: ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
     rows: data.losses.map((row, i) => `
           <tr>
             <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.losses[${i}].date=this.value; saveData(false)"></td>
+            <td>${renderLossTypeSelect(row, i)}</td>
             <td><input value="${escapeAttr(row.label)}" onchange="data.losses[${i}].label=this.value; saveData(false)"></td>
             <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.losses[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
             <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.losses[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
@@ -2937,7 +2976,11 @@ function renderLosses() {
             <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('losses', ${i})">×</button></td>
           </tr>
         `).join(''),
-    footer: `<div class="kv"><span>Total pertes / charges diverses</span><span>${money(t.lossesTotal)}</span></div>`
+    footer: `
+      <div class="kv"><span>Cotisations sociales</span><span>${money(t.socialContributionsTotal)}</span></div>
+      <div class="kv"><span>Taxes sans TVA récupérable</span><span>${money(t.otherTaxesTotal)}</span></div>
+      <div class="kv"><span>Total taxes / cotisations</span><span>${money(t.lossesTotal)}</span></div>
+    `
   });
 }
 
@@ -2966,7 +3009,7 @@ function renderKm() {
 
 function renderResult() {
   const t = totals();
-  const taxAndSocial = t.lossesTotal;
+  const taxAndSocial = t.socialContributionsTotal;
   const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
   const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
@@ -3010,7 +3053,7 @@ function renderResult() {
                   </tr>
 
                   <tr>
-                    <td rowspan="6" style="background:#f8fafc;"></td>
+                    <td rowspan="7" style="background:#f8fafc;"></td>
                     <td>61 – Frais de fonctionnement / Frais généraux</td>
                     <td style="text-align:right;">${money(t.purchasesGeneralNet)}</td>
                   </tr>
@@ -3023,21 +3066,27 @@ function renderResult() {
                     <td style="text-align:right;">${money(t.yearlyAmort)}</td>
                   </tr>
                   <tr>
-                    <td>64 – Taxes **</td>
-                    <td style="text-align:right;">${money(0)}</td>
+                    <td>64 – Taxes sans TVA récupérable</td>
+                    <td style="text-align:right;">${money(t.otherTaxesTotal)}</td>
                   </tr>
                   <tr>
                     <td>65 – Frais financier</td>
                     <td style="text-align:right;">${money(0)}</td>
                   </tr>
                   <tr>
-                    <td>66 – Charges exceptionnel</td>
+                    <td>66 – Charges exceptionnelles</td>
                     <td style="text-align:right;">${money(0)}</td>
+                  </tr>
+                  <tr>
+                    <td>Cotisations sociales versées</td>
+                    <td style="text-align:right;">${money(t.socialContributionsTotal)}</td>
                   </tr>
                   <tr style="background:#f1f5f9; font-weight:700;">
                     <td style="text-align:right;">Total :</td>
                     <td style="text-align:right;">${money(
     t.purchasesMerchandiseNet + t.purchasesGeneralNet + t.yearlyAmort
+    + t.otherTaxesTotal
+    + t.socialContributionsTotal
   )}</td>
                   </tr>
                 </tbody>
@@ -3444,7 +3493,7 @@ function reportKv(items) {
 function buildPrintReportHtml() {
   const t = totals();
   const year = parseInt(data.company.period, 10) || new Date().getFullYear();
-  const taxAndSocial = t.lossesTotal;
+  const taxAndSocial = t.socialContributionsTotal;
   const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
   const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
@@ -3519,6 +3568,7 @@ function buildPrintReportHtml() {
 
   const lossRows = data.losses.map(row => [
     printableDate(row.date),
+    escapeHtml(getLossTypeLabel(getLossType(row))),
     escapeHtml(row.label || '—'),
     num(row.quantity),
     money(row.unitPrice),
@@ -3700,8 +3750,8 @@ function buildPrintReportHtml() {
     </section>
 
     <section class="section">
-      <h2 class="section-title">Pertes et charges diverses</h2>
-      ${reportTable(['Date', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
+      <h2 class="section-title">Taxes et cotisations</h2>
+      ${reportTable(['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
     </section>
 
     <section class="section">
@@ -3717,7 +3767,8 @@ function buildPrintReportHtml() {
           <div class="row"><div>60 – Marchandises</div><div>${money(t.purchasesMerchandiseNet)}</div></div>
           <div class="row"><div>61 – Frais généraux</div><div>${money(t.purchasesGeneralNet)}</div></div>
           <div class="row"><div>63 – Amortissements</div><div>${money(t.yearlyAmort)}</div></div>
-          <div class="row"><div>Autres charges diverses</div><div>${money(t.lossesTotal)}</div></div>
+          <div class="row"><div>64 – Taxes sans TVA récupérable</div><div>${money(t.otherTaxesTotal)}</div></div>
+          <div class="row"><div>Cotisations sociales versées</div><div>${money(t.socialContributionsTotal)}</div></div>
           <div class="row total"><div>Résultat estimé</div><div>${money(t.estimatedProfit)}</div></div>
         </div>
         <div class="panel soft"><div class="panel-body">${reportKv([
