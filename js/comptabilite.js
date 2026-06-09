@@ -1057,7 +1057,7 @@ function buildNextExerciseData(targetYear) {
   nextData.settings = preservedSettings;
   nextData.settings.retainedEarnings = round2(
     toNumber(preservedSettings.retainedEarnings)
-    + toNumber(t.estimatedProfit)
+    + toNumber(t.taxableEstimatedProfit)
   );
   nextData.settings.vatCarryover = Math.max(0, round2(toNumber(t.receivableVat)));
 
@@ -3129,7 +3129,7 @@ function renderBalance() {
             <div class="section-head"><h3>Passif simplifié</h3></div>
             <div class="kv"><span>Capital de départ</span><span>${money(data.settings.capitalStart)}</span></div>
             <div class="kv"><span>Résultat reporté</span><span>${money(data.settings.retainedEarnings)}</span></div>
-            <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.estimatedProfit)}</span></div>
+            <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.taxableEstimatedProfit)}</span></div>
             <div class="kv"><span>TVA à payer</span><span>${money(t.payableVat)}</span></div>
             <div class="kv"><span><strong>Total passif</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
             <div class="kv"><span>Écart</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
