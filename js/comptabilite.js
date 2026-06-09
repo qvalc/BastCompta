@@ -3883,7 +3883,18 @@ function render() {
 
   if (metricSales) metricSales.textContent = money(t.salesNet);
   if (metricPurchases) metricPurchases.textContent = money(t.purchasesNet);
-  if (metricVat) metricVat.textContent = money(t.netVat);
+  if (metricVat) {
+    if (t.payableVat > 0) {
+      metricVat.previousElementSibling.textContent = 'TVA à payer';
+      metricVat.textContent = money(t.payableVat);
+    } else if (t.receivableVat > 0) {
+      metricVat.previousElementSibling.textContent = 'TVA à retoucher';
+      metricVat.textContent = money(t.receivableVat);
+    } else {
+      metricVat.previousElementSibling.textContent = 'TVA';
+      metricVat.textContent = money(0);
+    }
+  }
   if (metricProfit) metricProfit.textContent = money(t.taxableEstimatedProfit);
 }
 
