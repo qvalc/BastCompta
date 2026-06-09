@@ -199,7 +199,9 @@ const LOSS_TYPE_OPTIONS = [
   { value: 'taxe_communale', label: 'Taxe communale' },
   { value: 'precompte_immobilier_pro', label: 'Précompte immobilier pro' },
   { value: 'redevance_spw', label: 'Redevance SPW / administration' },
-  { value: 'autre_taxe_sans_tva', label: 'Autre taxe sans TVA' }
+  { value: 'autre_taxe_sans_tva', label: 'Autre taxe sans TVA' },
+  { value: 'frais_financiers', label: 'Frais financiers / banque' },
+  { value: 'charges_exceptionnelles', label: 'Charges exceptionnelles' }
 ];
 
 function getLossType(row) {
@@ -2512,23 +2514,40 @@ function totals() {
   const socialContributionsTotal = data.losses.reduce((sum, row) => {
     return sum + (getLossType(row) === 'cotisations_sociales' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
   }, 0);
+  const financialChargesTotal = data.losses.reduce((sum, row) => {
+    return sum + (getLossType(row) === 'frais_financiers' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
+  }, 0);
+  const exceptionalChargesTotal = data.losses.reduce((sum, row) => {
+    return sum + (getLossType(row) === 'charges_exceptionnelles' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
+  }, 0);
   const otherTaxesTotal = data.losses.reduce((sum, row) => {
-    return sum + (getLossType(row) !== 'cotisations_sociales' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
+    const type = getLossType(row);
+    const amount = toNumber(row.quantity) * toNumber(row.unitPrice);
+    return sum + (!['cotisations_sociales', 'frais_financiers', 'charges_exceptionnelles'].includes(type) ? amount : 0);
   }, 0);
   const kmTotal = data.km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
 
   const carryover = toNumber(data.settings.vatCarryover);
 
-  const totalCharges = purchasesNet + yearlyAmort + lossesTotal;
+  // Les cotisations sociales ne sont pas reprises dans les charges du compte de résultat.
+  // Elles sont traitées uniquement dans le bloc de correction/exonération.
+  const totalCharges = purchasesNet + yearlyAmort + otherTaxesTotal + financialChargesTotal + exceptionalChargesTotal;
   const estimatedProfit = salesNet - totalCharges;
 
   const socialExemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
+  const socialContributionRate = toNumber(data.settings.socialContributionRate || 20.5);
+  const socialContributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
+  const isExemptSocial = estimatedProfit <= socialExemptionThreshold;
 
-  const socialContributionRecovered = estimatedProfit <= socialExemptionThreshold
+  const socialContributionRecovered = isExemptSocial
     ? socialContributionsTotal
     : 0;
 
-  const taxableEstimatedProfit = estimatedProfit + socialContributionRecovered;
+  const socialBaseContribution = isExemptSocial ? 0 : (estimatedProfit * socialContributionRate / 100);
+  const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * socialContributionFeeRate / 100);
+  const socialContributionDue = socialBaseContribution + socialFeeContribution;
+
+  const taxableEstimatedProfit = estimatedProfit + socialContributionRecovered - socialContributionDue;
 
   const netVat = salesVat - purchasesVat - carryover;
 
@@ -2545,7 +2564,7 @@ function totals() {
 
   const receivableVat = realVat < 0 ? Math.abs(realVat) : 0;
   const payableVat = realVat > 0 ? realVat : 0;
-  const resultRetained = estimatedProfit;
+  const resultRetained = taxableEstimatedProfit;
 
   const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
   const liabilitiesSide =
@@ -2570,10 +2589,13 @@ function totals() {
     lossesTotal,
     socialContributionsTotal,
     otherTaxesTotal,
+    financialChargesTotal,
+    exceptionalChargesTotal,
     kmTotal,
     totalCharges,
     estimatedProfit,
     socialContributionRecovered,
+    socialContributionDue,
     taxableEstimatedProfit,
     netVat,
     realVat,
@@ -2961,8 +2983,8 @@ function renderLosses() {
   return renderTablePage({
     key: 'losses',
     title: 'Taxes et cotisations',
-    hint: 'Cotisations sociales : gardent la mécanique d’exonération. Autres taxes : taxes sans TVA récupérable, reprises en 64 – Taxes.',
-    addLabel: 'Ajouter une taxe / cotisation',
+    hint: 'Cotisations sociales : gardent la mécanique d’exonération. Taxes sans TVA : reprises en 64. Frais financiers : repris en 65. Charges exceptionnelles : reprises en 66.',
+    addLabel: 'Ajouter une ligne',
     onAdd: `addRow('losses', { date: '', type: 'cotisations_sociales', label: '', quantity: 1, unitPrice: 0 })`,
     headers: ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
     rows: data.losses.map((row, i) => `
@@ -2978,8 +3000,10 @@ function renderLosses() {
         `).join(''),
     footer: `
       <div class="kv"><span>Cotisations sociales</span><span>${money(t.socialContributionsTotal)}</span></div>
-      <div class="kv"><span>Taxes sans TVA récupérable</span><span>${money(t.otherTaxesTotal)}</span></div>
-      <div class="kv"><span>Total taxes / cotisations</span><span>${money(t.lossesTotal)}</span></div>
+      <div class="kv"><span>64 – Taxes sans TVA récupérable</span><span>${money(t.otherTaxesTotal)}</span></div>
+      <div class="kv"><span>65 – Frais financiers / banque</span><span>${money(t.financialChargesTotal)}</span></div>
+      <div class="kv"><span>66 – Charges exceptionnelles</span><span>${money(t.exceptionalChargesTotal)}</span></div>
+      <div class="kv"><span>Total onglet</span><span>${money(t.lossesTotal)}</span></div>
     `
   });
 }
@@ -3014,12 +3038,8 @@ function renderResult() {
   const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
   const isExemptSocial = t.estimatedProfit <= exemptionThreshold;
-  const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
-  const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
-  const socialTotalContribution = socialBaseContribution + socialFeeContribution;
-  const taxableBase = isExemptSocial
-    ? t.estimatedProfit + taxAndSocial
-    : t.estimatedProfit - socialTotalContribution;
+  const socialTotalContribution = t.socialContributionDue;
+  const taxableBase = t.taxableEstimatedProfit;
   const socialStatusLabel = isExemptSocial
     ? `Exonéré de cotisations sociales (≤ ${money(exemptionThreshold)})`
     : `Non exonéré de cotisations sociales (> ${money(exemptionThreshold)})`;
@@ -3070,19 +3090,18 @@ function renderResult() {
                     <td style="text-align:right;">${money(t.otherTaxesTotal)}</td>
                   </tr>
                   <tr>
-                    <td>65 – Frais financier</td>
-                    <td style="text-align:right;">${money(0)}</td>
+                    <td>65 – Frais financiers / banque</td>
+                    <td style="text-align:right;">${money(t.financialChargesTotal)}</td>
                   </tr>
                   <tr>
                     <td>66 – Charges exceptionnelles</td>
-                    <td style="text-align:right;">${money(0)}</td>
+                    <td style="text-align:right;">${money(t.exceptionalChargesTotal)}</td>
                   </tr>
-                  <tr>
                   <tr style="background:#f1f5f9; font-weight:700;">
                     <td style="text-align:right;">Total :</td>
                     <td style="text-align:right;">${money(
     t.purchasesMerchandiseNet + t.purchasesGeneralNet + t.yearlyAmort
-    + t.otherTaxesTotal
+    + t.otherTaxesTotal + t.financialChargesTotal + t.exceptionalChargesTotal
   )}</td>
                   </tr>
                 </tbody>
