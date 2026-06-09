@@ -3078,15 +3078,11 @@ function renderResult() {
                     <td style="text-align:right;">${money(0)}</td>
                   </tr>
                   <tr>
-                    <td>Cotisations sociales versées</td>
-                    <td style="text-align:right;">${money(t.socialContributionsTotal)}</td>
-                  </tr>
                   <tr style="background:#f1f5f9; font-weight:700;">
                     <td style="text-align:right;">Total :</td>
                     <td style="text-align:right;">${money(
     t.purchasesMerchandiseNet + t.purchasesGeneralNet + t.yearlyAmort
     + t.otherTaxesTotal
-    + t.socialContributionsTotal
   )}</td>
                   </tr>
                 </tbody>
