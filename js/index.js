@@ -1643,7 +1643,10 @@ async function handleFullRestoreFile(event) {
       for (const entry of driveFiles) {
         const zipItem = zip.file(entry.path);
         const blob = await zipItem.async('blob');
-        await uploadBlobToDriveAppData(blob, entry.name || entry.path.split('/').pop(), 'application/json');
+        const fileName = entry.name || entry.path.split('/').pop();
+
+        await deleteDriveAppDataFilesByName(fileName);
+        await uploadBlobToDriveAppData(blob, fileName, 'application/json');
       }
     }
 
@@ -1655,6 +1658,17 @@ async function handleFullRestoreFile(event) {
   } finally {
     hideBlockingProgress();
   }
+}
+
+async function deleteDriveAppDataFilesByName(name) {
+  const allFiles = await listDriveAppDataFiles();
+  const matches = allFiles.filter(file => file.name === name);
+
+  for (const file of matches) {
+    await deleteHiddenDriveFile(file);
+  }
+
+  return matches.length;
 }
 
 async function uploadBlobToDriveAppData(blob, name, mimeType = 'application/json') {
