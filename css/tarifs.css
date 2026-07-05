@@ -82,10 +82,48 @@ th { background: #fafafa; color: var(--muted); font-size: 12px; text-align: left
 @media (max-width: 650px) { .app { padding: 12px; } .card-grid, .advanced-grid, .result-item { grid-template-columns: 1fr; } }
 @media print { body { background: #fff; } .no-print, .side-panel, .search-bar, .results { display: none !important; } .app { max-width: none; padding: 0; } .layout { display: block; } .main-panel, .tarif-card { border: none; box-shadow: none; padding: 0; } input, textarea { border: none; padding: 0; } }
 
-/* V2 Tarifs : postes triés par catégorie */
-.post-category-group { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
-.post-category-group + .post-category-group { margin-top: 8px; }
-.post-category-group > summary { cursor: pointer; padding: 10px 12px; font-weight: 900; display: flex; align-items: center; justify-content: space-between; background: #f8fafc; }
-.post-category-count { color: var(--muted); font-size: 12px; font-weight: 800; background: #eef2ff; border: 1px solid #dbeafe; border-radius: 999px; padding: 2px 7px; }
-.post-category-items { display: grid; gap: 8px; padding: 8px; }
-.post-category-items .post-row { margin: 0; }
+
+/* --- Tarifs V2 : regroupement des postes par catégorie --- */
+.post-category-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.post-category-group > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  color: var(--ink);
+}
+.post-category-group > summary::-webkit-details-marker { display: none; }
+.post-category-group > summary::before {
+  content: '▶';
+  margin-right: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.post-category-group[open] > summary::before { content: '▼'; }
+.post-category-count {
+  display: inline-flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+.post-category-items {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+.post-category-items .post-row { box-shadow: none; }

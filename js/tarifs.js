@@ -1,4 +1,5 @@
 (function () {
+  // Tarifs V2 corrigé : recherche stable, ajout document sans doublon, liste groupée par catégorie.
   const STORAGE_KEY = 'bastcompta_tarifs_v7_vierge_sans_fiche';
   const CATEGORIES_KEY = 'bastcompta_tarifs_categories_v3_vierge_sans_fiche';
   const LEGACY_KEYS = [];
@@ -14,8 +15,8 @@
   let autosaveDirty = false;
   let autosaveTimer = null;
   let lastSavedSnapshot = '';
-  let lastTransferAt = 0;
-  let lastTransferKey = '';
+  const openCategoryGroups = new Set();
+  const recentDocumentAdds = new Map();
 
 
   const editor = document.getElementById('tarifEditor');
@@ -215,31 +216,34 @@
     if (!tarifs.length) { postList.innerHTML = '<p class="small-hint">Aucun poste.</p>'; return; }
 
     const groups = new Map();
-    tarifs.slice()
-      .sort((a, b) => {
-        const catCmp = (a.categorie || 'Sans catégorie').localeCompare(b.categorie || 'Sans catégorie', 'fr', { sensitivity: 'base' });
-        if (catCmp) return catCmp;
-        return (a.poste || '').localeCompare(b.poste || '', 'fr', { sensitivity: 'base' });
-      })
+    tarifs
+      .slice()
+      .sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }))
       .forEach(t => {
         const cat = String(t.categorie || '').trim() || 'Sans catégorie';
         if (!groups.has(cat)) groups.set(cat, []);
         groups.get(cat).push(t);
       });
 
-    groups.forEach((items, cat) => {
+    Array.from(groups.keys()).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })).forEach(cat => {
       const details = document.createElement('details');
       details.className = 'post-category-group';
-      details.open = items.some(t => t.id === selectedId);
+      details.dataset.categoryGroup = cat;
+      const containsSelected = groups.get(cat).some(t => t.id === selectedId);
+      details.open = openCategoryGroups.has(cat) || containsSelected || openCategoryGroups.size === 0;
+      details.addEventListener('toggle', () => {
+        if (details.open) openCategoryGroups.add(cat);
+        else openCategoryGroups.delete(cat);
+      });
+
       const summary = document.createElement('summary');
-      summary.innerHTML = `<span>${escapeHtml(cat)}</span><span class="post-category-count">${items.length}</span>`;
+      summary.innerHTML = `<span>${escapeHtml(cat)}</span><span class="post-category-count">${groups.get(cat).length}</span>`;
       details.appendChild(summary);
 
       const wrap = document.createElement('div');
       wrap.className = 'post-category-items';
-      items.forEach(t => {
-        const row = document.createElement('div');
-        row.className = 'post-row' + (t.id === selectedId ? ' active' : '');
+      groups.get(cat).forEach(t => {
+        const row = document.createElement('div'); row.className = 'post-row' + (t.id === selectedId ? ' active' : '');
         row.innerHTML = `<button type="button" class="open-post" data-select="${escapeHtml(t.id)}">${escapeHtml(t.poste || 'Poste sans nom')}</button><button type="button" class="icon-delete" data-delete-post="${escapeHtml(t.id)}" title="Supprimer" aria-label="Supprimer">×</button>`;
         wrap.appendChild(row);
       });
@@ -297,18 +301,6 @@
   }
 
   function render() { renderFilters(); renderPostList(); renderSearchResults(); renderEditor(); }
-
-  function renderSearchOnlyKeepFocus() {
-    const active = document.activeElement;
-    const keepFocus = active === searchInput;
-    const start = keepFocus ? searchInput.selectionStart : null;
-    const end = keepFocus ? searchInput.selectionEnd : null;
-    renderSearchResults();
-    if (keepFocus) {
-      searchInput.focus();
-      try { searchInput.setSelectionRange(start, end); } catch {}
-    }
-  }
   function update(index, field, value) {
     if (!tarifs[index]) return;
     tarifs[index][field] = value;
@@ -373,16 +365,8 @@
   function addTarifToDevisFacture(docKey, tarif) {
     const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
     if (!tarif) return;
-
-    // Sécurité anti-double clic / anti-double événement.
-    const transferKey = [targetKey, tarif.id || '', tarif.poste || '', tarif.prix || '', tarif.mesure || ''].join('|');
-    const now = Date.now();
-    if (transferKey === lastTransferKey && now - lastTransferAt < 1200) return;
-    lastTransferKey = transferKey;
-    lastTransferAt = now;
-
     const line = {
-      id: 'line_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+      id: 'line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
       tarifId: tarif.id || '',
       description: tarif.poste || '',
       designation: tarif.poste || '',
@@ -402,32 +386,36 @@
       tva: num(tarif.tva || DEFAULT_TVA) || 21
     };
 
-    const message = {
-      type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT',
-      docKey: targetKey,
-      tarifId: tarif.id || '',
-      line,
-      transferId: line.id,
-      source: 'tarifs'
-    };
+    const guardKey = `${targetKey}:${tarif.id || tarif.poste || ''}`;
+    const now = Date.now();
+    if (recentDocumentAdds.has(guardKey) && now - recentDocumentAdds.get(guardKey) < 1200) return;
+    recentDocumentAdds.set(guardKey, now);
+    setTimeout(() => recentDocumentAdds.delete(guardKey), 1500);
 
-    // Important : on ne pousse plus directement la ligne dans localStorage ET via événement.
-    // C'était la cause la plus probable du double ajout. En mode portail/iframe, Devis-Facture
-    // reçoit le message et ajoute la ligne une seule fois. En mode page seule, on garde un fallback localStorage.
-    if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage(message, window.location.origin); } catch {}
-    } else {
+    // Ne pas écrire directement dans les lignes ici : Devis/Facture écoute cet événement
+    // et ajoute lui-même la ligne au document actif. L'ancienne version faisait les deux,
+    // ce qui provoquait l'ajout en double.
+    const eventPayload = { docKey: targetKey, tarifId: tarif.id || '', line, requestId: 'tarif_add_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 7) };
+    let sent = false;
+    try {
+      window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', { detail: eventPayload }));
+      sent = true;
+    } catch {}
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', ...eventPayload }, window.location.origin);
+        sent = true;
+      }
+    } catch {}
+
+    // Secours uniquement si Tarifs est ouvert seul, hors module Devis/Facture.
+    if (!sent) {
       let payload = {};
       try { payload = JSON.parse(localStorage.getItem(DEVIS_FACTURE_KEY) || '{}') || {}; } catch { payload = {}; }
-      if (!payload[targetKey] || typeof payload[targetKey] !== 'object') payload[targetKey] = {};
-      if (!Array.isArray(payload[targetKey].lines)) payload[targetKey].lines = [];
-      payload[targetKey].lines.push(line);
-      payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString(), transferId: line.id };
+      payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString() };
       localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(payload));
-      try { window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', { detail: message })); } catch {}
     }
-
-    toast(targetKey === 'invoice' ? 'Ajouté à la facture' : 'Ajouté au devis');
+    toast(targetKey === 'invoice' ? 'Envoyé à la facture' : 'Envoyé au devis');
   }
 
   function copyText(text) { navigator.clipboard.writeText(text).then(() => toast('Copié')).catch(() => { const a = document.createElement('textarea'); a.value = text; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); toast('Copié'); }); }
@@ -476,7 +464,7 @@
   });
   document.addEventListener('click', e => { const select = e.target.closest('[data-select]'); if (select) selectPost(select.dataset.select); const delPost = e.target.closest('[data-delete-post]'); if (delPost) deletePostById(delPost.dataset.deletePost); const delCat = e.target.closest('[data-delete-category]'); if (delCat) deleteCategory(delCat.dataset.deleteCategory); });
   addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; focusPosteNameAfterRender = true; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; });
-  searchInput.addEventListener('input', renderSearchOnlyKeepFocus); categoryFilter.addEventListener('change', () => { renderSearchResults(); }); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
+  searchInput.addEventListener('input', renderSearchResults); categoryFilter.addEventListener('change', () => { renderPostList(); renderSearchResults(); }); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
   window.addEventListener('beforeunload', () => forceAutosave('beforeunload'));
