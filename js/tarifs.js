@@ -54,13 +54,49 @@
     delete base.favorite; delete base.cout;
     return base;
   }
+  function readDevisFacturePayload() {
+    try {
+      const raw = localStorage.getItem(DEVIS_FACTURE_KEY);
+      return raw ? (JSON.parse(raw) || {}) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function extractTarifsFromDevisFacturePayload(payload) {
+    const block = payload && payload.tarifs;
+    if (!block) return [];
+    if (Array.isArray(block.items)) return block.items.map(migrate);
+    if (Array.isArray(block.tarifs)) return block.tarifs.map(migrate);
+    if (Array.isArray(block)) return block.map(migrate);
+    return [];
+  }
+
+  function extractCategoriesFromDevisFacturePayload(payload) {
+    const block = payload && payload.tarifs;
+    if (!block) return [];
+    if (Array.isArray(block.categories)) return cleanCategoryList(block.categories);
+    return [];
+  }
+
   function loadTarifs() {
     try {
       let raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) for (const key of LEGACY_KEYS) { raw = localStorage.getItem(key); if (raw) break; }
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.map(migrate) : [];
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed.map(migrate);
+      }
+
+      const devisPayload = readDevisFacturePayload();
+      const fromDevisFacture = extractTarifsFromDevisFacturePayload(devisPayload);
+      if (fromDevisFacture.length) return fromDevisFacture;
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.map(migrate) : [];
+      }
+      return [];
     } catch { return []; }
   }
   function getTarifsPayload() {
@@ -91,6 +127,20 @@
 
     localStorage.setItem(STORAGE_KEY, payloadTarifs);
     localStorage.setItem(CATEGORIES_KEY, payloadCategories);
+
+    // Tarifs est intégré dans Devis & Facture : on écrit aussi dans le même localStorage.
+    // Sinon, quand l'iframe Devis/Facture se recharge, elle peut reprendre une ancienne version
+    // et écraser les modifications non enregistrées par la disquette.
+    try {
+      const devisPayload = readDevisFacturePayload();
+      devisPayload.tarifs = {
+        version: 7,
+        updatedAt: new Date().toISOString(),
+        categories: cleanCategoryList(managedCategories),
+        items: tarifs
+      };
+      localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(devisPayload));
+    } catch {}
 
     autosaveDirty = false;
     lastSavedSnapshot = snapshot;
@@ -125,7 +175,16 @@
     return list.map(c => String(c || '').trim()).filter(c => { const key = normalize(c); if (!c || seen.has(key)) return false; seen.add(key); return true; });
   }
   function loadCategories() {
-    try { const raw = localStorage.getItem(CATEGORIES_KEY); return raw ? cleanCategoryList(JSON.parse(raw)) : []; } catch { return []; }
+    try {
+      const raw = localStorage.getItem(CATEGORIES_KEY);
+      if (raw) {
+        const parsed = cleanCategoryList(JSON.parse(raw));
+        if (parsed.length) return parsed;
+      }
+      const fromDevisFacture = extractCategoriesFromDevisFacturePayload(readDevisFacturePayload());
+      if (fromDevisFacture.length) return fromDevisFacture;
+      return raw ? cleanCategoryList(JSON.parse(raw)) : [];
+    } catch { return []; }
   }
   function saveCategories(reason) { managedCategories = cleanCategoryList(managedCategories); scheduleAutosave(reason || 'categories'); }
   function categories() { return cleanCategoryList([...managedCategories, ...tarifs.map(t => t.categorie).filter(Boolean)]).sort((a, b) => a.localeCompare(b, 'fr')); }
@@ -389,11 +448,28 @@
       return getTarifsPayload();
     },
     setData: function (data) {
-      if (Array.isArray(data)) tarifs = data.map(migrate);
-      else if (data && Array.isArray(data.tarifs)) {
-        tarifs = data.tarifs.map(migrate);
-        if (Array.isArray(data.categories)) managedCategories = cleanCategoryList(data.categories);
+      let incomingTarifs = null;
+      let incomingCategories = null;
+
+      if (Array.isArray(data)) {
+        incomingTarifs = data.map(migrate);
+      } else if (data && Array.isArray(data.tarifs)) {
+        incomingTarifs = data.tarifs.map(migrate);
+        if (Array.isArray(data.categories)) incomingCategories = cleanCategoryList(data.categories);
+      } else if (data && Array.isArray(data.items)) {
+        incomingTarifs = data.items.map(migrate);
+        if (Array.isArray(data.categories)) incomingCategories = cleanCategoryList(data.categories);
       }
+
+      // Sécurité : ne pas remplacer des tarifs existants par une réponse vide du parent
+      // lors d'un rechargement tardif de Devis/Facture.
+      if (incomingTarifs && (incomingTarifs.length || !tarifs.length)) {
+        tarifs = incomingTarifs;
+      }
+      if (incomingCategories && (incomingCategories.length || !managedCategories.length)) {
+        managedCategories = incomingCategories;
+      }
+
       selectedId = tarifs[0] ? tarifs[0].id : '';
       forceAutosave('setData');
       render();
