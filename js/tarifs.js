@@ -14,6 +14,8 @@
   let autosaveDirty = false;
   let autosaveTimer = null;
   let lastSavedSnapshot = '';
+  let lastTransferAt = 0;
+  let lastTransferKey = '';
 
 
   const editor = document.getElementById('tarifEditor');
@@ -208,35 +210,29 @@
     });
   }
 
-  function sortTarifsForDisplay(list) {
-    return [...list].sort((a, b) => {
-      const ca = a.categorie || 'Sans catégorie';
-      const cb = b.categorie || 'Sans catégorie';
-      const byCat = ca.localeCompare(cb, 'fr', { sensitivity: 'base' });
-      if (byCat) return byCat;
-      return (a.poste || 'Poste sans nom').localeCompare(b.poste || 'Poste sans nom', 'fr', { sensitivity: 'base' });
-    });
-  }
-
   function renderPostList() {
     postList.innerHTML = '';
     if (!tarifs.length) { postList.innerHTML = '<p class="small-hint">Aucun poste.</p>'; return; }
 
-    const grouped = new Map();
-    sortTarifsForDisplay(tarifs).forEach(t => {
-      const cat = String(t.categorie || 'Sans catégorie').trim() || 'Sans catégorie';
-      if (!grouped.has(cat)) grouped.set(cat, []);
-      grouped.get(cat).push(t);
-    });
+    const groups = new Map();
+    tarifs.slice()
+      .sort((a, b) => {
+        const catCmp = (a.categorie || 'Sans catégorie').localeCompare(b.categorie || 'Sans catégorie', 'fr', { sensitivity: 'base' });
+        if (catCmp) return catCmp;
+        return (a.poste || '').localeCompare(b.poste || '', 'fr', { sensitivity: 'base' });
+      })
+      .forEach(t => {
+        const cat = String(t.categorie || '').trim() || 'Sans catégorie';
+        if (!groups.has(cat)) groups.set(cat, []);
+        groups.get(cat).push(t);
+      });
 
-    grouped.forEach((items, cat) => {
+    groups.forEach((items, cat) => {
       const details = document.createElement('details');
       details.className = 'post-category-group';
-      details.open = true;
-
+      details.open = items.some(t => t.id === selectedId);
       const summary = document.createElement('summary');
-      summary.className = 'post-category-title';
-      summary.textContent = `${cat} (${items.length})`;
+      summary.innerHTML = `<span>${escapeHtml(cat)}</span><span class="post-category-count">${items.length}</span>`;
       details.appendChild(summary);
 
       const wrap = document.createElement('div');
@@ -301,7 +297,18 @@
   }
 
   function render() { renderFilters(); renderPostList(); renderSearchResults(); renderEditor(); }
-  function renderSearchOnly() { renderPostList(); renderSearchResults(); }
+
+  function renderSearchOnlyKeepFocus() {
+    const active = document.activeElement;
+    const keepFocus = active === searchInput;
+    const start = keepFocus ? searchInput.selectionStart : null;
+    const end = keepFocus ? searchInput.selectionEnd : null;
+    renderSearchResults();
+    if (keepFocus) {
+      searchInput.focus();
+      try { searchInput.setSelectionRange(start, end); } catch {}
+    }
+  }
   function update(index, field, value) {
     if (!tarifs[index]) return;
     tarifs[index][field] = value;
@@ -363,16 +370,19 @@
       if (c && totalCell) totalCell.textContent = money(componentTotal(c));
     });
   }
-  let addToDocumentLock = false;
-
   function addTarifToDevisFacture(docKey, tarif) {
     const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
-    if (!tarif || addToDocumentLock) return;
-    addToDocumentLock = true;
-    setTimeout(() => { addToDocumentLock = false; }, 700);
+    if (!tarif) return;
+
+    // Sécurité anti-double clic / anti-double événement.
+    const transferKey = [targetKey, tarif.id || '', tarif.poste || '', tarif.prix || '', tarif.mesure || ''].join('|');
+    const now = Date.now();
+    if (transferKey === lastTransferKey && now - lastTransferAt < 1200) return;
+    lastTransferKey = transferKey;
+    lastTransferAt = now;
 
     const line = {
-      id: 'line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+      id: 'line_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 7),
       tarifId: tarif.id || '',
       description: tarif.poste || '',
       designation: tarif.poste || '',
@@ -392,28 +402,31 @@
       tva: num(tarif.tva || DEFAULT_TVA) || 21
     };
 
-    // Important : on ne déclenche plus un CustomEvent local en plus de l'écriture localStorage.
-    // Dans Devis/Facture, cela pouvait ajouter la ligne une fois via localStorage et une fois via listener.
-    let payload = {};
-    try { payload = JSON.parse(localStorage.getItem(DEVIS_FACTURE_KEY) || '{}') || {}; } catch { payload = {}; }
-    if (!payload[targetKey] || typeof payload[targetKey] !== 'object') payload[targetKey] = {};
-    if (!Array.isArray(payload[targetKey].lines)) payload[targetKey].lines = [];
+    const message = {
+      type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT',
+      docKey: targetKey,
+      tarifId: tarif.id || '',
+      line,
+      transferId: line.id,
+      source: 'tarifs'
+    };
 
-    const alreadyExists = payload[targetKey].lines.some(existing =>
-      existing && existing._fromTarifClickId && existing._fromTarifClickId === line.id
-    );
-    if (!alreadyExists) {
-      line._fromTarifClickId = line.id;
+    // Important : on ne pousse plus directement la ligne dans localStorage ET via événement.
+    // C'était la cause la plus probable du double ajout. En mode portail/iframe, Devis-Facture
+    // reçoit le message et ajoute la ligne une seule fois. En mode page seule, on garde un fallback localStorage.
+    if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage(message, window.location.origin); } catch {}
+    } else {
+      let payload = {};
+      try { payload = JSON.parse(localStorage.getItem(DEVIS_FACTURE_KEY) || '{}') || {}; } catch { payload = {}; }
+      if (!payload[targetKey] || typeof payload[targetKey] !== 'object') payload[targetKey] = {};
+      if (!Array.isArray(payload[targetKey].lines)) payload[targetKey].lines = [];
       payload[targetKey].lines.push(line);
+      payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString(), transferId: line.id };
+      localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(payload));
+      try { window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', { detail: message })); } catch {}
     }
-    payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString() };
-    localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(payload));
 
-    try {
-      if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', docKey: targetKey, tarifId: tarif.id || '', line }, window.location.origin);
-      }
-    } catch {}
     toast(targetKey === 'invoice' ? 'Ajouté à la facture' : 'Ajouté au devis');
   }
 
@@ -463,7 +476,7 @@
   });
   document.addEventListener('click', e => { const select = e.target.closest('[data-select]'); if (select) selectPost(select.dataset.select); const delPost = e.target.closest('[data-delete-post]'); if (delPost) deletePostById(delPost.dataset.deletePost); const delCat = e.target.closest('[data-delete-category]'); if (delCat) deleteCategory(delCat.dataset.deleteCategory); });
   addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; focusPosteNameAfterRender = true; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; });
-  searchInput.addEventListener('input', renderSearchOnly); categoryFilter.addEventListener('change', renderSearchOnly); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
+  searchInput.addEventListener('input', renderSearchOnlyKeepFocus); categoryFilter.addEventListener('change', () => { renderSearchResults(); }); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
   window.addEventListener('beforeunload', () => forceAutosave('beforeunload'));
