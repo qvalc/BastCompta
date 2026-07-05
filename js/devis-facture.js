@@ -4109,6 +4109,8 @@ let tarifCategoryFilter = 'Toutes';
 let selectedTarifId = '';
 let tarifPostDrawerOpen = false;
 let tarifCategoryDrawerOpen = false;
+let tarifOpenCategoryGroups = new Set(['__default_open__']);
+let lastTarifAddClickAt = 0;
 
 function ensureTarifsData() {
   if (!data.tarifs || typeof data.tarifs !== 'object' || Array.isArray(data.tarifs)) {
@@ -4240,15 +4242,64 @@ function renderTarifCategoryOptions(selected = '') {
   return getTarifCategories().map(c => `<option value="${escapeHtml(c)}" ${c === selected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
 }
 
+function getTarifGroupKey(category) {
+  const label = String(category || '').trim() || 'Sans catégorie';
+  return normalizeTarifText(label) || 'sans-categorie';
+}
+
+function rememberTarifCategoryGroupState(key, isOpen) {
+  if (!key) return;
+  if (!(tarifOpenCategoryGroups instanceof Set)) {
+    tarifOpenCategoryGroups = new Set();
+  }
+  if (isOpen) {
+    tarifOpenCategoryGroups.add(key);
+  } else {
+    tarifOpenCategoryGroups.delete(key);
+  }
+}
+
 function renderTarifPostList() {
   ensureTarifsData();
   if (!data.tarifs.items.length) return '<p class="tarifs-muted">Aucun poste.</p>';
-  return data.tarifs.items.map(t => `
-    <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}">
-      <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
-      <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
-    </div>
-  `).join('');
+
+  const groups = new Map();
+  data.tarifs.items.forEach(t => {
+    const label = String(t.categorie || '').trim() || 'Sans catégorie';
+    const key = getTarifGroupKey(label);
+    if (!groups.has(key)) {
+      groups.set(key, { key, label, items: [] });
+    }
+    groups.get(key).items.push(t);
+  });
+
+  const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+    if (a.label === 'Sans catégorie') return 1;
+    if (b.label === 'Sans catégorie') return -1;
+    return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+  });
+
+  return sortedGroups.map(group => {
+    group.items.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }));
+    const containsSelected = group.items.some(t => t.id === selectedTarifId);
+    const shouldOpen = containsSelected || tarifOpenCategoryGroups.has(group.key) || tarifOpenCategoryGroups.has('__default_open__');
+    return `
+      <details class="tarif-category-group" ${shouldOpen ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(group.key)}', this.open)">
+        <summary>
+          <span>${escapeHtml(group.label)}</span>
+          <span class="tarif-category-count">${group.items.length}</span>
+        </summary>
+        <div class="tarif-category-items">
+          ${group.items.map(t => `
+            <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
+              <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
+              <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+            </div>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  }).join('');
 }
 
 function renderManagedTarifCategories() {
@@ -4279,6 +4330,20 @@ function renderTarifSearchResults() {
     </div>
   `).join('')}</div>`;
 }
+
+
+function updateTarifSearch(value) {
+  tarifSearchTerm = value || '';
+  refreshTarifSearchResults();
+}
+
+function refreshTarifSearchResults() {
+  const wrap = document.getElementById('tarifSearchResultsWrap');
+  if (wrap) {
+    wrap.innerHTML = renderTarifSearchResults();
+  }
+}
+
 
 function renderTarifComponents(tarif) {
   if (!tarif.composants.length) {
@@ -4361,7 +4426,63 @@ function renderTarifEditor() {
   `;
 }
 
+
+function ensureTarifsV2Styles() {
+  if (document.getElementById('tarifs-v2-inline-style')) return;
+  const style = document.createElement('style');
+  style.id = 'tarifs-v2-inline-style';
+  style.textContent = `
+    .tarif-category-group {
+      border: 1px solid var(--line, #d1d5db);
+      border-radius: 12px;
+      background: #fff;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .tarif-category-group > summary {
+      cursor: pointer;
+      padding: 10px 12px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8fafc;
+      color: var(--ink, #111827);
+      list-style: none;
+    }
+    .tarif-category-group > summary::-webkit-details-marker { display: none; }
+    .tarif-category-group > summary::before {
+      content: '▶';
+      margin-right: 8px;
+      font-size: 11px;
+      color: var(--muted, #6b7280);
+    }
+    .tarif-category-group[open] > summary::before { content: '▼'; }
+    .tarif-category-count {
+      display: inline-flex;
+      min-width: 24px;
+      height: 24px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: var(--primary, #1d4ed8);
+      font-size: 12px;
+      font-weight: 900;
+      margin-left: auto;
+    }
+    .tarif-category-items {
+      display: grid;
+      gap: 8px;
+      padding: 8px;
+      border-top: 1px solid var(--line, #d1d5db);
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function renderTarifs() {
+  ensureTarifsV2Styles();
   ensureTarifsData();
   const cats = getTarifCategories();
   if (tarifCategoryFilter !== 'Toutes' && !cats.includes(tarifCategoryFilter)) tarifCategoryFilter = 'Toutes';
@@ -4400,10 +4521,10 @@ function renderTarifs() {
         </aside>
         <section class="tarifs-main">
           <div class="tarifs-search no-print">
-            <div><label>Rechercher un poste</label><input type="search" value="${escapeHtml(tarifSearchTerm)}" oninput="tarifSearchTerm=this.value; render()" placeholder="Ex. bloc, nettoyage, haie..."></div>
-            <div><label>Filtrer par catégorie</label><select onchange="tarifCategoryFilter=this.value; render()"><option value="Toutes">Toutes les catégories</option>${renderTarifCategoryOptions(tarifCategoryFilter)}</select></div>
+            <div><label>Rechercher un poste</label><input id="tarifSearchInput" type="search" value="${escapeHtml(tarifSearchTerm)}" oninput="updateTarifSearch(this.value)" placeholder="Ex. bloc, nettoyage, haie..."></div>
+            <div><label>Filtrer par catégorie</label><select onchange="tarifCategoryFilter=this.value; refreshTarifSearchResults(); render()"><option value="Toutes">Toutes les catégories</option>${renderTarifCategoryOptions(tarifCategoryFilter)}</select></div>
           </div>
-          ${renderTarifSearchResults()}
+          <div id="tarifSearchResultsWrap">${renderTarifSearchResults()}</div>
           ${renderTarifEditor()}
         </section>
       </div>
@@ -4449,6 +4570,14 @@ function updateTarifField(field, value) {
   if (!tarif) return;
   tarif[field] = value;
   saveTarifsData();
+
+  if (field === 'categorie') {
+    const postList = document.querySelector('.tarifs-post-list');
+    if (postList) postList.innerHTML = renderTarifPostList();
+    refreshTarifSearchResults();
+    return;
+  }
+
   refreshTarifNavigation();
 }
 
@@ -4541,6 +4670,10 @@ function duplicateTarifPost() {
 }
 
 function addTarifToDocument(docKey) {
+  const now = Date.now();
+  if (now - lastTarifAddClickAt < 800) return;
+  lastTarifAddClickAt = now;
+
   const tarif = getSelectedTarif();
   if (!tarif) return;
 
@@ -4578,9 +4711,10 @@ function addTarifToDocument(docKey) {
 
   saveData(false);
   activePage = targetKey;
-  try {
-    window.parent?.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', docKey: targetKey, tarifId: tarif.id || '', line }, window.location.origin);
-  } catch {}
+
+  // Important : dans cette page, le module Tarifs est déjà intégré à Devis/Facture.
+  // On ne renvoie donc pas le même ajout par postMessage au parent, sinon le message
+  // peut être réécouté et la ligne est ajoutée une seconde fois.
   render();
 
   setTimeout(() => {
@@ -4680,6 +4814,7 @@ function receiveTarifLineFromExternalModule(detail = {}) {
 
 window.addEventListener('message', event => {
   if (event.origin !== window.location.origin) return;
+  if (event.source === window) return;
   if (event.data?.type === 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT') {
     receiveTarifLineFromExternalModule(event.data);
   }
@@ -4701,6 +4836,9 @@ Object.assign(window, {
   addTarifToDocument,
   exportTarifsJson,
   importTarifsJson,
+  updateTarifSearch,
+  refreshTarifSearchResults,
+  rememberTarifCategoryGroupState,
   receiveTarifLineFromExternalModule
 });
 
