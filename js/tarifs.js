@@ -100,11 +100,13 @@
 
   function scheduleAutosave(reason) {
     autosaveDirty = true;
-    if (autosaveTimer) clearTimeout(autosaveTimer);
-    autosaveTimer = setTimeout(() => {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
       autosaveTimer = null;
-      persistTarifsLocal(reason || 'autosave-delayed');
-    }, 300);
+    }
+    // Sauvegarde immédiate en localStorage, comme dans Devis/Facture.
+    // Important : ne pas attendre un délai, sinon un rechargement/veille peut perdre la dernière saisie.
+    persistTarifsLocal(reason || 'autosave-immediate');
   }
 
   function forceAutosave(reason) {
@@ -373,7 +375,11 @@
       forceAutosave('autosave-interval');
     }
   }, 15000);
-  forceAutosave('initial-state');
+
+  // Ne surtout pas sauvegarder automatiquement à l'ouverture.
+  // Si le parent Devis/Facture n'a pas encore renvoyé ses données, sauvegarder ici peut écraser les tarifs par un état vide.
+  lastSavedSnapshot = JSON.stringify(tarifs) + '|' + JSON.stringify(managedCategories);
+  autosaveDirty = false;
 
   window.BastComptaModule = {
     name: 'Tarifs',
