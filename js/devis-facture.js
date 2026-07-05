@@ -284,6 +284,8 @@ let activePage = 'quote';
 let crmExpandedClientId = '';
 let crmSearchTerm = '';
 let driveFileIndex = {};
+let tarifsLocalDirty = false;
+let tarifsLastLocalEditAt = Number(data?.tarifs?.updatedAt || 0) || 0;
 
 function loadData() {
   try {
@@ -325,6 +327,7 @@ async function saveData(showAlert = true) {
 
         try {
           syncSaved = await saveSyncToDrive(false);
+          if (syncSaved) tarifsLocalDirty = false;
         } catch (error) {
           console.error(error);
         }
@@ -1593,6 +1596,7 @@ async function saveSyncToDrive(showErrorAlert = false) {
         reminderBody: data.mail?.reminderBody || defaultData.mail.reminderBody
       },
       tarifs: {
+        updatedAt: Number(data.tarifs?.updatedAt || tarifsLastLocalEditAt || 0),
         categories: Array.isArray(data.tarifs?.categories) ? cleanTarifCategories(data.tarifs.categories) : [],
         items: Array.isArray(data.tarifs?.items) ? data.tarifs.items.map(normalizeTarifItem) : []
       }
@@ -1639,6 +1643,7 @@ async function saveSyncToDrive(showErrorAlert = false) {
       throw new Error(errorText);
     }
 
+    tarifsLocalDirty = false;
     return true;
   } catch (error) {
     console.error(error);
@@ -1689,10 +1694,22 @@ async function loadSyncDataFromDriveIfAvailable() {
       data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
     }
     if (parsed.tarifs && typeof parsed.tarifs === 'object') {
-      data.tarifs = {
-        categories: cleanTarifCategories(parsed.tarifs.categories || []),
-        items: Array.isArray(parsed.tarifs.items) ? parsed.tarifs.items.map(normalizeTarifItem) : []
-      };
+      ensureTarifsData();
+      const localTarifsUpdatedAt = Number(data.tarifs?.updatedAt || tarifsLastLocalEditAt || 0);
+      const driveTarifsUpdatedAt = Number(parsed.tarifs.updatedAt || 0);
+      const localHasTarifs = Array.isArray(data.tarifs?.items) && data.tarifs.items.length > 0;
+      const driveHasTarifs = Array.isArray(parsed.tarifs.items) && parsed.tarifs.items.length > 0;
+
+      // Ne jamais écraser une saisie locale Tarifs non envoyée par la disquette.
+      // C'était la cause du texte qui disparaissait après un rafraîchissement/focus.
+      if (!tarifsLocalDirty && (!localHasTarifs || driveTarifsUpdatedAt > localTarifsUpdatedAt || (driveHasTarifs && !localTarifsUpdatedAt))) {
+        data.tarifs = {
+          updatedAt: driveTarifsUpdatedAt,
+          categories: cleanTarifCategories(parsed.tarifs.categories || []),
+          items: Array.isArray(parsed.tarifs.items) ? parsed.tarifs.items.map(normalizeTarifItem) : []
+        };
+        tarifsLastLocalEditAt = driveTarifsUpdatedAt;
+      }
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     return true;
@@ -4105,6 +4122,13 @@ function ensureTarifsData() {
 function saveTarifsData() {
   ensureTarifsData();
   try {
+    // Sécurité anti-perte : chaque saisie dans Tarifs est marquée comme plus récente
+    // que la dernière version Drive. Sans cela, le rafraîchissement automatique au
+    // retour sur l'onglet pouvait recharger l'ancien fichier Drive et effacer la saisie.
+    data.tarifs.updatedAt = Date.now();
+    tarifsLastLocalEditAt = data.tarifs.updatedAt;
+    tarifsLocalDirty = true;
+
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     try {
       window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIFS_CHANGED', {
