@@ -208,13 +208,47 @@
     });
   }
 
+  function sortTarifsForDisplay(list) {
+    return [...list].sort((a, b) => {
+      const ca = a.categorie || 'Sans catégorie';
+      const cb = b.categorie || 'Sans catégorie';
+      const byCat = ca.localeCompare(cb, 'fr', { sensitivity: 'base' });
+      if (byCat) return byCat;
+      return (a.poste || 'Poste sans nom').localeCompare(b.poste || 'Poste sans nom', 'fr', { sensitivity: 'base' });
+    });
+  }
+
   function renderPostList() {
     postList.innerHTML = '';
     if (!tarifs.length) { postList.innerHTML = '<p class="small-hint">Aucun poste.</p>'; return; }
-    tarifs.forEach(t => {
-      const row = document.createElement('div'); row.className = 'post-row' + (t.id === selectedId ? ' active' : '');
-      row.innerHTML = `<button type="button" class="open-post" data-select="${escapeHtml(t.id)}">${escapeHtml(t.poste || 'Poste sans nom')}</button><button type="button" class="icon-delete" data-delete-post="${escapeHtml(t.id)}" title="Supprimer" aria-label="Supprimer">×</button>`;
-      postList.appendChild(row);
+
+    const grouped = new Map();
+    sortTarifsForDisplay(tarifs).forEach(t => {
+      const cat = String(t.categorie || 'Sans catégorie').trim() || 'Sans catégorie';
+      if (!grouped.has(cat)) grouped.set(cat, []);
+      grouped.get(cat).push(t);
+    });
+
+    grouped.forEach((items, cat) => {
+      const details = document.createElement('details');
+      details.className = 'post-category-group';
+      details.open = true;
+
+      const summary = document.createElement('summary');
+      summary.className = 'post-category-title';
+      summary.textContent = `${cat} (${items.length})`;
+      details.appendChild(summary);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'post-category-items';
+      items.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'post-row' + (t.id === selectedId ? ' active' : '');
+        row.innerHTML = `<button type="button" class="open-post" data-select="${escapeHtml(t.id)}">${escapeHtml(t.poste || 'Poste sans nom')}</button><button type="button" class="icon-delete" data-delete-post="${escapeHtml(t.id)}" title="Supprimer" aria-label="Supprimer">×</button>`;
+        wrap.appendChild(row);
+      });
+      details.appendChild(wrap);
+      postList.appendChild(details);
     });
   }
 
@@ -267,6 +301,7 @@
   }
 
   function render() { renderFilters(); renderPostList(); renderSearchResults(); renderEditor(); }
+  function renderSearchOnly() { renderPostList(); renderSearchResults(); }
   function update(index, field, value) {
     if (!tarifs[index]) return;
     tarifs[index][field] = value;
@@ -328,9 +363,14 @@
       if (c && totalCell) totalCell.textContent = money(componentTotal(c));
     });
   }
+  let addToDocumentLock = false;
+
   function addTarifToDevisFacture(docKey, tarif) {
     const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
-    if (!tarif) return;
+    if (!tarif || addToDocumentLock) return;
+    addToDocumentLock = true;
+    setTimeout(() => { addToDocumentLock = false; }, 700);
+
     const line = {
       id: 'line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
       tarifId: tarif.id || '',
@@ -352,17 +392,23 @@
       tva: num(tarif.tva || DEFAULT_TVA) || 21
     };
 
+    // Important : on ne déclenche plus un CustomEvent local en plus de l'écriture localStorage.
+    // Dans Devis/Facture, cela pouvait ajouter la ligne une fois via localStorage et une fois via listener.
     let payload = {};
     try { payload = JSON.parse(localStorage.getItem(DEVIS_FACTURE_KEY) || '{}') || {}; } catch { payload = {}; }
     if (!payload[targetKey] || typeof payload[targetKey] !== 'object') payload[targetKey] = {};
     if (!Array.isArray(payload[targetKey].lines)) payload[targetKey].lines = [];
-    payload[targetKey].lines.push(line);
+
+    const alreadyExists = payload[targetKey].lines.some(existing =>
+      existing && existing._fromTarifClickId && existing._fromTarifClickId === line.id
+    );
+    if (!alreadyExists) {
+      line._fromTarifClickId = line.id;
+      payload[targetKey].lines.push(line);
+    }
     payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString() };
     localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(payload));
 
-    try {
-      window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', { detail: { docKey: targetKey, tarifId: tarif.id || '', line } }));
-    } catch {}
     try {
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', docKey: targetKey, tarifId: tarif.id || '', line }, window.location.origin);
@@ -417,7 +463,7 @@
   });
   document.addEventListener('click', e => { const select = e.target.closest('[data-select]'); if (select) selectPost(select.dataset.select); const delPost = e.target.closest('[data-delete-post]'); if (delPost) deletePostById(delPost.dataset.deletePost); const delCat = e.target.closest('[data-delete-category]'); if (delCat) deleteCategory(delCat.dataset.deleteCategory); });
   addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; focusPosteNameAfterRender = true; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; });
-  searchInput.addEventListener('input', render); categoryFilter.addEventListener('change', render); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
+  searchInput.addEventListener('input', renderSearchOnly); categoryFilter.addEventListener('change', renderSearchOnly); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
   window.addEventListener('beforeunload', () => forceAutosave('beforeunload'));
