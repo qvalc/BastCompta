@@ -234,6 +234,12 @@
   function deleteCategory(name) { if (!confirm('Supprimer cette catégorie de la liste ? Les postes existants ne seront pas modifiés.')) return; managedCategories = managedCategories.filter(c => c !== name); saveCategories(); render(); }
   function deletePostById(id) { const idx = tarifs.findIndex(t => t.id === id); if (idx < 0 || !confirm('Supprimer ce poste ?')) return; tarifs.splice(idx, 1); selectedId = ''; saveTarifs(); render(); }
   function selectPost(id) { selectedId = id; render(); }
+  function focusPosteInput() {
+    const input = editor.querySelector('[data-field="poste"]');
+    if (!input) return;
+    input.focus();
+    input.select();
+  }
 
   function exportJson() { downloadBlob(new Blob([JSON.stringify({ version: 5, categories: managedCategories, tarifs }, null, 2)], { type: 'application/json' }), 'tarifs.json'); }
   function exportCsv() {
@@ -273,7 +279,7 @@
     if (btn.dataset.action === 'delete') deletePostById(t.id);
   });
   document.addEventListener('click', e => { const select = e.target.closest('[data-select]'); if (select) selectPost(select.dataset.select); const delPost = e.target.closest('[data-delete-post]'); if (delPost) deletePostById(delPost.dataset.deletePost); const delCat = e.target.closest('[data-delete-category]'); if (delCat) deleteCategory(delCat.dataset.deleteCategory); });
-  addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; });
+  addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; focusPosteInput(); });
   searchInput.addEventListener('input', render); categoryFilter.addEventListener('change', render); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
