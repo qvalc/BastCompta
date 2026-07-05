@@ -79,6 +79,7 @@ const devisFrame = document.getElementById('devisFrame');
 const comptaFrame = document.getElementById('comptaFrame');
 const chantierFrame = document.getElementById('chantierFrame');
 const impotsFrame = document.getElementById('impotsFrame');
+const tarifsFrame = document.getElementById('tarifsFrame');
 const subscriptionModal = document.getElementById('subscriptionModal');
 const subscriptionModalTitle = document.getElementById('subscriptionModalTitle');
 const subscriptionModalText = document.getElementById('subscriptionModalText');
@@ -88,7 +89,7 @@ let activateTrialBtn = null;
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
-const FREE_MAIN_TABS = ['devis'];
+const FREE_MAIN_TABS = ['devis', 'tarifs'];
 const PAID_MAIN_TABS = ['compta', 'chantier', 'impots'];
 let currentSubscriptionState = { allowed: false, status: 'unknown', data: null };
 
@@ -404,7 +405,8 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
     { tab: 'devis', frame: devisFrame },
     { tab: 'compta', frame: comptaFrame },
     { tab: 'chantier', frame: chantierFrame },
-    { tab: 'impots', frame: impotsFrame }
+    { tab: 'impots', frame: impotsFrame },
+    { tab: 'tarifs', frame: tarifsFrame }
   ].forEach(({ tab, frame }) => {
     if (!frame) return;
 
@@ -423,7 +425,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 }
 
 function unloadProtectedFrames() {
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach(frame => {
+  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     if (!frame) return;
     frame.setAttribute('src', 'about:blank');
   });
@@ -505,10 +507,11 @@ function getFrameModuleSaveApi(frame) {
 function getLoadedModuleFrames() {
   return [
     { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+    { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
     { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
     { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
     { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
-  ];
+  ].filter(item => item.frame);
 }
 
 function waitForFrameLoad(frame, timeoutMs = 8000) {
@@ -1876,7 +1879,7 @@ function broadcastDriveConnected() {
     expiresAt: googleTokenExpiresAt
   };
 
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach(frame => {
+  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
@@ -1886,13 +1889,13 @@ function broadcastDriveDisconnected() {
     type: 'BASTCOMPTA_GOOGLE_LOGOUT'
   };
 
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach(frame => {
+  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
 
 function bindIframeMessaging() {
-  [devisFrame, comptaFrame, chantierFrame].forEach(frame => {
+  [devisFrame, comptaFrame, chantierFrame, tarifsFrame].forEach(frame => {
     frame?.addEventListener('load', () => {
       if (isTokenFresh()) broadcastDriveConnected();
       else broadcastDriveDisconnected();
@@ -1919,6 +1922,7 @@ window.addEventListener('message', event => {
   }
 
   if (event.data?.type === 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT') {
+    postToFrame(devisFrame, event.data);
     openDevisDocumentFromSuiviClient(event.data.docKey === 'invoice' ? 'invoice' : 'quote');
   }
 

@@ -4106,6 +4106,11 @@ function saveTarifsData() {
   ensureTarifsData();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    try {
+      window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIFS_CHANGED', {
+        detail: { source: 'devis-facture', tarifs: data.tarifs, updatedAt: new Date().toISOString() }
+      }));
+    } catch {}
   } catch (error) {
     console.error('Sauvegarde tarifs impossible.', error);
   }
@@ -4280,7 +4285,7 @@ function renderTarifEditor() {
     <article class="tarif-card">
       <div class="tarif-card-head">
         <div>
-          <input class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste', this.value)" placeholder="Nom du poste / prestation">
+          <input id="tarifPosteNameInput" class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste', this.value)" placeholder="Nom du poste / prestation" autocomplete="off">
           <div class="tarif-meta-line">
             <span>${escapeHtml(tarif.categorie || 'Sans catégorie')}</span>
             <span>${money(price)} HTVA / ${escapeHtml(tarif.mesure || 'unité')}</span>
@@ -4391,6 +4396,13 @@ function addTarifPost() {
   tarifPostDrawerOpen = true;
   saveTarifsData();
   render();
+  setTimeout(() => {
+    const input = document.getElementById('tarifPosteNameInput');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 0);
 }
 
 function selectTarifPost(id) {
@@ -4476,6 +4488,7 @@ function addTarifCategoryFromInput() {
   data.tarifs.categories.push(value);
   data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
   tarifCategoryDrawerOpen = true;
+  if (input) input.value = '';
   saveTarifsData();
   render();
 }
@@ -4514,18 +4527,36 @@ function addTarifToDocument(docKey) {
     data[targetKey].lines = [];
   }
 
-  data[targetKey].lines.push({
+  const line = {
+    id: 'line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+    tarifId: tarif.id || '',
     description: tarif.poste || '',
+    designation: tarif.poste || '',
+    libelle: tarif.poste || '',
     qty: 1,
+    quantite: 1,
     unit: tarif.mesure || '',
+    unite: tarif.mesure || '',
     unitPrice: tarifNumber(tarif.prix),
+    prixUnitaire: tarifNumber(tarif.prix),
+    priceHtva: tarifNumber(tarif.prix),
     costPrice: tarifTotalCost(tarif),
+    coutRevient: tarifTotalCost(tarif),
     discount: 0,
-    vatRate: tarifNumber(tarif.tva || 21) || 21
-  });
+    remise: 0,
+    vatRate: tarifNumber(tarif.tva || 21) || 21,
+    tva: tarifNumber(tarif.tva || 21) || 21,
+    source: 'tarifs'
+  };
+
+  data[targetKey].lines.push(line);
+  data.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString() };
 
   saveData(false);
   activePage = targetKey;
+  try {
+    window.parent?.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', docKey: targetKey, tarifId: tarif.id || '', line }, window.location.origin);
+  } catch {}
   render();
 
   setTimeout(() => {
@@ -4588,6 +4619,73 @@ function importTarifsJson(event) {
   };
   reader.readAsText(file);
 }
+
+
+function receiveTarifLineFromExternalModule(detail = {}) {
+  const targetKey = detail.docKey === 'invoice' ? 'invoice' : 'quote';
+  const line = detail.line || {};
+  if (!data[targetKey]) return false;
+  if (!Array.isArray(data[targetKey].lines)) data[targetKey].lines = [];
+  data[targetKey].lines.push({
+    id: line.id || ('line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7)),
+    tarifId: line.tarifId || detail.tarifId || '',
+    description: line.description || line.designation || line.libelle || '',
+    designation: line.designation || line.description || line.libelle || '',
+    libelle: line.libelle || line.description || line.designation || '',
+    qty: line.qty || line.quantite || 1,
+    quantite: line.quantite || line.qty || 1,
+    unit: line.unit || line.unite || '',
+    unite: line.unite || line.unit || '',
+    unitPrice: tarifNumber(line.unitPrice ?? line.prixUnitaire ?? line.priceHtva),
+    prixUnitaire: tarifNumber(line.prixUnitaire ?? line.unitPrice ?? line.priceHtva),
+    priceHtva: tarifNumber(line.priceHtva ?? line.unitPrice ?? line.prixUnitaire),
+    costPrice: tarifNumber(line.costPrice ?? line.coutRevient),
+    coutRevient: tarifNumber(line.coutRevient ?? line.costPrice),
+    discount: tarifNumber(line.discount ?? line.remise),
+    remise: tarifNumber(line.remise ?? line.discount),
+    vatRate: tarifNumber(line.vatRate ?? line.tva) || 21,
+    tva: tarifNumber(line.tva ?? line.vatRate) || 21,
+    source: 'tarifs'
+  });
+  data.lastAddedFromTarifs = { docKey: targetKey, line: data[targetKey].lines[data[targetKey].lines.length - 1], at: new Date().toISOString() };
+  saveData(false);
+  activePage = targetKey;
+  render();
+  return true;
+}
+
+window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin) return;
+  if (event.data?.type === 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT') {
+    receiveTarifLineFromExternalModule(event.data);
+  }
+});
+
+// Fonctions Tarifs exposées volontairement : les boutons HTML inline de cette page doivent fonctionner,
+// même si le fichier est chargé comme module ou depuis un iframe.
+Object.assign(window, {
+  addTarifPost,
+  selectTarifPost,
+  deleteTarifPost,
+  updateTarifField,
+  addTarifComponent,
+  updateTarifComponent,
+  deleteTarifComponent,
+  addTarifCategoryFromInput,
+  deleteTarifCategory,
+  duplicateTarifPost,
+  addTarifToDocument,
+  exportTarifsJson,
+  importTarifsJson,
+  receiveTarifLineFromExternalModule
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && event.target?.id === 'newTarifCategoryInput') {
+    event.preventDefault();
+    addTarifCategoryFromInput();
+  }
+});
 
 function renderPages() {
   const wrap = document.getElementById('pages');
