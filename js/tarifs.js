@@ -11,6 +11,10 @@
   let managedCategories = loadCategories();
   let selectedId = ''; // aucune fiche ouverte automatiquement à l’ouverture
   let focusPosteNameAfterRender = false;
+  let autosaveDirty = false;
+  let autosaveTimer = null;
+  let lastSavedSnapshot = '';
+
 
   const editor = document.getElementById('tarifEditor');
   const template = document.getElementById('tarifTemplate');
@@ -80,9 +84,39 @@
     } catch {}
   }
 
+  function persistTarifsLocal(reason) {
+    const payloadTarifs = JSON.stringify(tarifs);
+    const payloadCategories = JSON.stringify(managedCategories);
+    const snapshot = payloadTarifs + '|' + payloadCategories;
+
+    localStorage.setItem(STORAGE_KEY, payloadTarifs);
+    localStorage.setItem(CATEGORIES_KEY, payloadCategories);
+
+    autosaveDirty = false;
+    lastSavedSnapshot = snapshot;
+    notifyHostSave(reason || 'autosave');
+    return true;
+  }
+
+  function scheduleAutosave(reason) {
+    autosaveDirty = true;
+    if (autosaveTimer) clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(() => {
+      autosaveTimer = null;
+      persistTarifsLocal(reason || 'autosave-delayed');
+    }, 300);
+  }
+
+  function forceAutosave(reason) {
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+    persistTarifsLocal(reason || 'autosave-forced');
+  }
+
   function saveTarifs(reason) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
-    notifyHostSave(reason || 'tarifs');
+    scheduleAutosave(reason || 'tarifs');
   }
   function cleanCategoryList(list) {
     const seen = new Set();
@@ -91,7 +125,7 @@
   function loadCategories() {
     try { const raw = localStorage.getItem(CATEGORIES_KEY); return raw ? cleanCategoryList(JSON.parse(raw)) : []; } catch { return []; }
   }
-  function saveCategories(reason) { managedCategories = cleanCategoryList(managedCategories); localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories)); notifyHostSave(reason || 'categories'); }
+  function saveCategories(reason) { managedCategories = cleanCategoryList(managedCategories); scheduleAutosave(reason || 'categories'); }
   function categories() { return cleanCategoryList([...managedCategories, ...tarifs.map(t => t.categorie).filter(Boolean)]).sort((a, b) => a.localeCompare(b, 'fr')); }
 
   function searchableText(t) { const comp = (t.composants || []).map(c => [c.nom, c.unite, c.quantite, c.prixUnitaire].join(' ')).join(' '); return normalize([t.poste, t.categorie, t.mesure, t.prix, t.tva, t.tags, t.remarque, t.historique, comp].join(' ')); }
@@ -325,6 +359,22 @@
   searchInput.addEventListener('input', render); categoryFilter.addEventListener('change', render); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
+  window.addEventListener('beforeunload', () => forceAutosave('beforeunload'));
+  window.addEventListener('pagehide', () => forceAutosave('pagehide'));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') forceAutosave('visibility-hidden');
+  });
+  window.addEventListener('blur', () => {
+    if (autosaveDirty) forceAutosave('window-blur');
+  });
+  setInterval(() => {
+    const currentSnapshot = JSON.stringify(tarifs) + '|' + JSON.stringify(managedCategories);
+    if (autosaveDirty || currentSnapshot !== lastSavedSnapshot) {
+      forceAutosave('autosave-interval');
+    }
+  }, 15000);
+  forceAutosave('initial-state');
+
   window.BastComptaModule = {
     name: 'Tarifs',
     storageKey: STORAGE_KEY,
@@ -339,15 +389,12 @@
         if (Array.isArray(data.categories)) managedCategories = cleanCategoryList(data.categories);
       }
       selectedId = tarifs[0] ? tarifs[0].id : '';
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
-      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories));
+      forceAutosave('setData');
       render();
-      notifyHostSave('setData');
       return { ok: true, module: 'tarifs', count: tarifs.length };
     },
     save: async function () {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
-      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories));
+      forceAutosave('portal-save');
       return { ok: true, module: 'tarifs', local: true, data: getTarifsPayload() };
     },
     getStatus: () => ({ ready: true, module: 'tarifs', count: tarifs.length })
