@@ -735,6 +735,8 @@ const LOCAL_DEVIS_KEY = 'devis-facture-style-vrai-document';
 const LOCAL_COMPTA_KEY = 'comptabilite-local-v1';
 const LOCAL_CHANTIERS_KEY = 'bastcompta-chantiers-v1';
 const LOCAL_IMPOTS_KEY = 'bastcompta-impots-belgique-v1';
+const LOCAL_TARIFS_KEY = 'bastcompta_tarifs_v7_vierge_sans_fiche';
+const LOCAL_TARIFS_CATEGORIES_KEY = 'bastcompta_tarifs_categories_v3_vierge_sans_fiche';
 
 function backupStatus(text, type = '') {
   setMessage(text || '', type);
@@ -791,6 +793,7 @@ function detectHiddenDriveCategory(file = {}) {
   if (name.includes('comptabilite') || name.includes(' compta ') || name.includes(' achat ') || name.includes(' achats ') || name.includes(' vente ') || name.includes(' ventes ') || name.includes(' frais ')) return 'comptabilite';
   if (name.includes('suivi client') || name.includes('suivi-client') || name.includes(' chantier ') || name.includes(' chantiers ') || name.includes(' client ') || name.includes(' crm ')) return 'clients';
   if (name.includes('impot') || name.includes('impots') || name.includes(' ipp ') || name.includes(' fiscal ') || name.includes(' taxe ') || name.includes(' taxes ')) return 'impots';
+  if (name.includes('tarif') || name.includes('prix') || name.includes('poste')) return 'autres';
   return 'autres';
 }
 
@@ -1033,7 +1036,9 @@ function getLocalBackupData() {
     devisFacture: safeJsonParse(localStorage.getItem(LOCAL_DEVIS_KEY), {}),
     comptabilite: safeJsonParse(localStorage.getItem(LOCAL_COMPTA_KEY), {}),
     chantiers: safeJsonParse(localStorage.getItem(LOCAL_CHANTIERS_KEY), { version: 1, projects: [] }),
-    impots: safeJsonParse(localStorage.getItem(LOCAL_IMPOTS_KEY), {})
+    impots: safeJsonParse(localStorage.getItem(LOCAL_IMPOTS_KEY), {}),
+    tarifs: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_KEY), []),
+    tarifsCategories: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_CATEGORIES_KEY), [])
   };
 }
 
@@ -1399,6 +1404,8 @@ async function createFullBackupZip() {
   const localCompta = localData.comptabilite || {};
   const localChantiers = localData.chantiers || { version: 1, projects: [] };
   const localImpots = localData.impots || {};
+  const localTarifs = Array.isArray(localData.tarifs) ? localData.tarifs : [];
+  const localTarifsCategories = Array.isArray(localData.tarifsCategories) ? localData.tarifsCategories : [];
   const registry = buildClientRegistry(Array.isArray(localDevis.clients) ? localDevis.clients : []);
   const driveFilesManifest = [];
 
@@ -1418,9 +1425,9 @@ async function createFullBackupZip() {
       displayName: currentUser.displayName || ''
     },
     backupType: 'complete-local-drive-pdf-crm-suivi-client-faithful',
-    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'impots'],
+    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'impots', 'tarifs'],
     restore: { localStorage: true, googleDrive: true, pdfFiles: true, clients: true, crm: true, mode: 'complete-reconstruction' },
-    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, impots: LOCAL_IMPOTS_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
+    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, impots: LOCAL_IMPOTS_KEY, tarifs: LOCAL_TARIFS_KEY, tarifsCategories: LOCAL_TARIFS_CATEGORIES_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
     crm: { clients: [], count: 0, exports: [] },
     clients: [],
     files: []
@@ -1439,10 +1446,12 @@ async function createFullBackupZip() {
   zip.file('01-donnees-locales/comptabilite-local.json', JSON.stringify(localCompta, null, 2));
   zip.file('01-donnees-locales/suivi-client-local.json', JSON.stringify(localChantiers, null, 2));
   zip.file('01-donnees-locales/impots-ipp-local.json', JSON.stringify(localImpots, null, 2));
+  zip.file('01-donnees-locales/tarifs-local.json', JSON.stringify({ categories: localTarifsCategories, tarifs: localTarifs }, null, 2));
   addFile('01-donnees-locales/devis-facture-local.json', 'localStorage', { module: 'devis-facture' });
   addFile('01-donnees-locales/comptabilite-local.json', 'localStorage', { module: 'comptabilite' });
   addFile('01-donnees-locales/suivi-client-local.json', 'localStorage', { module: 'suivi-client' });
   addFile('01-donnees-locales/impots-ipp-local.json', 'localStorage', { module: 'impots' });
+  addFile('01-donnees-locales/tarifs-local.json', 'localStorage', { module: 'tarifs' });
 
   const crmClients = registry.clients;
   manifest.crm.clients = crmClients.map(client => ({ id: client.id || '', name: client.canonicalName || client.name || '', email: client.email || '', phone: client.phone || '', vat: client.vat || client.clientVat || '', address: client.address || '', clientNumber: client.clientNumber || '' }));
@@ -1625,11 +1634,16 @@ async function handleFullRestoreFile(event) {
     const comptaData = await readJsonFromZip('01-donnees-locales/comptabilite-local.json', null);
     const suiviData = await readJsonFromZip('01-donnees-locales/suivi-client-local.json', null);
     const impotsData = await readJsonFromZip('01-donnees-locales/impots-ipp-local.json', null);
+    const tarifsData = await readJsonFromZip('01-donnees-locales/tarifs-local.json', null);
 
     if (devisData) localStorage.setItem(LOCAL_DEVIS_KEY, JSON.stringify(devisData));
     if (comptaData) localStorage.setItem(LOCAL_COMPTA_KEY, JSON.stringify(comptaData));
     if (suiviData) localStorage.setItem(LOCAL_CHANTIERS_KEY, JSON.stringify(suiviData));
     if (impotsData) localStorage.setItem(LOCAL_IMPOTS_KEY, JSON.stringify(impotsData));
+    if (tarifsData) {
+      if (Array.isArray(tarifsData.tarifs)) localStorage.setItem(LOCAL_TARIFS_KEY, JSON.stringify(tarifsData.tarifs));
+      if (Array.isArray(tarifsData.categories)) localStorage.setItem(LOCAL_TARIFS_CATEGORIES_KEY, JSON.stringify(tarifsData.categories));
+    }
 
     const driveFiles = [];
     if (manifest?.files) {
@@ -1902,6 +1916,10 @@ window.addEventListener('message', event => {
   }
   if (event.data?.type === 'BASTCOMPTA_SEND_INVOICE_TO_ACCOUNTING') {
     sendInvoiceToAccounting();
+  }
+
+  if (event.data?.type === 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT') {
+    openDevisDocumentFromSuiviClient(event.data.docKey === 'invoice' ? 'invoice' : 'quote');
   }
 
   if (event.data?.type === 'BASTCOMPTA_OPEN_DEVIS_DOCUMENT') {

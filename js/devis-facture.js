@@ -1591,6 +1591,10 @@ async function saveSyncToDrive(showErrorAlert = false) {
         invoiceBody: data.mail?.invoiceBody || defaultData.mail.invoiceBody,
         reminderSubject: data.mail?.reminderSubject || defaultData.mail.reminderSubject,
         reminderBody: data.mail?.reminderBody || defaultData.mail.reminderBody
+      },
+      tarifs: {
+        categories: Array.isArray(data.tarifs?.categories) ? cleanTarifCategories(data.tarifs.categories) : [],
+        items: Array.isArray(data.tarifs?.items) ? data.tarifs.items.map(normalizeTarifItem) : []
       }
     };
     const content = JSON.stringify(syncPayload, null, 2);
@@ -1683,6 +1687,12 @@ async function loadSyncDataFromDriveIfAvailable() {
     }
     if (parsed.mail && typeof parsed.mail === 'object') {
       data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
+    }
+    if (parsed.tarifs && typeof parsed.tarifs === 'object') {
+      data.tarifs = {
+        categories: cleanTarifCategories(parsed.tarifs.categories || []),
+        items: Array.isArray(parsed.tarifs.items) ? parsed.tarifs.items.map(normalizeTarifItem) : []
+      };
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     return true;
@@ -4279,8 +4289,8 @@ function renderTarifEditor() {
           </div>
         </div>
         <div class="tarif-card-actions no-print">
-          <button type="button" onclick="copyTarifName()">Copier</button>
-          <button type="button" onclick="copyTarifLine()">Copier ligne devis</button>
+          <button type="button" class="primary" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
+          <button type="button" class="primary" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
           <button type="button" onclick="duplicateTarifPost()">Copier fiche</button>
           <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(tarif.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
         </div>
@@ -4403,6 +4413,32 @@ function updateTarifField(field, value) {
   if (!tarif) return;
   tarif[field] = value;
   saveTarifsData();
+  refreshTarifNavigation();
+}
+
+function refreshTarifNavigation() {
+  const tarif = getSelectedTarif();
+  if (!tarif) return;
+
+  document.querySelectorAll('.tarif-post-row').forEach(row => {
+    const button = row.querySelector('.tarif-post-open');
+    if (!button) return;
+    const onClick = button.getAttribute('onclick') || '';
+    if (onClick.includes("'" + tarif.id + "'") || onClick.includes('"' + tarif.id + '"')) {
+      button.textContent = tarif.poste || 'Poste sans nom';
+    }
+  });
+
+  document.querySelectorAll('.tarif-result-item').forEach(item => {
+    const button = item.querySelector('[onclick*="selectTarifPost"]');
+    if (!button) return;
+    const onClick = button.getAttribute('onclick') || '';
+    if (!onClick.includes(tarif.id)) return;
+    const title = item.querySelector('strong');
+    const meta = item.querySelector('span');
+    if (title) title.textContent = tarif.poste || 'Poste sans nom';
+    if (meta) meta.textContent = `${tarif.categorie || 'Sans catégorie'} · ${money(tarifNumber(tarif.prix))} HTVA / ${tarif.mesure || 'unité'}`;
+  });
 }
 
 function addTarifComponent() {
@@ -4467,16 +4503,35 @@ function duplicateTarifPost() {
   render();
 }
 
-function copyTarifName() {
+function addTarifToDocument(docKey) {
   const tarif = getSelectedTarif();
   if (!tarif) return;
-  copyTextToClipboard(tarif.poste || '');
-}
 
-function copyTarifLine() {
-  const tarif = getSelectedTarif();
-  if (!tarif) return;
-  copyTextToClipboard(`${tarif.poste || ''}\t1\t${tarif.mesure || ''}\t${String(tarif.prix || '').replace(',', '.')}\tTVA ${tarif.tva || '21'}%`);
+  const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
+  if (!data[targetKey]) return;
+
+  if (!Array.isArray(data[targetKey].lines)) {
+    data[targetKey].lines = [];
+  }
+
+  data[targetKey].lines.push({
+    description: tarif.poste || '',
+    qty: 1,
+    unit: tarif.mesure || '',
+    unitPrice: tarifNumber(tarif.prix),
+    costPrice: tarifTotalCost(tarif),
+    discount: 0,
+    vatRate: tarifNumber(tarif.tva || 21) || 21
+  });
+
+  saveData(false);
+  activePage = targetKey;
+  render();
+
+  setTimeout(() => {
+    const page = document.getElementById('page-' + targetKey);
+    if (page) page.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, 50);
 }
 
 function copyTextToClipboard(text) {
