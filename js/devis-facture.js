@@ -238,6 +238,10 @@ const defaultData = {
     controlNumber: '',
     formatted: ''
   },
+  tarifs: {
+    categories: [],
+    items: []
+  },
   clients: [],
   mail: {
     recentEmails: [],
@@ -268,6 +272,7 @@ Cordialement,
 const pageDefs = [
   { key: 'quote', label: 'Devis' },
   { key: 'invoice', label: 'Facture' },
+  { key: 'tarifs', label: 'Tarifs' },
   { key: 'reminder', label: 'Rappel' },
   { key: 'communication', label: 'Communication structurée' },
   { key: 'peppol', label: 'Peppol / Doccle' },
@@ -4068,11 +4073,473 @@ function renderSettings() {
       `;
 }
 
+
+// ================================
+// Bibliothèque de tarifs
+// ================================
+let tarifSearchTerm = '';
+let tarifCategoryFilter = 'Toutes';
+let selectedTarifId = '';
+let tarifPostDrawerOpen = false;
+let tarifCategoryDrawerOpen = false;
+
+function ensureTarifsData() {
+  if (!data.tarifs || typeof data.tarifs !== 'object' || Array.isArray(data.tarifs)) {
+    data.tarifs = { categories: [], items: [] };
+  }
+  if (!Array.isArray(data.tarifs.categories)) data.tarifs.categories = [];
+  if (!Array.isArray(data.tarifs.items)) data.tarifs.items = [];
+  data.tarifs.items = data.tarifs.items.map(normalizeTarifItem);
+}
+
+function saveTarifsData() {
+  ensureTarifsData();
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error('Sauvegarde tarifs impossible.', error);
+  }
+}
+
+function makeTarifId() {
+  return 'tarif_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function emptyTarifItem() {
+  return {
+    id: makeTarifId(),
+    poste: '',
+    categorie: '',
+    mesure: '',
+    prix: '',
+    tva: '21',
+    tags: '',
+    remarque: '',
+    prixSimple: '',
+    prixMoyen: '',
+    prixDifficile: '',
+    historique: '',
+    composants: []
+  };
+}
+
+function emptyTarifComponent() {
+  return { nom: '', unite: '', quantite: '', prixUnitaire: '' };
+}
+
+function normalizeTarifItem(item = {}) {
+  const base = Object.assign(emptyTarifItem(), item || {});
+  base.id = item.id || base.id;
+  if (!Array.isArray(base.composants)) base.composants = [];
+  base.composants = base.composants.map(c => Object.assign(emptyTarifComponent(), c || {}));
+  delete base.favorite;
+  delete base.cout;
+  return base;
+}
+
+function normalizeTarifText(value) {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(',', '.');
+}
+
+function tarifNumber(value) {
+  const n = parseFloat(String(value || '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function cleanTarifCategories(list) {
+  const seen = new Set();
+  return (list || []).map(c => String(c || '').trim()).filter(c => {
+    const key = normalizeTarifText(c);
+    if (!c || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getTarifCategories() {
+  ensureTarifsData();
+  return cleanTarifCategories([
+    ...data.tarifs.categories,
+    ...data.tarifs.items.map(t => t.categorie).filter(Boolean)
+  ]).sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function tarifComponentTotal(component) {
+  return tarifNumber(component.quantite) * tarifNumber(component.prixUnitaire);
+}
+
+function tarifTotalCost(tarif) {
+  return (tarif.composants || []).reduce((sum, component) => sum + tarifComponentTotal(component), 0);
+}
+
+function getSelectedTarifIndex() {
+  ensureTarifsData();
+  return data.tarifs.items.findIndex(t => t.id === selectedTarifId);
+}
+
+function getSelectedTarif() {
+  const index = getSelectedTarifIndex();
+  return index >= 0 ? data.tarifs.items[index] : null;
+}
+
+function tarifSearchableText(tarif) {
+  const components = (tarif.composants || []).map(c => [c.nom, c.unite, c.quantite, c.prixUnitaire].join(' ')).join(' ');
+  return normalizeTarifText([tarif.poste, tarif.categorie, tarif.mesure, tarif.prix, tarif.tva, tarif.tags, tarif.remarque, tarif.historique, components].join(' '));
+}
+
+function getFilteredTarifs() {
+  ensureTarifsData();
+  const query = normalizeTarifText(tarifSearchTerm.trim());
+  return data.tarifs.items.filter(t => {
+    const categoryOk = tarifCategoryFilter === 'Toutes' || !tarifCategoryFilter || t.categorie === tarifCategoryFilter;
+    const queryOk = !query || tarifSearchableText(t).includes(query);
+    return categoryOk && queryOk;
+  });
+}
+
+function renderTarifCategoryOptions(selected = '') {
+  return getTarifCategories().map(c => `<option value="${escapeHtml(c)}" ${c === selected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+}
+
+function renderTarifPostList() {
+  ensureTarifsData();
+  if (!data.tarifs.items.length) return '<p class="tarifs-muted">Aucun poste.</p>';
+  return data.tarifs.items.map(t => `
+    <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}">
+      <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
+      <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+    </div>
+  `).join('');
+}
+
+function renderManagedTarifCategories() {
+  ensureTarifsData();
+  data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
+  if (!data.tarifs.categories.length) return '<p class="tarifs-muted">Aucune catégorie.</p>';
+  return data.tarifs.categories.map(c => `
+    <div class="tarif-category-row">
+      <span>${escapeHtml(c)}</span>
+      <button type="button" class="tarif-x" onclick="deleteTarifCategory('${escapeHtml(c)}')" title="Supprimer" aria-label="Supprimer">×</button>
+    </div>
+  `).join('');
+}
+
+function renderTarifSearchResults() {
+  const hasSearch = tarifSearchTerm.trim() || (tarifCategoryFilter && tarifCategoryFilter !== 'Toutes');
+  if (!hasSearch) return '';
+  const rows = getFilteredTarifs();
+  if (!rows.length) return '<div class="tarifs-empty small">Aucun poste trouvé.</div>';
+  return `<div class="tarif-results">${rows.slice(0, 30).map(t => `
+    <div class="tarif-result-item">
+      <div>
+        <strong>${escapeHtml(t.poste || 'Poste sans nom')}</strong>
+        <span>${escapeHtml(t.categorie || 'Sans catégorie')} · ${money(tarifNumber(t.prix))} HTVA / ${escapeHtml(t.mesure || 'unité')}</span>
+      </div>
+      <button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>
+      <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+function renderTarifComponents(tarif) {
+  if (!tarif.composants.length) {
+    return '<tr><td colspan="6" class="tarifs-empty-row">Aucun composant. Clique sur « Ajouter un composant ».</td></tr>';
+  }
+  return tarif.composants.map((component, componentIndex) => `
+    <tr>
+      <td><input value="${escapeHtml(component.nom)}" oninput="updateTarifComponent(${componentIndex}, 'nom', this.value)" placeholder="Bloc, sable, ciment..."></td>
+      <td><input value="${escapeHtml(component.unite)}" oninput="updateTarifComponent(${componentIndex}, 'unite', this.value)" placeholder="pièce, m³, sac..."></td>
+      <td><input value="${escapeHtml(component.quantite)}" oninput="updateTarifComponent(${componentIndex}, 'quantite', this.value)" inputmode="decimal"></td>
+      <td><input value="${escapeHtml(component.prixUnitaire)}" oninput="updateTarifComponent(${componentIndex}, 'prixUnitaire', this.value)" inputmode="decimal"></td>
+      <td>${money(tarifComponentTotal(component))}</td>
+      <td class="no-print"><button type="button" class="tarif-x" onclick="deleteTarifComponent(${componentIndex})" title="Supprimer" aria-label="Supprimer">×</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderTarifEditor() {
+  const tarif = getSelectedTarif();
+  if (!tarif) {
+    return '<div class="tarifs-empty"><strong>Aucun poste sélectionné</strong><br>Recherche un poste, sélectionne-le, ou crée un nouveau poste dans le volet de gauche.</div>';
+  }
+  const cost = tarifTotalCost(tarif);
+  const price = tarifNumber(tarif.prix);
+  const margin = price - cost;
+  const marginPct = price > 0 ? (margin / price) * 100 : 0;
+  return `
+    <article class="tarif-card">
+      <div class="tarif-card-head">
+        <div>
+          <input class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste', this.value)" placeholder="Nom du poste / prestation">
+          <div class="tarif-meta-line">
+            <span>${escapeHtml(tarif.categorie || 'Sans catégorie')}</span>
+            <span>${money(price)} HTVA / ${escapeHtml(tarif.mesure || 'unité')}</span>
+            <span>Coût ${money(cost)}</span>
+            <span class="${marginPct >= 35 ? 'good' : marginPct >= 15 ? 'low' : 'bad'}">Marge ${money(margin)} (${num(marginPct, 1)} %)</span>
+          </div>
+        </div>
+        <div class="tarif-card-actions no-print">
+          <button type="button" onclick="copyTarifName()">Copier</button>
+          <button type="button" onclick="copyTarifLine()">Copier ligne devis</button>
+          <button type="button" onclick="duplicateTarifPost()">Copier fiche</button>
+          <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(tarif.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+        </div>
+      </div>
+      <div class="tarif-grid">
+        <div><label>Catégorie</label><input value="${escapeHtml(tarif.categorie)}" list="tarifsCategoriesList" oninput="updateTarifField('categorie', this.value)" placeholder="Nettoyage, Maçonnerie..."></div>
+        <div><label>Unité / mesure</label><input value="${escapeHtml(tarif.mesure)}" oninput="updateTarifField('mesure', this.value)" placeholder="m², ml, h, forfait..."></div>
+        <div><label>Prix HTVA</label><input value="${escapeHtml(tarif.prix)}" oninput="updateTarifField('prix', this.value)" inputmode="decimal" placeholder="2.80"></div>
+        <div><label>TVA %</label><input value="${escapeHtml(tarif.tva)}" oninput="updateTarifField('tva', this.value)" inputmode="decimal" placeholder="21"></div>
+        <div><label>Prix TVAC</label><input value="${escapeHtml(money(price * (1 + tarifNumber(tarif.tva) / 100)))}" readonly></div>
+        <div><label>Coût composants</label><input value="${escapeHtml(money(cost))}" readonly></div>
+        <div><label>Marge €</label><input value="${escapeHtml(money(margin))}" readonly></div>
+        <div><label>Marge %</label><input value="${escapeHtml(num(marginPct, 1) + ' %')}" readonly></div>
+      </div>
+      <div class="tarif-grid two">
+        <div><label>Mots-clés</label><input value="${escapeHtml(tarif.tags)}" oninput="updateTarifField('tags', this.value)" placeholder="bloc, ciment, karcher..."></div>
+        <div><label>Remarque</label><textarea oninput="updateTarifField('remarque', this.value)" placeholder="Remarque interne...">${escapeHtml(tarif.remarque)}</textarea></div>
+      </div>
+      <details class="tarif-details" open>
+        <summary>Détail coût de revient / composants</summary>
+        <div class="tarif-table-wrap">
+          <table class="tarif-components-table">
+            <thead><tr><th>Élément</th><th>Unité</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th><th class="no-print">Action</th></tr></thead>
+            <tbody>${renderTarifComponents(tarif)}</tbody>
+          </table>
+        </div>
+        <div class="tarif-component-actions no-print"><button type="button" onclick="addTarifComponent()">+ Ajouter un composant</button></div>
+      </details>
+      <details class="tarif-details">
+        <summary>Prix multiples et historique</summary>
+        <div class="tarif-grid">
+          <div><label>Prix simple</label><input value="${escapeHtml(tarif.prixSimple)}" oninput="updateTarifField('prixSimple', this.value)" inputmode="decimal"></div>
+          <div><label>Prix moyen</label><input value="${escapeHtml(tarif.prixMoyen)}" oninput="updateTarifField('prixMoyen', this.value)" inputmode="decimal"></div>
+          <div><label>Prix difficile</label><input value="${escapeHtml(tarif.prixDifficile)}" oninput="updateTarifField('prixDifficile', this.value)" inputmode="decimal"></div>
+          <div><label>Historique des prix</label><textarea oninput="updateTarifField('historique', this.value)" placeholder="2026 : 2.80 €">${escapeHtml(tarif.historique)}</textarea></div>
+        </div>
+      </details>
+    </article>
+  `;
+}
+
+function renderTarifs() {
+  ensureTarifsData();
+  const cats = getTarifCategories();
+  if (tarifCategoryFilter !== 'Toutes' && !cats.includes(tarifCategoryFilter)) tarifCategoryFilter = 'Toutes';
+  return `
+    <section class="page ${activePage === 'tarifs' ? 'active' : ''}" id="page-tarifs">
+      <div class="toolbar no-print">
+        <div class="toolbar-meta">
+          <div class="toolbar-title">Tarifs</div>
+          <div class="toolbar-subtitle">Bibliothèque personnelle de postes, prix et détails de composants.</div>
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" onclick="exportTarifsJson()">Exporter JSON</button>
+          <label class="file-label">Importer JSON<input type="file" accept="application/json" onchange="importTarifsJson(event)"></label>
+        </div>
+      </div>
+      <div class="tarifs-layout">
+        <aside class="tarifs-side no-print">
+          <details class="tarifs-drawer" ${tarifPostDrawerOpen ? 'open' : ''} ontoggle="tarifPostDrawerOpen=this.open">
+            <summary>Postes</summary>
+            <div class="tarifs-drawer-content">
+              <button type="button" class="primary full" onclick="addTarifPost()">+ Créer un poste</button>
+              <div class="tarifs-post-list">${renderTarifPostList()}</div>
+            </div>
+          </details>
+          <details class="tarifs-drawer" ${tarifCategoryDrawerOpen ? 'open' : ''} ontoggle="tarifCategoryDrawerOpen=this.open">
+            <summary>Catégories</summary>
+            <div class="tarifs-drawer-content">
+              <div class="tarif-category-add">
+                <input id="newTarifCategoryInput" type="text" placeholder="Nouvelle catégorie...">
+                <button type="button" onclick="addTarifCategoryFromInput()">Ajouter</button>
+              </div>
+              <div>${renderManagedTarifCategories()}</div>
+              <p class="tarifs-muted">Tu peux gérer tes catégories ici. Supprimer une catégorie ne supprime aucun poste.</p>
+            </div>
+          </details>
+        </aside>
+        <section class="tarifs-main">
+          <div class="tarifs-search no-print">
+            <div><label>Rechercher un poste</label><input type="search" value="${escapeHtml(tarifSearchTerm)}" oninput="tarifSearchTerm=this.value; render()" placeholder="Ex. bloc, nettoyage, haie..."></div>
+            <div><label>Filtrer par catégorie</label><select onchange="tarifCategoryFilter=this.value; render()"><option value="Toutes">Toutes les catégories</option>${renderTarifCategoryOptions(tarifCategoryFilter)}</select></div>
+          </div>
+          ${renderTarifSearchResults()}
+          ${renderTarifEditor()}
+        </section>
+      </div>
+      <datalist id="tarifsCategoriesList">${cats.map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}</datalist>
+    </section>
+  `;
+}
+
+function addTarifPost() {
+  ensureTarifsData();
+  const item = emptyTarifItem();
+  data.tarifs.items.unshift(item);
+  selectedTarifId = item.id;
+  tarifPostDrawerOpen = true;
+  saveTarifsData();
+  render();
+}
+
+function selectTarifPost(id) {
+  selectedTarifId = id;
+  render();
+}
+
+function deleteTarifPost(id) {
+  ensureTarifsData();
+  const index = data.tarifs.items.findIndex(t => t.id === id);
+  if (index < 0 || !confirm('Supprimer ce poste ?')) return;
+  data.tarifs.items.splice(index, 1);
+  if (selectedTarifId === id) selectedTarifId = '';
+  saveTarifsData();
+  render();
+}
+
+function updateTarifField(field, value) {
+  const tarif = getSelectedTarif();
+  if (!tarif) return;
+  tarif[field] = value;
+  saveTarifsData();
+}
+
+function addTarifComponent() {
+  const tarif = getSelectedTarif();
+  if (!tarif) return;
+  tarif.composants.push(emptyTarifComponent());
+  saveTarifsData();
+  render();
+}
+
+function updateTarifComponent(componentIndex, field, value) {
+  const tarif = getSelectedTarif();
+  if (!tarif || !tarif.composants[componentIndex]) return;
+  tarif.composants[componentIndex][field] = value;
+  saveTarifsData();
+}
+
+function deleteTarifComponent(componentIndex) {
+  const tarif = getSelectedTarif();
+  if (!tarif || !tarif.composants[componentIndex]) return;
+  tarif.composants.splice(componentIndex, 1);
+  saveTarifsData();
+  render();
+}
+
+function addTarifCategoryFromInput() {
+  const input = document.getElementById('newTarifCategoryInput');
+  const value = String(input?.value || '').trim();
+  if (!value) return;
+  ensureTarifsData();
+  if (getTarifCategories().some(c => normalizeTarifText(c) === normalizeTarifText(value))) {
+    alert('Cette catégorie existe déjà.');
+    return;
+  }
+  data.tarifs.categories.push(value);
+  data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
+  tarifCategoryDrawerOpen = true;
+  saveTarifsData();
+  render();
+}
+
+function deleteTarifCategory(name) {
+  if (!confirm('Supprimer cette catégorie de la liste ? Les postes existants ne seront pas modifiés.')) return;
+  ensureTarifsData();
+  data.tarifs.categories = data.tarifs.categories.filter(c => c !== name);
+  saveTarifsData();
+  render();
+}
+
+function duplicateTarifPost() {
+  const index = getSelectedTarifIndex();
+  if (index < 0) return;
+  const source = data.tarifs.items[index];
+  const copy = Object.assign({}, source, {
+    id: makeTarifId(),
+    poste: (source.poste || 'Poste sans nom') + ' - copie',
+    composants: (source.composants || []).map(c => Object.assign({}, c))
+  });
+  data.tarifs.items.splice(index + 1, 0, copy);
+  selectedTarifId = copy.id;
+  saveTarifsData();
+  render();
+}
+
+function copyTarifName() {
+  const tarif = getSelectedTarif();
+  if (!tarif) return;
+  copyTextToClipboard(tarif.poste || '');
+}
+
+function copyTarifLine() {
+  const tarif = getSelectedTarif();
+  if (!tarif) return;
+  copyTextToClipboard(`${tarif.poste || ''}\t1\t${tarif.mesure || ''}\t${String(tarif.prix || '').replace(',', '.')}\tTVA ${tarif.tva || '21'}%`);
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text);
+    return;
+  }
+  const input = document.createElement('textarea');
+  input.value = text;
+  document.body.appendChild(input);
+  input.select();
+  document.execCommand('copy');
+  input.remove();
+}
+
+function exportTarifsJson() {
+  ensureTarifsData();
+  const blob = new Blob([JSON.stringify(data.tarifs, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'tarifs.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importTarifsJson(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      ensureTarifsData();
+      if (Array.isArray(imported)) {
+        data.tarifs.items = imported.map(normalizeTarifItem);
+      } else if (imported && Array.isArray(imported.items)) {
+        data.tarifs.items = imported.items.map(normalizeTarifItem);
+        data.tarifs.categories = cleanTarifCategories(imported.categories || []);
+      } else if (imported && Array.isArray(imported.tarifs)) {
+        data.tarifs.items = imported.tarifs.map(normalizeTarifItem);
+        data.tarifs.categories = cleanTarifCategories(imported.categories || []);
+      } else {
+        throw new Error('Format incorrect');
+      }
+      selectedTarifId = '';
+      saveTarifsData();
+      render();
+    } catch (error) {
+      alert('Le fichier JSON n’est pas valide.');
+    } finally {
+      event.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
 function renderPages() {
   const wrap = document.getElementById('pages');
   wrap.innerHTML = `
     ${renderQuote()}
     ${renderInvoice()}
+    ${renderTarifs()}
     ${renderReminder()}
     ${renderCommunication()}
     ${renderPeppol()}
