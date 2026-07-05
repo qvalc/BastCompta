@@ -66,8 +66,8 @@
     <article class="tarif-card">
       <div class="card-head">
         <div class="title-block">
-          <label class="poste-label">Nom du poste / prestation</label>
-          <input class="poste-input" data-field="poste" placeholder="Ex. Taille de haie, nettoyage terrasse, pose bordure..." />
+          <label class="poste-label" for="posteNomInput">Nom du poste / prestation</label>
+          <input id="posteNomInput" class="poste-input" data-field="poste" placeholder="Ex. Taille de haie, nettoyage terrasse, pose bordure..." autocomplete="off" />
           <div class="meta-line">
             <span class="category-badge"></span>
             <span class="price-quick"></span>
@@ -78,7 +78,6 @@
         <div class="card-actions no-print">
           <button type="button" class="primary" data-action="addQuote">Ajouter au devis</button>
           <button type="button" class="primary" data-action="addInvoice">Ajouter à la facture</button>
-          <button type="button" data-action="duplicate">Copier fiche</button>
           <button type="button" class="icon-delete" data-action="delete" title="Supprimer" aria-label="Supprimer">×</button>
         </div>
       </div>

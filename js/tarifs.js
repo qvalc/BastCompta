@@ -10,6 +10,7 @@
   let tarifs = loadTarifs();
   let managedCategories = loadCategories();
   let selectedId = ''; // aucune fiche ouverte automatiquement à l’ouverture
+  let focusPosteNameAfterRender = false;
 
   const editor = document.getElementById('tarifEditor');
   const template = document.getElementById('tarifTemplate');
@@ -58,7 +59,31 @@
       return Array.isArray(parsed) ? parsed.map(migrate) : [];
     } catch { return []; }
   }
-  function saveTarifs() { localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs)); }
+  function getTarifsPayload() {
+    return {
+      version: 7,
+      updatedAt: new Date().toISOString(),
+      categories: managedCategories,
+      tarifs: tarifs
+    };
+  }
+
+  function notifyHostSave(reason) {
+    const payload = getTarifsPayload();
+    try {
+      window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIFS_CHANGED', { detail: { reason: reason || 'change', payload } }));
+    } catch {}
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'BASTCOMPTA_TARIFS_CHANGED', reason: reason || 'change', payload }, window.location.origin);
+      }
+    } catch {}
+  }
+
+  function saveTarifs(reason) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
+    notifyHostSave(reason || 'tarifs');
+  }
   function cleanCategoryList(list) {
     const seen = new Set();
     return list.map(c => String(c || '').trim()).filter(c => { const key = normalize(c); if (!c || seen.has(key)) return false; seen.add(key); return true; });
@@ -66,7 +91,7 @@
   function loadCategories() {
     try { const raw = localStorage.getItem(CATEGORIES_KEY); return raw ? cleanCategoryList(JSON.parse(raw)) : []; } catch { return []; }
   }
-  function saveCategories() { managedCategories = cleanCategoryList(managedCategories); localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories)); }
+  function saveCategories(reason) { managedCategories = cleanCategoryList(managedCategories); localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories)); notifyHostSave(reason || 'categories'); }
   function categories() { return cleanCategoryList([...managedCategories, ...tarifs.map(t => t.categorie).filter(Boolean)]).sort((a, b) => a.localeCompare(b, 'fr')); }
 
   function searchableText(t) { const comp = (t.composants || []).map(c => [c.nom, c.unite, c.quantite, c.prixUnitaire].join(' ')).join(' '); return normalize([t.poste, t.categorie, t.mesure, t.prix, t.tva, t.tags, t.remarque, t.historique, comp].join(' ')); }
@@ -126,6 +151,14 @@
     renderComponents(card, tarif);
     const photoBox = card.querySelector('.photo-box'); const img = card.querySelector('.photo-box img'); if (tarif.image) { img.src = tarif.image; photoBox.classList.add('has-image'); }
     editor.appendChild(card);
+    if (focusPosteNameAfterRender) {
+      focusPosteNameAfterRender = false;
+      const posteInput = card.querySelector('[data-field="poste"]');
+      if (posteInput) {
+        posteInput.focus();
+        posteInput.select();
+      }
+    }
   }
 
   function renderComponents(card, tarif) {
@@ -203,26 +236,42 @@
   function addTarifToDevisFacture(docKey, tarif) {
     const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
     if (!tarif) return;
+    const line = {
+      id: 'line_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+      tarifId: tarif.id || '',
+      description: tarif.poste || '',
+      designation: tarif.poste || '',
+      libelle: tarif.poste || '',
+      qty: 1,
+      quantite: 1,
+      unit: tarif.mesure || '',
+      unite: tarif.mesure || '',
+      unitPrice: num(tarif.prix),
+      prixUnitaire: num(tarif.prix),
+      priceHtva: num(tarif.prix),
+      costPrice: totalCost(tarif),
+      coutRevient: totalCost(tarif),
+      discount: 0,
+      remise: 0,
+      vatRate: num(tarif.tva || DEFAULT_TVA) || 21,
+      tva: num(tarif.tva || DEFAULT_TVA) || 21
+    };
+
     let payload = {};
     try { payload = JSON.parse(localStorage.getItem(DEVIS_FACTURE_KEY) || '{}') || {}; } catch { payload = {}; }
     if (!payload[targetKey] || typeof payload[targetKey] !== 'object') payload[targetKey] = {};
     if (!Array.isArray(payload[targetKey].lines)) payload[targetKey].lines = [];
-    payload[targetKey].lines.push({
-      description: tarif.poste || '',
-      qty: 1,
-      unit: tarif.mesure || '',
-      unitPrice: num(tarif.prix),
-      costPrice: totalCost(tarif),
-      discount: 0,
-      vatRate: num(tarif.tva || DEFAULT_TVA) || 21
-    });
+    payload[targetKey].lines.push(line);
+    payload.lastAddedFromTarifs = { docKey: targetKey, line, at: new Date().toISOString() };
     localStorage.setItem(DEVIS_FACTURE_KEY, JSON.stringify(payload));
+
     try {
-      window.parent?.postMessage({
-        type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT',
-        docKey: targetKey,
-        tarifId: tarif.id || ''
-      }, window.location.origin);
+      window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', { detail: { docKey: targetKey, tarifId: tarif.id || '', line } }));
+    } catch {}
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT', docKey: targetKey, tarifId: tarif.id || '', line }, window.location.origin);
+      }
     } catch {}
     toast(targetKey === 'invoice' ? 'Ajouté à la facture' : 'Ajouté au devis');
   }
@@ -234,14 +283,8 @@
   function deleteCategory(name) { if (!confirm('Supprimer cette catégorie de la liste ? Les postes existants ne seront pas modifiés.')) return; managedCategories = managedCategories.filter(c => c !== name); saveCategories(); render(); }
   function deletePostById(id) { const idx = tarifs.findIndex(t => t.id === id); if (idx < 0 || !confirm('Supprimer ce poste ?')) return; tarifs.splice(idx, 1); selectedId = ''; saveTarifs(); render(); }
   function selectPost(id) { selectedId = id; render(); }
-  function focusPosteInput() {
-    const input = editor.querySelector('[data-field="poste"]');
-    if (!input) return;
-    input.focus();
-    input.select();
-  }
 
-  function exportJson() { downloadBlob(new Blob([JSON.stringify({ version: 5, categories: managedCategories, tarifs }, null, 2)], { type: 'application/json' }), 'tarifs.json'); }
+  function exportJson() { downloadBlob(new Blob([JSON.stringify(getTarifsPayload(), null, 2)], { type: 'application/json' }), 'tarifs.json'); }
   function exportCsv() {
     const headers = ['Poste', 'Catégorie', 'Unité', 'Prix HTVA', 'TVA', 'Prix TVAC', 'Coût composants', 'Marge', 'Marge %', 'Composants', 'Tags', 'Remarque', 'Historique'];
     const lines = tarifs.map(t => { const cost = totalCost(t); const marge = num(t.prix) - cost; const margePct = num(t.prix) > 0 ? (marge / num(t.prix)) * 100 : 0; const comp = (t.composants || []).map(c => `${c.nom} (${c.quantite} ${c.unite} x ${c.prixUnitaire})`).join(' | '); return [t.poste, t.categorie, t.mesure, t.prix, t.tva, (num(t.prix) * (1 + num(t.tva) / 100)).toFixed(2), cost.toFixed(2), marge.toFixed(2), margePct.toFixed(1), comp, t.tags, t.remarque, t.historique].map(csvEscape).join(';'); });
@@ -274,23 +317,40 @@
     if (btn.dataset.action === 'deleteComponent' && row) { t.composants.splice(Number(row.dataset.componentIndex), 1); saveTarifs(); render(); }
     if (btn.dataset.action === 'addQuote') addTarifToDevisFacture('quote', t);
     if (btn.dataset.action === 'addInvoice') addTarifToDevisFacture('invoice', t);
-    if (btn.dataset.action === 'duplicate') { const copy = Object.assign({}, t, { id: makeId(), poste: (t.poste || '') + ' - copie', composants: (t.composants || []).map(c => Object.assign({}, c)) }); tarifs.splice(index + 1, 0, copy); selectedId = copy.id; saveTarifs(); render(); }
     if (btn.dataset.action === 'removeImage') { t.image = ''; saveTarifs(); render(); }
     if (btn.dataset.action === 'delete') deletePostById(t.id);
   });
   document.addEventListener('click', e => { const select = e.target.closest('[data-select]'); if (select) selectPost(select.dataset.select); const delPost = e.target.closest('[data-delete-post]'); if (delPost) deletePostById(delPost.dataset.deletePost); const delCat = e.target.closest('[data-delete-category]'); if (delCat) deleteCategory(delCat.dataset.deleteCategory); });
-  addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; focusPosteInput(); });
+  addBtn.addEventListener('click', () => { const t = emptyTarif(); tarifs.unshift(t); selectedId = t.id; focusPosteNameAfterRender = true; saveTarifs(); render(); document.getElementById('postsDrawer').open = true; });
   searchInput.addEventListener('input', render); categoryFilter.addEventListener('change', render); exportBtn.addEventListener('click', exportJson); exportCsvBtn.addEventListener('click', exportCsv);
   addCategoryBtn.addEventListener('click', () => addCategory(newCategoryInput.value)); newCategoryInput.addEventListener('keydown', e => { if (e.key === 'Enter') addCategory(newCategoryInput.value); });
   importInput.addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (Array.isArray(imported)) tarifs = imported.map(migrate); else if (imported && Array.isArray(imported.tarifs)) { tarifs = imported.tarifs.map(migrate); if (Array.isArray(imported.categories)) { managedCategories = cleanCategoryList(imported.categories); saveCategories(); } } else throw new Error('Format incorrect'); selectedId = ''; saveTarifs(); render(); toast('Tarifs importés'); } catch { alert('Le fichier JSON n’est pas valide.'); } }; reader.readAsText(file); e.target.value = ''; });
   window.BastComptaModule = {
     name: 'Tarifs',
-    save: async function () {
-      saveTarifs();
-      saveCategories();
-      return { ok: true, module: 'tarifs', local: true, drive: false };
+    storageKey: STORAGE_KEY,
+    categoriesKey: CATEGORIES_KEY,
+    getData: function () {
+      return getTarifsPayload();
     },
-    getStatus: () => ({ ready: true, module: 'tarifs' })
+    setData: function (data) {
+      if (Array.isArray(data)) tarifs = data.map(migrate);
+      else if (data && Array.isArray(data.tarifs)) {
+        tarifs = data.tarifs.map(migrate);
+        if (Array.isArray(data.categories)) managedCategories = cleanCategoryList(data.categories);
+      }
+      selectedId = tarifs[0] ? tarifs[0].id : '';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories));
+      render();
+      notifyHostSave('setData');
+      return { ok: true, module: 'tarifs', count: tarifs.length };
+    },
+    save: async function () {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tarifs));
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(managedCategories));
+      return { ok: true, module: 'tarifs', local: true, data: getTarifsPayload() };
+    },
+    getStatus: () => ({ ready: true, module: 'tarifs', count: tarifs.length })
   };
 
   render();
