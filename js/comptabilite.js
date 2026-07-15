@@ -256,10 +256,47 @@ function applyVatRegimeRules() {
   data.settings.vatCarryover = 0;
 }
 
+function hasExistingAccountingEntries() {
+  return [
+    data.sales,
+    data.purchases,
+    data.investments,
+    data.assets,
+    data.stock,
+    data.losses,
+    data.km,
+    data.vat?.declarations
+  ].some(rows => Array.isArray(rows) && rows.length > 0);
+}
+
 function setVatRegime(value) {
-  data.settings.vatRegime = value || 'taxable';
+  const currentRegime = getVatRegime();
+  const requestedRegime = value || 'taxable';
+
+  // Aucun traitement nécessaire lorsque l'utilisateur resélectionne
+  // le régime déjà actif.
+  if (requestedRegime === currentRegime) return;
+
+  // Sécurité absolue : le régime TVA ne peut plus être modifié
+  // dès qu'une écriture comptable existe dans l'exercice.
+  if (hasExistingAccountingEntries()) {
+    alert(
+      "Impossible de modifier le régime TVA : des écritures existent déjà dans cet exercice. " +
+      "Crée un nouvel exercice vide pour utiliser un autre régime TVA."
+    );
+
+    // Le rendu remet immédiatement le sélecteur sur la valeur enregistrée.
+    render();
+    return;
+  }
+
+  data.settings.vatRegime = requestedRegime;
   applyVatRegimeRules();
-  if (isVatExempt() && activePage === 'vat') activePage = 'dashboard';
+
+  if (isVatExempt() && activePage === 'vat') {
+    activePage = 'dashboard';
+  }
+
   saveData(false);
 }
 
