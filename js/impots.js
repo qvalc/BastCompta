@@ -246,11 +246,20 @@
   }
 
   function isSocialContributionRow(row) {
+    // Dans l’onglet Taxes et cotisations,
+    // le type est plus fiable que le libellé.
+    // Cela permet de compter aussi les remboursements négatifs.
+    if (row?.type === 'cotisations_sociales') {
+      return true;
+    }
+
+    // Compatibilité avec les anciennes écritures
+    // ou les achats qui ne possèdent pas de champ "type".
     const label = normalizeText([
-      row.label,
-      row.description,
-      row.supplier,
-      row.category
+      row?.label,
+      row?.description,
+      row?.supplier,
+      row?.category
     ].join(' '));
 
     return (
@@ -356,25 +365,105 @@
   }
 
   function fiscalCodes() {
-    const left = settings.taxColumn !== 'right';
     const isProfits = settings.declarationMode === 'profits';
-    const suffix = left ? 'gauche' : 'droite';
+
     if (isProfits) {
       return [
-        { section: 'Cadre XVIII - Profits', label: 'Recettes provenant de l’exercice de la profession', code: left ? '1650-96' : '2650-66', amount: snapshot.salesNet, source: 'Ventes comptables', note: 'Pour professions libérales, charges, offices ou autres occupations lucratives.' },
-        { section: 'Cadre XVIII - Profits', label: 'Cotisations sociales', code: left ? '1656-90' : '2656-60', amount: snapshot.socialContributions, source: 'Détection + réglage manuel', note: 'À vérifier avec l’attestation de ta caisse sociale.' },
-        { section: 'Cadre XVIII - Profits', label: 'Frais professionnels réels', code: left ? '1657-89' : '2657-59', amount: snapshot.fiscalCosts, source: 'Achats + charges + amortissements + km', note: 'Code probable pour autres frais professionnels si tu optes pour les frais réels.' },
-        { section: 'Cadre X - Réductions', label: 'Pension complémentaire pour indépendants', code: left ? '1342-16' : '2342-83', amount: settings.plci, source: 'Saisie manuelle', note: 'PLCI / pension complémentaire, selon attestation.' }
+        {
+          section: 'Cadre XVIII - Profits',
+          label: 'Recettes provenant de l’exercice de la profession',
+          codeLeft: '1650-96',
+          codeRight: '2650-66',
+          amount: snapshot.salesNet,
+          source: 'Ventes comptables',
+          note: 'Pour professions libérales, charges, offices ou autres occupations lucratives.'
+        },
+        {
+          section: 'Cadre XVIII - Profits',
+          label: 'Cotisations sociales',
+          codeLeft: '1656-90',
+          codeRight: '2656-60',
+          amount: snapshot.socialContributions,
+          source: 'Détection + réglage manuel',
+          note: 'À vérifier avec l’attestation de ta caisse sociale.'
+        },
+        {
+          section: 'Cadre XVIII - Profits',
+          label: 'Frais professionnels réels',
+          codeLeft: '1657-89',
+          codeRight: '2657-59',
+          amount: snapshot.fiscalCosts,
+          source: 'Achats + charges + amortissements + km',
+          note: 'Code probable pour les frais professionnels réels.'
+        },
+        {
+          section: 'Cadre X - Réductions',
+          label: 'Pension complémentaire pour indépendants',
+          codeLeft: '1342-16',
+          codeRight: '2342-83',
+          amount: settings.plci,
+          source: 'Saisie manuelle',
+          note: 'PLCI / pension complémentaire, selon attestation.'
+        }
       ];
     }
 
     return [
-      { section: 'Cadre XVII - Bénéfices', label: 'Bénéfice brut de l’exploitation proprement dite', code: left ? '1600-49' : '2600-19', amount: snapshot.salesNet, source: 'Ventes comptables', note: 'Pour activité commerciale, industrielle, artisanale ou agricole.' },
-      { section: 'Cadre XVII - Bénéfices', label: 'Cotisations sociales', code: left ? '1632-17' : '2632-84', amount: snapshot.socialContributions, source: 'Détection + réglage manuel', note: 'À vérifier avec l’attestation de ta caisse sociale.' },
-      { section: 'Cadre XVII - Bénéfices', label: 'Autres frais professionnels réels', code: left ? '1606-43' : '2606-13', amount: snapshot.fiscalCosts, source: 'Achats + charges + amortissements + km', note: 'Autres frais professionnels, hors cotisations sociales.' },
-      { section: 'Cadre VIII', label: 'Pertes professionnelles antérieures', code: left ? '1349-09' : '2349-76', amount: settings.priorLosses, source: 'Saisie manuelle', note: 'Uniquement si pertes reportables confirmées.' },
-      { section: 'Cadre X - Réductions', label: 'Pension complémentaire pour indépendants', code: left ? '1342-16' : '2342-83', amount: settings.plci, source: 'Saisie manuelle', note: 'PLCI / pension complémentaire, selon attestation.' }
-    ].map(item => ({ ...item, note: item.note + ` Colonne ${suffix}.` }));
+      {
+        section: 'Cadre XVII - Bénéfices',
+        label: 'Bénéfice brut de l’exploitation proprement dite',
+        codeLeft: '1600-49',
+        codeRight: '2600-19',
+        amount: snapshot.salesNet,
+        source: 'Ventes comptables',
+        note: 'Pour activité commerciale, industrielle, artisanale ou agricole.'
+      },
+      {
+        section: 'Cadre XVII - Bénéfices',
+        label: 'Cotisations sociales',
+        codeLeft: '1632-17',
+        codeRight: '2632-84',
+        amount: snapshot.socialContributions,
+        source: 'Détection + réglage manuel',
+        note: 'À vérifier avec l’attestation de ta caisse sociale.'
+      },
+      {
+        section: 'Cadre XVII - Bénéfices',
+        label: 'Autres frais professionnels réels',
+        codeLeft: '1606-43',
+        codeRight: '2606-13',
+        amount: snapshot.fiscalCosts,
+        source: 'Achats + charges + amortissements + km',
+        note: 'Autres frais professionnels, hors cotisations sociales.'
+      },
+      {
+        section: 'Cadre XVII - Bénéfices',
+        label: 'Revenus recueillis comme indépendant complémentaire',
+        codeLeft: '1617-32',
+        codeRight: '2617-02',
+        amount: snapshot.salesNet,
+        source: 'Même montant que le bénéfice brut',
+        note: 'À compléter pour une activité indépendante complémentaire ou comme étudiant-indépendant.'
+      },
+      {
+        section: 'Cadre VIII',
+        label: 'Pertes professionnelles antérieures',
+        codeLeft: '1349-09',
+        codeRight: '2349-76',
+        amount: settings.priorLosses,
+        source: 'Saisie manuelle',
+        note: 'Uniquement si pertes reportables confirmées.'
+      },
+      {
+        section: 'Cadre X - Réductions',
+        label: 'Pension complémentaire pour indépendants',
+        codeLeft: '1342-16',
+        codeRight: '2342-83',
+        amount: settings.plci,
+        source: 'Saisie manuelle',
+        note: 'PLCI / pension complémentaire, selon attestation.'
+      }
+    ];
   }
 
   function alerts() {
@@ -412,7 +501,7 @@
   }
 
   function renderSummary() {
-    const codeRows = fiscalCodes().filter(row => toNumber(row.amount) !== 0 || ['1600-49', '2600-19', '1650-96', '2650-66'].includes(row.code));
+    const codeRows = fiscalCodes().filter(row => toNumber(row.amount) !== 0 || ['1600-49', '1650-96'].includes(row.codeLeft));
     return `
       <section class="page ${activePage === 'summary' ? 'active' : ''}">
         <div class="grid-2">
@@ -442,9 +531,36 @@
   }
 
   function renderCodesTable(rows) {
-    return `<div style="overflow:auto;"><table><thead><tr><th>Cadre</th><th>Poste</th><th>Code</th><th class="num">Montant</th><th>Source</th><th>Note</th></tr></thead><tbody>
-      ${rows.map(row => `<tr><td>${escapeHtml(row.section)}</td><td>${escapeHtml(row.label)}</td><td><strong>${escapeHtml(row.code)}</strong></td><td class="num">${money(row.amount)}</td><td><span class="source-pill">${escapeHtml(row.source)}</span></td><td>${escapeHtml(row.note || '')}</td></tr>`).join('')}
-    </tbody></table></div>`;
+    return `
+      <div style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Cadre</th>
+              <th>Poste</th>
+              <th>Code gauche</th>
+              <th>Code droite</th>
+              <th class="num">Montant</th>
+              <th>Source</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `
+              <tr>
+                <td>${escapeHtml(row.section)}</td>
+                <td>${escapeHtml(row.label)}</td>
+                <td><strong>${escapeHtml(row.codeLeft)}</strong></td>
+                <td><strong>${escapeHtml(row.codeRight)}</strong></td>
+                <td class="num">${money(row.amount)}</td>
+                <td><span class="source-pill">${escapeHtml(row.source)}</span></td>
+                <td>${escapeHtml(row.note || '')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   function renderCodes() {
