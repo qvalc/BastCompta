@@ -181,6 +181,7 @@ const defaultData = {
   },
   settings: {
     vatCarryover: 0,
+    vatRegime: 'taxable',
     bankBalance: 0,
     cashBalance: 0,
     capitalStart: 0,
@@ -210,6 +211,56 @@ function getLossType(row) {
 
 function getLossTypeLabel(type) {
   return LOSS_TYPE_OPTIONS.find(option => option.value === type)?.label || 'Cotisations sociales';
+}
+
+function getVatRegime() {
+  return data?.settings?.vatRegime || 'taxable';
+}
+
+function isVatExempt() {
+  return getVatRegime() === 'exempt_article_44';
+}
+
+function isVatMixed() {
+  return getVatRegime() === 'mixed';
+}
+
+function getVatRegimeLabel() {
+  const labels = {
+    taxable: 'Assujetti TVA',
+    mixed: 'Assujetti mixte',
+    exempt_article_44: 'Exonéré TVA – article 44'
+  };
+  return labels[getVatRegime()] || labels.taxable;
+}
+
+function purchaseVatAmount(row) {
+  return round2(rowHtvaToVat(row?.htva, row?.rate));
+}
+
+function isPurchaseVatRecoverable(row) {
+  if (isVatExempt()) return false;
+  return row?.deductible !== false;
+}
+
+function purchaseProfessionalCost(row) {
+  const htva = toNumber(row?.htva);
+  const vat = purchaseVatAmount(row);
+  return round2(htva + (isPurchaseVatRecoverable(row) ? 0 : vat));
+}
+
+function applyVatRegimeRules() {
+  if (!isVatExempt()) return;
+  data.sales.forEach(row => { row.rate = 0; });
+  data.purchases.forEach(row => { row.deductible = false; });
+  data.settings.vatCarryover = 0;
+}
+
+function setVatRegime(value) {
+  data.settings.vatRegime = value || 'taxable';
+  applyVatRegimeRules();
+  if (isVatExempt() && activePage === 'vat') activePage = 'dashboard';
+  saveData(false);
 }
 
 function renderLossTypeSelect(row, index) {
@@ -1026,6 +1077,10 @@ function getDriveFileNameFromData(sourceData) {
 }
 
 function openIntervat() {
+  if (isVatExempt()) {
+    alert('Régime exonéré TVA – article 44 : aucune déclaration périodique Intervat n’est préparée par BastCompta.');
+    return;
+  }
   window.open('https://finances.belgium.be/fr/E-services/Intervat', '_blank', 'noopener');
 }
 
@@ -1585,10 +1640,12 @@ function salesRowTvac(row) {
 }
 
 function salesRowNet(row) {
+  if (isVatExempt()) return salesRowTvac(row);
   return rowNetFromTvac(salesRowTvac(row), row?.rate);
 }
 
 function salesRowVat(row) {
+  if (isVatExempt()) return 0;
   return rowVatFromTvac(salesRowTvac(row), row?.rate);
 }
 
@@ -2424,7 +2481,7 @@ function totals() {
   const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
 
   const purchasesNet = data.purchases.reduce(
-    (sum, row) => sum + toNumber(row.htva),
+    (sum, row) => sum + purchaseProfessionalCost(row),
     0
   );
 
@@ -2432,7 +2489,7 @@ function totals() {
     const groups = {};
 
     data.purchases.forEach(row => {
-      if (!row.deductible) return;
+      if (!isPurchaseVatRecoverable(row)) return;
 
       const key = [
         row.supplier || '',
@@ -2456,12 +2513,12 @@ function totals() {
   })();
 
   const purchasesMerchandiseNet = data.purchases.reduce(
-    (sum, row) => sum + (row.category === 'marchandise' ? toNumber(row.htva) : 0),
+    (sum, row) => sum + (row.category === 'marchandise' ? purchaseProfessionalCost(row) : 0),
     0
   );
 
   const purchasesGeneralNet = data.purchases.reduce(
-    (sum, row) => sum + (row.category === 'frais_generaux' ? toNumber(row.htva) : 0),
+    (sum, row) => sum + (row.category === 'frais_generaux' ? purchaseProfessionalCost(row) : 0),
     0
   );
 
@@ -2653,7 +2710,8 @@ function deleteRow(key, index) {
 
 function renderTabs() {
   const tabs = document.getElementById('tabs');
-  tabs.innerHTML = pageDefs.map(page => `
+  const visiblePages = pageDefs.filter(page => !(isVatExempt() && page.key === 'vat'));
+  tabs.innerHTML = visiblePages.map(page => `
         <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
       `).join('');
 }
@@ -2691,6 +2749,7 @@ function renderDashboard() {
               <div class="muted-box">
                 <strong>Société :</strong> ${escapeHtml(data.company.name || '—')}<br>
                 <strong>Période :</strong> ${escapeHtml(data.company.period)}<br>
+                <strong>Régime TVA :</strong> ${escapeHtml(getVatRegimeLabel())}<br>
                 <strong>Lignes achats :</strong> ${data.purchases.length}<br>
                 <strong>Lignes ventes :</strong> ${data.sales.length}<br>
                 <strong>Investissements :</strong> ${t.investmentComputed.length}<br>
@@ -2729,7 +2788,7 @@ function renderSales() {
     title: 'Journal des ventes',
     hint: '',
     addLabel: 'Ajouter une vente',
-    onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: 21, tvac: 0, documentType: 'invoice', documentStatus: 'sent' })`,
+    onAdd: `addRow('sales', { date: '', client: '', invoiceNumber: '', rate: ${isVatExempt() ? 0 : 21}, tvac: 0, documentType: 'invoice', documentStatus: 'sent' })`,
     tableAttrs: `class="table-sales"`,
     headers: ['Date', 'Client', 'N° Facture', 'Type', 'Taux TVA', 'TVAC', 'HTVA', 'TVA', 'Facture', ''],
     rows: data.sales.map((row, i) => {
@@ -2740,13 +2799,14 @@ function renderSales() {
       const lockedDec = getClosedVatDeclarationForDate(row.date || '');
       const locked = !!lockedDec;
       const lockAttr = locked ? 'disabled title="Période TVA clôturée"' : '';
+      const vatRateAttr = (locked || isVatExempt()) ? 'disabled title="' + (isVatExempt() ? 'Régime exonéré TVA – taux forcé à 0 %' : 'Période TVA clôturée') + '"' : '';
       return `
   <tr ${locked ? 'title="Période TVA clôturée : ligne verrouillée"' : ''}>
     <td><input type="date" value="${escapeAttr(row.date)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'date', this.value, { sort: true })"></td>
     <td><input value="${escapeAttr(row.client)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'client', this.value)"></td>
     <td><input value="${escapeAttr(row.invoiceNumber || '')}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'invoiceNumber', this.value)"></td>
     <td>${escapeHtml(getInvoiceImportTypeLabel(row))}</td>
-    <td><input type="number" step="0.01" value="${num(row.rate)}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'rate', this.value, { type: 'number' })"></td>
+    <td><input type="number" step="0.01" value="${num(isVatExempt() ? 0 : row.rate)}" ${vatRateAttr} onchange="updateAccountingRowField('sales', ${i}, 'rate', this.value, { type: 'number' })"></td>
     <td><input type="number" step="0.01" value="${num(salesRowTvac(row))}" ${lockAttr} onchange="updateAccountingRowField('sales', ${i}, 'tvac', this.value, { type: 'number' })"></td>
     <td>${money(salesRowNet(row))}</td>
     <td>${money(salesRowVat(row))}</td>
@@ -2772,10 +2832,12 @@ function renderPurchases() {
             <div class="hint">Chaque ligne garde le montant HTVA, le taux, le caractère déductible de la TVA et le PDF de la facture si disponible.</div>
           </div>
           <div class="inline-actions">
-            <button class="primary" onclick="addRow('purchases', { date: '', supplier: '', invoiceNumber: '', rate: 21, htva: 0, category: 'frais_generaux', deductible: true, pdfFileId: '', pdfFileName: '' })">Ajouter un achat</button>
+            <button class="primary" onclick="addRow('purchases', { date: '', supplier: '', invoiceNumber: '', rate: 21, htva: 0, category: 'frais_generaux', deductible: ${isVatExempt() ? false : true}, pdfFileId: '', pdfFileName: '' })">Ajouter un achat</button>
             <button type="button" onclick="loadPurchasePdfDriveFiles(true).then(() => render())">Actualiser les PDF</button>
           </div>
         </div>
+
+        ${isVatExempt() ? `<div class="muted-box" style="margin-bottom:14px;"><strong>Régime exonéré TVA – article 44 :</strong> la TVA des achats n’est pas récupérable et est incluse automatiquement dans la charge professionnelle (TVAC).</div>` : (isVatMixed() ? `<div class="muted-box" style="margin-bottom:14px;"><strong>Régime mixte :</strong> choisis Oui ou Non pour la récupération de TVA sur chaque achat selon son affectation.</div>` : '')}
 
         <div style="overflow:auto;">
           <table class="table-purchases" style="table-layout:fixed; width:100%;">
@@ -2813,6 +2875,8 @@ function renderPurchases() {
     const lockedDec = getClosedVatDeclarationForDate(row.date || '');
     const locked = !!lockedDec;
     const lockAttr = locked ? 'disabled title="Période TVA clôturée"' : '';
+    const deductibleAttr = (locked || isVatExempt()) ? 'disabled title="' + (isVatExempt() ? 'TVA non récupérable sous le régime article 44' : 'Période TVA clôturée') + '"' : '';
+    const effectiveDeductible = isPurchaseVatRecoverable(row);
     return `
                 <tr ${locked ? 'title="Période TVA clôturée : ligne verrouillée"' : ''}>
                   <td><input type="date" value="${escapeAttr(row.date)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'date', this.value, { sort: true })"></td>
@@ -2827,12 +2891,12 @@ function renderPurchases() {
                   <td><input type="number" step="0.01" value="${num(row.rate)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'rate', this.value, { type: 'number' })"></td>
                   <td><input type="number" step="0.01" value="${num(row.htva)}" ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'htva', this.value, { type: 'number' })"></td>
                   <td>
-                    <select ${lockAttr} onchange="updateAccountingRowField('purchases', ${i}, 'deductible', this.value, { type: 'boolean' })">
-                      <option value="true" ${row.deductible ? 'selected' : ''}>Oui</option>
-                      <option value="false" ${!row.deductible ? 'selected' : ''}>Non</option>
+                    <select ${deductibleAttr} onchange="updateAccountingRowField('purchases', ${i}, 'deductible', this.value, { type: 'boolean' })">
+                      <option value="true" ${effectiveDeductible ? 'selected' : ''}>Oui</option>
+                      <option value="false" ${!effectiveDeductible ? 'selected' : ''}>Non</option>
                     </select>
                   </td>
-                  <td>${money(row.deductible ? purchaseVatDisplay(i) : 0)}</td>
+                  <td>${money(effectiveDeductible ? purchaseVatDisplay(i) : 0)}</td>
                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
                   <td>
                     <div class="inline-actions">
@@ -3160,6 +3224,18 @@ function renderBalance() {
 
 function renderVat() {
   ensureVatStructures();
+  if (isVatExempt()) {
+    return `
+      <section class="page ${activePage === 'vat' ? 'active' : ''}">
+        <div class="card">
+          <h2>TVA</h2>
+          <div class="muted-box" style="margin-top:14px;">
+            <strong>Activité exonérée de TVA – article 44.</strong><br>
+            BastCompta ne prépare pas de déclaration périodique Intervat pour ce régime. Les ventes sont enregistrées sans TVA et la TVA des achats est intégrée dans leur coût professionnel.
+          </div>
+        </div>
+      </section>`;
+  }
   const vatLedger = computeVatLedger();
 
   return `
@@ -3402,7 +3478,18 @@ function renderSettings() {
               <tbody>
                 <tr><td>Nom de l'entreprise</td><td><input value="${escapeAttr(data.company.name)}" onchange="setField('company.name', this.value)"></td></tr>
                 <tr><td>Période</td><td><input value="${escapeAttr(data.company.period)}" onchange="setField('company.period', this.value)"></td></tr>
-                <tr><td>Report TVA</td><td><input type="number" step="0.01" value="${num(data.settings.vatCarryover)}" onchange="setField('settings.vatCarryover', parseFloat(this.value)||0)"></td></tr>
+                <tr>
+                  <td>Régime TVA</td>
+                  <td>
+                    <select onchange="setVatRegime(this.value)">
+                      <option value="taxable" ${getVatRegime() === 'taxable' ? 'selected' : ''}>Assujetti TVA</option>
+                      <option value="mixed" ${getVatRegime() === 'mixed' ? 'selected' : ''}>Assujetti mixte</option>
+                      <option value="exempt_article_44" ${getVatRegime() === 'exempt_article_44' ? 'selected' : ''}>Exonéré TVA – article 44 (ex. infirmier)</option>
+                    </select>
+                    <div class="hint" style="margin-top:6px;">Ce choix adapte les ventes, la récupération de TVA sur les achats, les charges et l’onglet TVA.</div>
+                  </td>
+                </tr>
+                <tr><td>Report TVA</td><td><input type="number" step="0.01" value="${num(data.settings.vatCarryover)}" ${isVatExempt() ? 'disabled title="Sans objet pour une activité exonérée article 44"' : ''} onchange="setField('settings.vatCarryover', parseFloat(this.value)||0)"></td></tr>
                 <tr><td>Seuil exonération cotisations sociales</td><td><input type="number" step="0.01" value="${num(data.settings.socialExemptionThreshold)}" onchange="setField('settings.socialExemptionThreshold', parseFloat(this.value)||1881.76)"></td></tr>
                 <tr><td>Taux cotisations sociales (%)</td><td><input type="number" step="0.01" value="${num(data.settings.socialContributionRate)}" onchange="setField('settings.socialContributionRate', parseFloat(this.value)||20.5)"></td></tr>
                 <tr><td>Frais caisse sociale (%)</td><td><input type="number" step="0.01" value="${num(data.settings.socialContributionFeeRate)}" onchange="setField('settings.socialContributionFeeRate', parseFloat(this.value)||3.5)"></td></tr>
@@ -3703,7 +3790,7 @@ function buildPrintReportHtml() {
     <div class="metrics">
       <div class="metric"><span>Ventes HTVA</span><strong>${money(t.salesNet)}</strong></div>
       <div class="metric"><span>Achats HTVA</span><strong>${money(t.purchasesNet)}</strong></div>
-      <div class="metric"><span>TVA nette</span><strong>${money(t.netVat)}</strong></div>
+      ${isVatExempt() ? '' : `<div class="metric"><span>TVA nette</span><strong>${money(t.netVat)}</strong></div>`}
       <div class="metric"><span>Résultat estimé</span><strong>${money(t.estimatedProfit)}</strong></div>
     </div>
 
@@ -3713,6 +3800,7 @@ function buildPrintReportHtml() {
         <div class="panel soft"><div class="panel-body">${reportKv([
     ['Société', escapeHtml(data.company.name || '—')],
     ['Période', escapeHtml(data.company.period || '—')],
+    ['Régime TVA', escapeHtml(getVatRegimeLabel())],
     ['Investissements', String(t.investmentComputed.length)],
     ['Immobilisations', String(data.assets.length)],
     ['Km encodés', `${num(t.kmTotal, 0)} km`],
@@ -3880,10 +3968,14 @@ function render() {
   const metricPurchases = document.getElementById('metricPurchases');
   const metricVat = document.getElementById('metricVat');
   const metricProfit = document.getElementById('metricProfit');
+  const metricVatCard = document.getElementById('metricVatCard');
+  const intervatTopButton = document.getElementById('intervatTopButton');
 
   if (metricSales) metricSales.textContent = money(t.salesNet);
   if (metricPurchases) metricPurchases.textContent = money(t.purchasesNet);
-  if (metricVat) {
+  if (metricVatCard) metricVatCard.style.display = isVatExempt() ? 'none' : '';
+  if (intervatTopButton) intervatTopButton.style.display = isVatExempt() ? 'none' : '';
+  if (metricVat && !isVatExempt()) {
     if (t.payableVat > 0) {
       metricVat.previousElementSibling.textContent = 'TVA à payer';
       metricVat.textContent = money(t.payableVat);
@@ -4058,6 +4150,7 @@ window.BastComptaModule = {
 
 window.addEventListener('load', async () => {
   ensureVatStructures();
+  applyVatRegimeRules();
   render();
   await initDriveClientOnly();
 

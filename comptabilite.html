@@ -21,7 +21,7 @@
         <div class="top-actions">
           <button onclick="goToPage('gdrive')">Google Drive</button>
           <button onclick="goToPage('settings')">Paramètres</button>
-          <button onclick="openIntervat()">Intervat</button>
+          <button id="intervatTopButton" onclick="openIntervat()">Intervat</button>
         </div>
       </div>
       <div class="actions">
@@ -53,7 +53,7 @@
         <div class="metric-label">Achats HTVA</div>
         <div class="metric-value" id="metricPurchases">0,00 €</div>
       </div>
-      <div class="card">
+      <div class="card" id="metricVatCard">
         <div class="metric-label">TVA nette</div>
         <div class="metric-value" id="metricVat">0,00 €</div>
       </div>
