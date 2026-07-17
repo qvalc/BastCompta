@@ -2633,15 +2633,24 @@ function totals() {
   const socialContributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
   const isExemptSocial = estimatedProfit <= socialExemptionThreshold;
 
+  // Cotisations nettes positives : logique existante inchangée.
+  // Si les remboursements dépassent les paiements, l'excédent devient
+  // un autre produit professionnel à réintégrer.
+  const deductibleSocialContributions = Math.max(0, socialContributionsTotal);
+  const excessSocialRefund = Math.max(0, -socialContributionsTotal);
+
   const socialContributionRecovered = isExemptSocial
-    ? socialContributionsTotal
+    ? deductibleSocialContributions
     : 0;
 
   const socialBaseContribution = isExemptSocial ? 0 : (estimatedProfit * socialContributionRate / 100);
   const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * socialContributionFeeRate / 100);
   const socialContributionDue = socialBaseContribution + socialFeeContribution;
 
-  const taxableEstimatedProfit = estimatedProfit + socialContributionRecovered - socialContributionDue;
+  const taxableEstimatedProfit = estimatedProfit
+    + socialContributionRecovered
+    + excessSocialRefund
+    - socialContributionDue;
 
   const netVat = salesVat - purchasesVat - carryover;
 
@@ -2688,6 +2697,8 @@ function totals() {
     kmTotal,
     totalCharges,
     estimatedProfit,
+    deductibleSocialContributions,
+    excessSocialRefund,
     socialContributionRecovered,
     socialContributionDue,
     taxableEstimatedProfit,
@@ -3134,7 +3145,8 @@ function renderKm() {
 
 function renderResult() {
   const t = totals();
-  const taxAndSocial = t.socialContributionsTotal;
+  const taxAndSocial = t.deductibleSocialContributions;
+  const excessSocialRefund = t.excessSocialRefund;
   const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
   const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
@@ -3144,9 +3156,12 @@ function renderResult() {
   const socialStatusLabel = isExemptSocial
     ? `Exonéré de cotisations sociales (≤ ${money(exemptionThreshold)})`
     : `Non exonéré de cotisations sociales (> ${money(exemptionThreshold)})`;
-  const socialDetailLabel = isExemptSocial
-    ? 'Cotisations sociales récupérées'
-    : `Cotisations sociales (${num(contributionRate, 1)}%) + frais caisse (${num(contributionFeeRate, 1)}%)`;
+  const hasExcessSocialRefund = excessSocialRefund > 0;
+  const socialDetailLabel = hasExcessSocialRefund
+    ? 'Excédent de remboursements ajouté aux produits professionnels'
+    : isExemptSocial
+      ? 'Cotisations sociales récupérées'
+      : `Cotisations sociales (${num(contributionRate, 1)}%) + frais caisse (${num(contributionFeeRate, 1)}%)`;
 
   return `
         <section class="page ${activePage === 'result' ? 'active' : ''}">
@@ -3161,7 +3176,7 @@ function renderResult() {
               <table>
                 <thead>
                   <tr>
-                    <th style="width:40%; text-align:center;">Recette des ventes</th>
+                    <th style="width:40%; text-align:center;">Produits professionnels</th>
                     <th style="width:42%; text-align:center;">Dépenses &amp; Frais</th>
                     <th style="width:18%; text-align:center;">Valeurs</th>
                   </tr>
@@ -3174,7 +3189,7 @@ function renderResult() {
                   </tr>
 
                   <tr>
-                    <td rowspan="7" style="background:#f8fafc;"></td>
+                    <td rowspan="7" style="background:${excessSocialRefund > 0 ? '#ecfdf5' : '#f8fafc'};${excessSocialRefund > 0 ? ' font-weight:700;' : ''}">${excessSocialRefund > 0 ? `Excédent remboursement cotisations : ${money(excessSocialRefund)}` : ''}</td>
                     <td>61 – Frais de fonctionnement / Frais généraux</td>
                     <td style="text-align:right;">${money(t.purchasesGeneralNet)}</td>
                   </tr>
@@ -3220,7 +3235,9 @@ function renderResult() {
                   <span style="color:var(--muted); font-size:13px;">${socialDetailLabel}</span>
                 </div>
                 <div style="padding:10px 12px; text-align:right;">
-                  ${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}
+                  ${hasExcessSocialRefund
+                    ? `+ ${money(excessSocialRefund)}`
+                    : `${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}`}
                 </div>
               </div>
               <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
@@ -3632,7 +3649,8 @@ function reportKv(items) {
 function buildPrintReportHtml() {
   const t = totals();
   const year = parseInt(data.company.period, 10) || new Date().getFullYear();
-  const taxAndSocial = t.socialContributionsTotal;
+  const taxAndSocial = t.deductibleSocialContributions;
+  const excessSocialRefund = t.excessSocialRefund;
   const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
   const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
@@ -3640,7 +3658,7 @@ function buildPrintReportHtml() {
   const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
   const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
   const socialTotalContribution = socialBaseContribution + socialFeeContribution;
-  const taxableBase = isExemptSocial ? t.estimatedProfit + taxAndSocial : t.estimatedProfit - socialTotalContribution;
+  const taxableBase = t.taxableEstimatedProfit;
   const vatLedger = computeVatLedger();
   const vatReportRows = vatLedger.rows.flatMap(row => [
     [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – période`, `${printableDate(row.computed.startDate)} au ${printableDate(row.computed.endDate)}`],
@@ -3904,6 +3922,7 @@ function buildPrintReportHtml() {
       <div class="totals-grid">
         <div class="result-card">
           <div class="row"><div>Recettes des ventes</div><div>${money(t.salesNet)}</div></div>
+          ${excessSocialRefund > 0 ? `<div class="row"><div>Excédent remboursement cotisations sociales</div><div>${money(excessSocialRefund)}</div></div>` : ''}
           <div class="row"><div>60 – Marchandises</div><div>${money(t.purchasesMerchandiseNet)}</div></div>
           <div class="row"><div>61 – Frais généraux</div><div>${money(t.purchasesGeneralNet)}</div></div>
           <div class="row"><div>63 – Amortissements</div><div>${money(t.yearlyAmort)}</div></div>
@@ -3915,6 +3934,7 @@ function buildPrintReportHtml() {
     ['Exercice', String(year)],
     ['Seuil exonération sociale', money(exemptionThreshold)],
     ['Cotisations sociales estimées', money(socialTotalContribution)],
+    ['Excédent remboursement à réintégrer', money(excessSocialRefund)],
     ['Statut social', escapeHtml(isExemptSocial ? 'Exonéré' : 'Non exonéré')],
     ['Solde imposable', money(taxableBase)]
   ])}</div></div>
