@@ -2445,6 +2445,16 @@ onAuthStateChanged(auth, async (user) => {
       await user.reload().catch(() => { });
       const freshUser = auth.currentUser || user;
 
+      if (typeof window.clarity === "function") {
+        window.clarity(
+          "identify",
+          freshUser.uid,
+          undefined,
+          undefined,
+          freshUser.email || freshUser.uid
+        );
+      }
+
       await createUserDocument(freshUser);
       const subscription = await checkSubscription(freshUser);
 
