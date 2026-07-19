@@ -2686,8 +2686,8 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     if (shell.classList.contains('sidebar-open') && event.target === shell) closeMobileSidebar();
   });
   sidebarSettingsBtn?.addEventListener('click', event => {
-    settingsMenu?.classList.add('open');
-    closeMobileSidebar();
+    const isOpen = settingsMenu?.classList.toggle('open');
+    sidebarSettingsBtn.setAttribute('aria-expanded', String(Boolean(isOpen)));
     event.stopPropagation();
   });
 

@@ -1724,3 +1724,89 @@ body:has(#portalScreen:not(.hidden)) {
   max-height: 100% !important;
   overflow-y: auto !important;
 }
+
+
+/* ===== V6 : paramètres intégrés au menu + typographie compacte ===== */
+#portalScreen .sidebar-home,
+#portalScreen .sidebar-module {
+  min-height: 50px;
+  padding: 11px 20px;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+#portalScreen .sidebar-submenu button {
+  min-height: 38px;
+  padding: 9px 16px 9px 54px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+#portalScreen .sidebar-icon {
+  width: 22px;
+  font-size: 16px;
+}
+
+#portalScreen .sidebar-settings-group {
+  margin-top: 18px;
+  border-top: 1px solid var(--bc-sidebar-line);
+  border-bottom: 0;
+}
+
+#portalScreen #settingsMenu {
+  position: static;
+  display: block;
+}
+
+#portalScreen #settingsDropdown {
+  position: static;
+  inset: auto;
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: rgba(0,0,0,.13);
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .25s ease;
+}
+
+#portalScreen #settingsMenu.open #settingsDropdown {
+  max-height: 520px;
+}
+
+#portalScreen #settingsDropdown button {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 16px 9px 54px;
+  border: 0;
+  border-radius: 0;
+  color: #d9e1e7;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+#portalScreen #settingsDropdown button:hover {
+  color: #fff;
+  background: var(--bc-sidebar-hover);
+  transform: none;
+}
+
+#portalScreen #settingsDropdown .danger-link {
+  color: #ffb4b4;
+  border-top: 1px solid var(--bc-sidebar-line);
+}
+
+#portalScreen .user-actions {
+  gap: 10px;
+}

@@ -223,11 +223,22 @@
               <button data-main-tab="impots" data-page-key="manual" type="button">Réglages / manuel</button>
             </div>
           </div>
+          <div id="settingsMenu" class="sidebar-group sidebar-settings-group" data-sidebar-group="settings">
+            <button id="sidebarSettingsBtn" class="sidebar-module" type="button" aria-expanded="false">
+              <span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span><span class="sidebar-chevron">⌄</span>
+            </button>
+            <div class="sidebar-submenu settings-dropdown" id="settingsDropdown">
+              <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
+              <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
+              <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+              <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
+              <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
+              <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
+              <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
+              <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
+            </div>
+          </div>
         </nav>
-
-        <div class="sidebar-footer">
-          <button id="sidebarSettingsBtn" type="button"><span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span></button>
-        </div>
       </aside>
 
       <div class="portal-main">
@@ -242,20 +253,7 @@
           <div class="user-actions">
             <button id="globalSaveBtn" class="ghost icon-btn" title="Sauvegarder">💾</button>
             <div id="currentUser" class="user-pill"></div>
-            <div id="settingsMenu" class="settings-menu">
-              <button id="settingsMenuBtn" class="settings-icon-btn ghost settings-gear-btn" type="button" title="Paramètres" aria-label="Paramètres">⚙️</button>
-              <div class="settings-dropdown" id="settingsDropdown">
-                <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
-                <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
-                <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
-                <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
-                <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
-                <button id="sendVerificationBtn" type="button">Renvoyer email de vérification</button>
-                <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
-                <div class="settings-separator"></div>
-                <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
-              </div>
-            </div>
+
           </div>
         </div>
 
