@@ -2112,3 +2112,138 @@ body.portal-active .app {
         padding-inline: 8px !important;
     }
 }
+
+/* ===== Page de connexion modernisée - v16 ===== */
+#authScreen .showcase {
+    padding: 38px;
+    justify-content: flex-start;
+}
+
+#authScreen .brand h1 {
+    margin: 0 0 14px;
+    max-width: 650px;
+    font-size: clamp(34px, 3.2vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.045em;
+}
+
+#authScreen .brand p {
+    max-width: 680px;
+    font-size: 17px;
+    line-height: 1.6;
+}
+
+#authScreen .feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 30px;
+}
+
+#authScreen .feature-card {
+    min-height: 0;
+    padding: 18px;
+    border-radius: 18px;
+    display: flex;
+    flex-direction: column;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+
+#authScreen .feature-card:hover {
+    transform: translateY(-3px);
+    border-color: #bfd4ff;
+    box-shadow: 0 16px 34px rgba(15, 23, 42, .10);
+}
+
+#authScreen .feature-icon {
+    width: 42px;
+    height: 42px;
+    margin-bottom: 12px;
+    border-radius: 13px;
+    font-size: 20px;
+    line-height: 1;
+}
+
+#authScreen .feature-card h3 {
+    margin: 0 0 7px;
+    font-size: 16px;
+    line-height: 1.25;
+}
+
+#authScreen .feature-card p {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+}
+
+#authScreen .showcase-footer {
+    position: relative;
+    z-index: 1;
+    margin-top: auto;
+    padding-top: 24px;
+}
+
+#authScreen .benefit-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, .82);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#authScreen .benefit-list span {
+    white-space: nowrap;
+}
+
+#authScreen .bottom-note {
+    margin-top: 11px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
+
+@media (max-width: 1150px) and (min-width: 701px) {
+    #authScreen .feature-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Sur téléphone, afficher directement l'identification. */
+@media (max-width: 700px) {
+    #authScreen .auth-layout {
+        min-height: calc(100dvh - 28px);
+        display: block;
+    }
+
+    #authScreen .showcase {
+        display: none !important;
+    }
+
+    #authScreen .auth-card {
+        width: 100%;
+        min-height: calc(100dvh - 28px);
+        padding: 18px;
+        padding-top: 8px;
+        border-radius: 22px;
+    }
+
+    #authScreen .auth-logo {
+        margin-bottom: 12px;
+    }
+
+    #authScreen .auth-logo img {
+        width: 210px;
+    }
+
+    #authScreen .auth-head {
+        margin-bottom: 18px;
+    }
+}
