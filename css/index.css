@@ -975,148 +975,6 @@ iframe {
 }
 
 /* ================================
-   Correctif responsive mobile BastCompta
-   ================================ */
-@media (max-width: 768px) {
-    body {
-        overflow-x: hidden;
-    }
-
-    .app {
-        max-width: none;
-        width: 100%;
-        padding: 8px;
-    }
-
-    .portal-shell {
-        min-height: 100vh;
-    }
-
-    .portal-topbar {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 10px;
-        padding: 10px;
-        min-height: 0;
-        border-radius: 20px;
-    }
-
-    .topbar-logo {
-        position: static;
-        transform: none;
-        order: -1;
-        width: 100%;
-        pointer-events: auto;
-        margin-bottom: 2px;
-    }
-
-    .topbar-logo img {
-        max-height: 48px;
-        margin: 0 auto;
-    }
-
-    .main-tabs {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        margin-bottom: 0;
-    }
-
-    .main-tab {
-        width: 100%;
-        min-width: 0;
-        justify-content: flex-start;
-        padding: 10px;
-        border-radius: 16px;
-        font-size: 14px;
-        gap: 8px;
-    }
-
-    .main-tab span:last-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .tab-icon {
-        width: 30px;
-        height: 30px;
-        min-width: 30px;
-        font-size: 16px;
-    }
-
-    .user-actions {
-        width: 100%;
-        justify-content: space-between;
-        gap: 8px;
-    }
-
-    .user-pill {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        text-align: center;
-        padding: 10px 12px;
-    }
-
-    .icon-btn,
-    .settings-icon-btn {
-        width: 42px;
-        height: 42px;
-        min-width: 42px;
-    }
-
-    .settings-dropdown {
-        right: 0;
-        left: auto;
-        min-width: min(320px, calc(100vw - 24px));
-        max-width: calc(100vw - 24px);
-    }
-
-    .workspace {
-        border-radius: 18px;
-        min-height: 0;
-    }
-
-    iframe {
-        width: 100%;
-        height: 2200px;
-        min-height: 100vh;
-    }
-
-    .auth-layout {
-        grid-template-columns: 1fr;
-        gap: 14px;
-        min-height: auto;
-    }
-
-    .showcase,
-    .auth-card {
-        padding: 18px;
-        border-radius: 22px;
-    }
-
-    .feature-grid {
-        grid-template-columns: 1fr;
-        gap: 10px;
-    }
-}
-
-@media (max-width: 420px) {
-    .main-tabs {
-        grid-template-columns: 1fr;
-    }
-
-    .main-tab {
-        justify-content: flex-start;
-    }
-}
-
-
-/* ================================
    Centre d'aide BastCompta
    ================================ */
 
@@ -2047,4 +1905,153 @@ body:has(#portalScreen:not(.hidden)) {
     max-width: 68px !important;
     padding-inline: 8px !important;
   }
+}
+
+/* ===== Mobile final V13 : navigation et barre supérieure ===== */
+.sidebar-backdrop { display: none; }
+
+@media (max-width: 900px) {
+  #portalScreen .portal-shell {
+    position: relative;
+    min-height: 100dvh;
+  }
+
+  #portalScreen .portal-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(86vw, 300px) !important;
+    max-width: 300px !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+    z-index: 1002 !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    transition: transform .24s ease !important;
+    visibility: visible !important;
+    will-change: transform;
+  }
+
+  #portalScreen .portal-shell.sidebar-open .portal-sidebar {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  #portalScreen .sidebar-nav {
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  #portalScreen .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, .48);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .2s ease, visibility .2s ease;
+  }
+
+  #portalScreen .portal-shell.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  #portalScreen .portal-shell.sidebar-open::after { content: none !important; }
+
+  #portalScreen .portal-topbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    min-height: 62px !important;
+    height: auto !important;
+    padding: 9px 10px !important;
+    gap: 8px !important;
+    overflow: hidden !important;
+  }
+
+  #portalScreen .sidebar-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 42px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    position: relative;
+    z-index: 2;
+  }
+
+  #portalScreen .sidebar-close { display: inline-flex !important; }
+
+  #portalScreen .topbar-context {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  #portalScreen .topbar-context strong,
+  #portalScreen .topbar-context span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #portalScreen .user-actions {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    margin: 0 0 0 auto !important;
+  }
+
+  #portalScreen #globalSaveBtn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+    font-size: 19px !important;
+  }
+
+  #portalScreen #currentUser.user-pill {
+    position: static !important;
+    inset: auto !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 82px !important;
+    margin: 0 !important;
+    padding: 8px 10px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #portalScreen .portal-topbar { padding-inline: 8px !important; gap: 7px !important; }
+  #portalScreen .topbar-context strong { font-size: 14px !important; }
+  #portalScreen .topbar-context span { font-size: 11px !important; }
+  #portalScreen #currentUser.user-pill { max-width: 68px !important; padding-inline: 8px !important; }
 }

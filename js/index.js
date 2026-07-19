@@ -2700,7 +2700,20 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     event.stopPropagation();
   });
 
-  window.addEventListener('resize', () => { if (window.innerWidth > 900) closeMobileSidebar(); });
+  function syncResponsiveNavigation() {
+    if (window.matchMedia('(min-width: 901px)').matches) closeMobileSidebar();
+    // Force le navigateur mobile à recalculer la barre après affichage du portail.
+    document.documentElement.style.setProperty('--bast-viewport-width', `${window.innerWidth}px`);
+  }
+
+  window.addEventListener('resize', syncResponsiveNavigation, { passive: true });
+  window.addEventListener('orientationchange', () => setTimeout(syncResponsiveNavigation, 100), { passive: true });
+  window.addEventListener('pageshow', syncResponsiveNavigation);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncResponsiveNavigation(); });
+
+  syncResponsiveNavigation();
+  requestAnimationFrame(syncResponsiveNavigation);
+  setTimeout(syncResponsiveNavigation, 150);
   updateSidebarState('devis', document.querySelector('.sidebar-submenu [data-main-tab="devis"][data-page-key="quote"]'));
 })();
 

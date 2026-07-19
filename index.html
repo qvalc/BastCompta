@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portail BastCompta</title>
-  <link rel="stylesheet" href="css/index.css">
+  <link rel="stylesheet" href="css/index.css?v=13">
   <script src="js/storage.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
@@ -244,7 +244,7 @@
 
       <div class="portal-main">
         <div class="portal-topbar">
-          <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Ouvrir le menu">☰</button>
+          <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="portalSidebar">☰</button>
           <div class="topbar-context">
             <strong id="topbarModuleTitle">Devis &amp; Factures</strong>
             <span id="topbarPageTitle">Devis</span>
@@ -252,7 +252,7 @@
           <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
 
           <div class="user-actions">
-            <button id="globalSaveBtn" class="ghost icon-btn" title="Sauvegarder">💾</button>
+            <button id="globalSaveBtn" class="ghost icon-btn" type="button" title="Sauvegarder" aria-label="Sauvegarder">💾</button>
             <div id="currentUser" class="user-pill"></div>
 
           </div>
@@ -922,23 +922,8 @@
     </div>
   </div>
 
-  <script type="module" src="js/index.js"></script>
-  <script>
-    // Secours navigation mobile : fonctionne même si le module principal rencontre une erreur.
-    document.addEventListener('DOMContentLoaded', function () {
-      var shell = document.querySelector('#portalScreen .portal-shell');
-      var toggle = document.getElementById('sidebarToggleBtn');
-      var close = document.getElementById('sidebarCloseBtn');
-      var backdrop = document.getElementById('sidebarBackdrop');
-      if (!shell || !toggle) return;
-      function openMenu() { shell.classList.add('sidebar-open'); toggle.setAttribute('aria-expanded', 'true'); }
-      function closeMenu() { shell.classList.remove('sidebar-open'); toggle.setAttribute('aria-expanded', 'false'); }
-      toggle.addEventListener('click', openMenu);
-      if (close) close.addEventListener('click', closeMenu);
-      if (backdrop) backdrop.addEventListener('click', closeMenu);
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
-    });
-  </script>
+  <script type="module" src="js/index.js?v=13"></script>
+
 </body>
 
 </html>
