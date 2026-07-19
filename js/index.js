@@ -686,8 +686,18 @@ function markModuleDirty(key, detail = '') {
 // API appelée explicitement par les modules lorsqu'une action métier
 // ajoute, modifie ou supprime réellement une donnée.
 window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
-  markChanged(moduleKey, detail) {
-    // La comparaison est regroupée sur 250 ms pour rester imperceptible pendant la saisie.
+  markChanged(moduleKey, detail, beforeSnapshot = null) {
+    const state = getModuleSyncState(moduleKey);
+
+    // Le module peut fournir l’état exact juste AVANT la première action de
+    // l’utilisateur. Cela évite qu’un chargement asynchrone (Drive, tarifs,
+    // calculs automatiques...) rende la référence du portail périmée.
+    if (!state.dirty && beforeSnapshot !== null) {
+      const candidate = stableSnapshotString(beforeSnapshot);
+      if (candidate !== null) state.baselineSnapshot = candidate;
+    }
+
+    // La comparaison est regroupée sur 250 ms pour rester imperceptible.
     // Si l’utilisateur remet exactement les valeurs d’origine, l’indicateur disparaît.
     scheduleModuleDifferenceCheck(moduleKey, detail || 'Données modifiées');
   }

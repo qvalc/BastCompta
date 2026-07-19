@@ -9,9 +9,9 @@ let googleDriveFiles = [];
 let selectedDriveFileId = '';
 let selectedDriveFileIds = [];
 
-function notifyPortalBusinessChange(detail) {
+function notifyPortalBusinessChange(detail, beforeSnapshot = null) {
   try {
-    window.parent?.BastComptaPortal?.markChanged?.('devis-facture', detail);
+    window.parent?.BastComptaPortal?.markChanged?.('devis-facture', detail, beforeSnapshot);
   } catch (error) {
     console.warn('Signalement de modification indisponible', error);
   }
@@ -810,10 +810,11 @@ function setField(path, value) {
   for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
   const lastKey = keys[keys.length - 1];
   const previousValue = ref[lastKey];
+  const beforeSnapshot = getDevisFactureChangeSnapshot();
   ref[lastKey] = value;
   if (String(previousValue ?? '') !== String(value ?? '')) {
     const documentLabel = ({ quote: 'Devis', invoice: 'Facture', reminder: 'Rappel' })[keys[0]] || 'Document';
-    notifyPortalBusinessChange(`${documentLabel} modifié`);
+    notifyPortalBusinessChange(`${documentLabel} modifié`, beforeSnapshot);
   }
   saveData(false);
 }
@@ -827,10 +828,11 @@ function setDocumentField(docKey, field, value, extraChanges = null) {
   const doc = data[docKey];
   if (!doc) return;
   const previousValue = doc[field];
+  const beforeSnapshot = getDevisFactureChangeSnapshot();
   doc[field] = value;
   if (typeof extraChanges === 'function') extraChanges(doc);
   if (String(previousValue ?? '') !== String(value ?? '')) {
-    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} modifié`);
+    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} modifié`, beforeSnapshot);
   }
   saveData(false);
 }
@@ -839,6 +841,7 @@ function setDocumentLineField(docKey, section, index, field, value) {
   const row = data?.[docKey]?.[section]?.[index];
   if (!row) return;
   const previousValue = row[field];
+  const beforeSnapshot = getDevisFactureChangeSnapshot();
   row[field] = value;
   if (String(previousValue ?? '') !== String(value ?? '')) {
     const fieldLabels = {
@@ -850,7 +853,7 @@ function setDocumentLineField(docKey, section, index, field, value) {
       discount: 'remise',
       vatRate: 'TVA'
     };
-    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} : ${fieldLabels[field] || 'ligne'} modifiée`);
+    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} : ${fieldLabels[field] || 'ligne'} modifiée`, beforeSnapshot);
   }
   saveData(false);
 }
