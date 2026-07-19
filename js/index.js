@@ -2698,3 +2698,26 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
   window.addEventListener('resize', () => { if (window.innerWidth > 900) closeMobileSidebar(); });
   updateSidebarState('devis', document.querySelector('.sidebar-submenu [data-main-tab="devis"][data-page-key="quote"]'));
 })();
+
+/* Fallback de défilement pour les navigateurs qui gèrent mal overflow dans une iframe. */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('#portalScreen iframe').forEach((frame) => {
+    frame.setAttribute('scrolling', 'yes');
+    frame.addEventListener('load', () => {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        doc.documentElement.style.setProperty('height', '100%', 'important');
+        doc.documentElement.style.setProperty('overflow-y', 'scroll', 'important');
+        doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
+        if (doc.body) {
+          doc.body.style.setProperty('height', 'auto', 'important');
+          doc.body.style.setProperty('min-height', '100%', 'important');
+          doc.body.style.setProperty('overflow', 'visible', 'important');
+        }
+      } catch (error) {
+        console.warn('Impossible d’activer le défilement de l’iframe :', error);
+      }
+    });
+  });
+});
