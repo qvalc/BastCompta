@@ -537,7 +537,7 @@ let portalSyncInProgress = false;
 
 function getModuleSyncState(key) {
   if (!moduleSyncState.has(key)) {
-    moduleSyncState.set(key, { dirty: false, syncedOnce: false, syncing: false, error: '' });
+    moduleSyncState.set(key, { dirty: false, syncedOnce: false, syncing: false, error: '', changes: [] });
   }
   return moduleSyncState.get(key);
 }
@@ -574,12 +574,40 @@ function updateSyncStatusIndicator() {
   }
 }
 
-function markModuleDirty(key) {
+function addModuleChange(key, detail) {
+  const state = getModuleSyncState(key);
+  if (state.syncing) return;
+  const text = String(detail || 'Donnée modifiée').trim();
+  if (!text) return;
+  state.changes = Array.isArray(state.changes) ? state.changes : [];
+  const previous = state.changes[state.changes.length - 1];
+  if (!previous || previous.text !== text) {
+    state.changes.push({ text, at: new Date().toISOString() });
+    if (state.changes.length > 50) state.changes.splice(0, state.changes.length - 50);
+  }
+}
+
+function markModuleDirty(key, detail = '') {
   const state = getModuleSyncState(key);
   if (state.syncing) return;
   state.dirty = true;
   state.error = '';
+  if (detail) addModuleChange(key, detail);
   updateSyncStatusIndicator();
+}
+
+function getFieldDescription(target) {
+  if (!target) return 'Champ modifié';
+  const doc = target.ownerDocument;
+  let label = '';
+  if (target.id) {
+    try { label = doc.querySelector(`label[for="${CSS.escape(target.id)}"]`)?.textContent?.trim() || ''; } catch { }
+  }
+  if (!label) label = target.getAttribute?.('aria-label') || target.getAttribute?.('placeholder') || target.name || target.id || '';
+  label = String(label).replace(/\s+/g, ' ').trim();
+  const value = target.type === 'checkbox' ? (target.checked ? 'coché' : 'décoché') : String(target.value ?? '').trim();
+  const safeValue = value.length > 80 ? value.slice(0, 77) + '…' : value;
+  return label ? `${label}${safeValue ? ` : ${safeValue}` : ''}` : 'Champ modifié';
 }
 
 function installDirtyTracking(moduleInfo) {
@@ -588,83 +616,51 @@ function installDirtyTracking(moduleInfo) {
   frame.dataset.dirtyTrackingInstalled = '1';
 
   const attach = () => {
-    getModuleSyncState(key); // Un module fraîchement chargé doit être confirmé une première fois.
+    getModuleSyncState(key);
     try {
-      const doc = frame.contentDocument || frame.contentWindow?.document;
+      const win = frame.contentWindow;
+      const doc = frame.contentDocument || win?.document;
       if (!doc || doc.__bastComptaDirtyTracking) return;
       doc.__bastComptaDirtyTracking = true;
-      // Les champs réellement modifiés sont détectés directement.
-      const dirty = event => {
+
+      // Les véritables éditions de champs sont détaillées.
+      const dirtyField = event => {
         if (!event.isTrusted) return;
-        markModuleDirty(key);
+        markModuleDirty(key, getFieldDescription(event.target));
       };
-
-      doc.addEventListener('input', dirty, true);
-      doc.addEventListener('change', dirty, true);
-      doc.addEventListener('submit', dirty, true);
-
-      /*
-       * Un simple clic n'est PAS une modification : ouvrir une fiche client,
-       * changer d'onglet ou afficher un document ne doit rien signaler.
-       *
-       * En revanche, certains boutons importants (Ajouter, Supprimer,
-       * Enregistrer, Valider...) modifient les données via JavaScript puis les
-       * écrivent dans localStorage. On arme donc une courte fenêtre après une
-       * action réelle de l'utilisateur et on marque le module uniquement si
-       * une écriture de données a effectivement lieu pendant cette fenêtre.
-       */
-      let userActionUntil = 0;
-      const armUserAction = event => {
+      doc.addEventListener('input', dirtyField, true);
+      doc.addEventListener('change', dirtyField, true);
+      doc.addEventListener('submit', event => {
         if (!event.isTrusted) return;
-        userActionUntil = Date.now() + 15000;
-      };
+        const formName = event.target?.getAttribute?.('aria-label') || event.target?.id || event.target?.name || 'Formulaire';
+        markModuleDirty(key, `${formName} validé`);
+      }, true);
 
-      doc.addEventListener('pointerdown', armUserAction, true);
-      doc.addEventListener('keydown', armUserAction, true);
-      doc.addEventListener('click', armUserAction, true);
-
-      const win = frame.contentWindow;
-      const storageProto = win?.Storage?.prototype;
-      if (storageProto && !storageProto.__bastComptaDirtyTrackingPatched) {
-        const originalSetItem = storageProto.setItem;
-        const originalRemoveItem = storageProto.removeItem;
-        const originalClear = storageProto.clear;
-
-        const shouldTrackStorageKey = storageKey => {
-          const allowedKeys = {
-            'devis-facture': ['devis-facture-style-vrai-document', 'bastcompta-chantiers-v1'],
-            'tarifs': [],
-            'comptabilite': ['comptabilite-local-v1', 'bastcompta-chantiers-v1'],
-            'suivi-client': ['bastcompta-chantiers-v1', 'devis-facture-style-vrai-document', 'bastcompta-crm-deleted-clients-v1'],
-            'impots': ['bastcompta-impots-belgique-v1']
+      // Détecte les actions importantes par leur effet réel sur les données,
+      // pas par un simple clic (ouvrir une fiche ne déclenche donc rien).
+      try {
+        const StorageProto = win?.Storage?.prototype;
+        if (StorageProto && !StorageProto.__bastComptaPatched) {
+          const originalSetItem = StorageProto.setItem;
+          const originalRemoveItem = StorageProto.removeItem;
+          StorageProto.setItem = function(storageKey, value) {
+            const oldValue = this.getItem(storageKey);
+            const result = originalSetItem.call(this, storageKey, value);
+            if (oldValue !== String(value)) {
+              markModuleDirty(key, `Données enregistrées (${storageKey})`);
+            }
+            return result;
           };
-          const keys = allowedKeys[key] || [];
-          return keys.some(base => storageKey === base || storageKey === `${base}-last-save`);
-        };
-
-        storageProto.setItem = function(storageKey, value) {
-          const result = originalSetItem.call(this, storageKey, value);
-          if (Date.now() <= userActionUntil && shouldTrackStorageKey(String(storageKey))) {
-            markModuleDirty(key);
-          }
-          return result;
-        };
-
-        storageProto.removeItem = function(storageKey) {
-          const result = originalRemoveItem.call(this, storageKey);
-          if (Date.now() <= userActionUntil && shouldTrackStorageKey(String(storageKey))) {
-            markModuleDirty(key);
-          }
-          return result;
-        };
-
-        storageProto.clear = function() {
-          const result = originalClear.call(this);
-          if (Date.now() <= userActionUntil) markModuleDirty(key);
-          return result;
-        };
-
-        storageProto.__bastComptaDirtyTrackingPatched = true;
+          StorageProto.removeItem = function(storageKey) {
+            const existed = this.getItem(storageKey) !== null;
+            const result = originalRemoveItem.call(this, storageKey);
+            if (existed) markModuleDirty(key, `Données supprimées (${storageKey})`);
+            return result;
+          };
+          StorageProto.__bastComptaPatched = true;
+        }
+      } catch (storageError) {
+        console.warn('Suivi des écritures locales indisponible pour', key, storageError);
       }
     } catch (error) {
       console.warn('Suivi des modifications indisponible pour', key, error);
@@ -822,6 +818,7 @@ async function saveAllModulesFromPortal() {
         state.dirty = false;
         state.syncedOnce = true;
         state.error = '';
+        state.changes = [];
       } else {
         state.dirty = true;
         state.error = item.message || 'Erreur de sauvegarde';
@@ -871,8 +868,72 @@ async function saveAllModulesFromPortal() {
   { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
 ].filter(item => item.frame).forEach(installDirtyTracking);
 
+function showModificationDetails() {
+  let modal = document.getElementById('syncChangesModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'syncChangesModal';
+    modal.innerHTML = `
+      <div class="sync-changes-backdrop"></div>
+      <div class="sync-changes-dialog" role="dialog" aria-modal="true" aria-labelledby="syncChangesTitle">
+        <div class="sync-changes-header">
+          <h3 id="syncChangesTitle">Modifications non sauvegardées</h3>
+          <button type="button" class="sync-changes-close" aria-label="Fermer">×</button>
+        </div>
+        <div class="sync-changes-body"></div>
+        <div class="sync-changes-actions">
+          <button type="button" class="sync-changes-cancel">Fermer</button>
+          <button type="button" class="sync-changes-save">Sauvegarder maintenant</button>
+        </div>
+      </div>`;
+    const style = document.createElement('style');
+    style.textContent = `
+      #syncChangesModal{position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center}
+      #syncChangesModal[hidden]{display:none}
+      .sync-changes-backdrop{position:absolute;inset:0;background:rgba(13,22,32,.52)}
+      .sync-changes-dialog{position:relative;width:min(620px,calc(100vw - 32px));max-height:80vh;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);overflow:hidden}
+      .sync-changes-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #e4e9ef}
+      .sync-changes-header h3{margin:0;font-size:20px}
+      .sync-changes-close{border:0;background:transparent;font-size:28px;cursor:pointer;line-height:1}
+      .sync-changes-body{padding:16px 20px;overflow:auto;max-height:52vh}
+      .sync-change-module{margin-bottom:16px}
+      .sync-change-module h4{margin:0 0 7px;font-size:15px}
+      .sync-change-module ul{margin:0;padding-left:20px;color:#3c4754}
+      .sync-change-module li{margin:5px 0}
+      .sync-changes-empty{color:#66717d;margin:0}
+      .sync-changes-actions{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid #e4e9ef;background:#f7f9fb}
+      .sync-changes-actions button{border-radius:9px;padding:10px 15px;font-weight:700;cursor:pointer}
+      .sync-changes-cancel{border:1px solid #cbd4dd;background:#fff}
+      .sync-changes-save{border:1px solid #255c2b;background:#2f6f36;color:#fff}
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+    const close = () => { modal.hidden = true; };
+    modal.querySelector('.sync-changes-backdrop').addEventListener('click', close);
+    modal.querySelector('.sync-changes-close').addEventListener('click', close);
+    modal.querySelector('.sync-changes-cancel').addEventListener('click', close);
+    modal.querySelector('.sync-changes-save').addEventListener('click', async () => {
+      close();
+      await saveAllModulesFromPortal();
+    });
+  }
+
+  const body = modal.querySelector('.sync-changes-body');
+  const dirtyModules = getLoadedModuleFrames().filter(item => getModuleSyncState(item.key).dirty);
+  if (!dirtyModules.length) {
+    body.innerHTML = '<p class="sync-changes-empty">Aucune modification en attente. La sauvegarde peut être vérifiée avec la disquette.</p>';
+  } else {
+    body.innerHTML = dirtyModules.map(item => {
+      const state = getModuleSyncState(item.key);
+      const entries = (state.changes || []).length ? state.changes : [{ text: 'Données du module modifiées' }];
+      return `<section class="sync-change-module"><h4>${item.label}</h4><ul>${entries.map(entry => `<li>${String(entry.text).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]))}</li>`).join('')}</ul></section>`;
+    }).join('');
+  }
+  modal.hidden = false;
+}
+
 syncStatusPill?.addEventListener('click', () => {
-  if (!portalSyncInProgress) saveAllModulesFromPortal();
+  if (!portalSyncInProgress) showModificationDetails();
 });
 
 window.addEventListener('beforeunload', event => {
