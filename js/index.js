@@ -2688,6 +2688,7 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
   sidebarSettingsBtn?.addEventListener('click', event => {
     const isOpen = settingsMenu?.classList.toggle('open');
     sidebarSettingsBtn.setAttribute('aria-expanded', String(Boolean(isOpen)));
+    sidebarSettingsBtn.classList.toggle('active', Boolean(isOpen));
     event.stopPropagation();
   });
 

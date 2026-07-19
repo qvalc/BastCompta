@@ -1810,3 +1810,55 @@ body:has(#portalScreen:not(.hidden)) {
 #portalScreen .user-actions {
   gap: 10px;
 }
+
+/* ===== V7 : paramètres réellement dans la navigation + menu plus compact ===== */
+#portalScreen .sidebar-home,
+#portalScreen .sidebar-module {
+  min-height: 44px !important;
+  padding: 9px 18px !important;
+  font-size: 13px !important;
+  line-height: 1.15 !important;
+}
+
+#portalScreen .sidebar-submenu button,
+#portalScreen #settingsDropdown button {
+  min-height: 33px !important;
+  padding-top: 7px !important;
+  padding-bottom: 7px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+
+#portalScreen .sidebar-icon {
+  width: 20px !important;
+  font-size: 14px !important;
+}
+
+#portalScreen .sidebar-chevron {
+  font-size: 14px !important;
+}
+
+#portalScreen .sidebar-settings-group {
+  margin-top: 12px !important;
+  border-top: 1px solid var(--bc-sidebar-line) !important;
+}
+
+#portalScreen .sidebar-settings-group > #sidebarSettingsBtn {
+  width: 100%;
+  border-radius: 0 !important;
+}
+
+#portalScreen .sidebar-settings-group > #sidebarSettingsBtn.active,
+#portalScreen .sidebar-settings-group > #sidebarSettingsBtn[aria-expanded="true"] {
+  background: rgba(255,255,255,.08) !important;
+  color: #fff !important;
+  box-shadow: inset 4px 0 var(--bc-accent) !important;
+}
+
+#portalScreen .sidebar-settings-group > #sidebarSettingsBtn[aria-expanded="true"] .sidebar-chevron {
+  transform: rotate(180deg);
+}
+
+#portalScreen #settingsMenu {
+  width: 100%;
+}
