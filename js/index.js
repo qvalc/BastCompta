@@ -593,10 +593,9 @@ function installDirtyTracking(moduleInfo) {
       const doc = frame.contentDocument || frame.contentWindow?.document;
       if (!doc || doc.__bastComptaDirtyTracking) return;
       doc.__bastComptaDirtyTracking = true;
+      // Les champs réellement modifiés sont détectés directement.
       const dirty = event => {
-        // Ignore les événements générés automatiquement par le programme.
         if (!event.isTrusted) return;
-
         markModuleDirty(key);
       };
 
@@ -604,18 +603,69 @@ function installDirtyTracking(moduleInfo) {
       doc.addEventListener('change', dirty, true);
       doc.addEventListener('submit', dirty, true);
 
-      doc.addEventListener('click', event => {
-        // Ignore les clics générés automatiquement par le programme.
+      /*
+       * Un simple clic n'est PAS une modification : ouvrir une fiche client,
+       * changer d'onglet ou afficher un document ne doit rien signaler.
+       *
+       * En revanche, certains boutons importants (Ajouter, Supprimer,
+       * Enregistrer, Valider...) modifient les données via JavaScript puis les
+       * écrivent dans localStorage. On arme donc une courte fenêtre après une
+       * action réelle de l'utilisateur et on marque le module uniquement si
+       * une écriture de données a effectivement lieu pendant cette fenêtre.
+       */
+      let userActionUntil = 0;
+      const armUserAction = event => {
         if (!event.isTrusted) return;
+        userActionUntil = Date.now() + 15000;
+      };
 
-        const target = event.target?.closest?.('button, [role="button"], a');
-        if (!target) return;
+      doc.addEventListener('pointerdown', armUserAction, true);
+      doc.addEventListener('keydown', armUserAction, true);
+      doc.addEventListener('click', armUserAction, true);
 
-        // Les clics purement liés à la navigation ne sont pas des modifications.
-        if (target.matches('[data-page], [data-tab], .nav-item, .tab-button')) return;
+      const win = frame.contentWindow;
+      const storageProto = win?.Storage?.prototype;
+      if (storageProto && !storageProto.__bastComptaDirtyTrackingPatched) {
+        const originalSetItem = storageProto.setItem;
+        const originalRemoveItem = storageProto.removeItem;
+        const originalClear = storageProto.clear;
 
-        markModuleDirty(key);
-      }, true);
+        const shouldTrackStorageKey = storageKey => {
+          const allowedKeys = {
+            'devis-facture': ['devis-facture-style-vrai-document', 'bastcompta-chantiers-v1'],
+            'tarifs': [],
+            'comptabilite': ['comptabilite-local-v1', 'bastcompta-chantiers-v1'],
+            'suivi-client': ['bastcompta-chantiers-v1', 'devis-facture-style-vrai-document', 'bastcompta-crm-deleted-clients-v1'],
+            'impots': ['bastcompta-impots-belgique-v1']
+          };
+          const keys = allowedKeys[key] || [];
+          return keys.some(base => storageKey === base || storageKey === `${base}-last-save`);
+        };
+
+        storageProto.setItem = function(storageKey, value) {
+          const result = originalSetItem.call(this, storageKey, value);
+          if (Date.now() <= userActionUntil && shouldTrackStorageKey(String(storageKey))) {
+            markModuleDirty(key);
+          }
+          return result;
+        };
+
+        storageProto.removeItem = function(storageKey) {
+          const result = originalRemoveItem.call(this, storageKey);
+          if (Date.now() <= userActionUntil && shouldTrackStorageKey(String(storageKey))) {
+            markModuleDirty(key);
+          }
+          return result;
+        };
+
+        storageProto.clear = function() {
+          const result = originalClear.call(this);
+          if (Date.now() <= userActionUntil) markModuleDirty(key);
+          return result;
+        };
+
+        storageProto.__bastComptaDirtyTrackingPatched = true;
+      }
     } catch (error) {
       console.warn('Suivi des modifications indisponible pour', key, error);
     }
