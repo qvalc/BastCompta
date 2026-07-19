@@ -1748,3 +1748,18 @@ body.bast-embedded .topbar .title-wrap {
 body.bast-embedded .topbar .actions {
   margin-left: auto;
 }
+
+/* Défilement lorsqu'un module est affiché dans le portail. */
+html:has(body.bast-embedded),
+body.bast-embedded {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+}
+body.bast-embedded .app {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}

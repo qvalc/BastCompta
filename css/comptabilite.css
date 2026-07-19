@@ -768,3 +768,18 @@ body.bast-embedded .topbar { position: relative; top: auto; }
 
 body.bast-embedded { min-height: 100vh; overflow-x: hidden; }
 body.bast-embedded .app { width: 100%; max-width: none; margin: 0; padding: 14px 18px 28px; }
+
+/* Défilement lorsqu'un module est affiché dans le portail. */
+html:has(body.bast-embedded),
+body.bast-embedded {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain;
+}
+body.bast-embedded .app {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}

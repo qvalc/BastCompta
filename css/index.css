@@ -1622,3 +1622,79 @@ body:has(#portalScreen:not(.hidden)) {
     min-height: 62px;
   }
 }
+
+/* ===== Ajustements navigation et défilement (2026-07-19 v2) ===== */
+:root {
+  --bc-sidebar: #222b35;
+  --bc-sidebar-deep: #192129;
+  --bc-sidebar-hover: rgba(255,255,255,.075);
+  --bc-sidebar-line: rgba(255,255,255,.10);
+  --bc-accent: #84b547;
+  --bc-active-bg: #f3f6f8;
+  --bc-active-text: #202a34;
+}
+
+#portalScreen .portal-sidebar {
+  background: var(--bc-sidebar);
+  box-shadow: 7px 0 22px rgba(20, 28, 36, .12);
+  overflow: hidden;
+}
+
+#portalScreen .sidebar-brand,
+#portalScreen .sidebar-footer {
+  background: var(--bc-sidebar-deep);
+  border-color: var(--bc-sidebar-line);
+  flex: 0 0 auto;
+}
+
+#portalScreen .sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.28) transparent;
+}
+
+#portalScreen .sidebar-nav::-webkit-scrollbar { width: 7px; }
+#portalScreen .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+#portalScreen .sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.25);
+  border-radius: 999px;
+}
+
+#portalScreen .sidebar-group { border-color: var(--bc-sidebar-line); }
+#portalScreen .sidebar-submenu { background: rgba(0,0,0,.13); }
+#portalScreen .sidebar-home:hover,
+#portalScreen .sidebar-module:hover,
+#portalScreen .sidebar-footer button:hover,
+#portalScreen .sidebar-submenu button:hover { background: var(--bc-sidebar-hover); }
+
+#portalScreen .sidebar-home.active,
+#portalScreen .sidebar-module.active {
+  background: var(--bc-active-bg);
+  color: var(--bc-active-text);
+  box-shadow: inset 4px 0 var(--bc-accent);
+  border-radius: 0 14px 14px 0;
+}
+
+#portalScreen .sidebar-submenu button { color: #d9e1e7; }
+#portalScreen .sidebar-submenu button.active {
+  color: #fff;
+  background: rgba(132,181,71,.20);
+  box-shadow: inset 4px 0 var(--bc-accent);
+}
+#portalScreen .sidebar-submenu button.active::before { background: var(--bc-accent); opacity: 1; }
+
+/* La zone principale reste fixe, chaque module défile dans son iframe. */
+#portalScreen .portal-main,
+#portalScreen .workspace,
+#portalScreen .tab-panel,
+#portalScreen .tab-panel.active {
+  min-height: 0;
+}
+
+#portalScreen .tab-panel iframe {
+  overflow: auto;
+}
