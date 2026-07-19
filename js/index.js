@@ -2600,7 +2600,7 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
 
 /* ===== Navigation latérale BastCompta ===== */
 (() => {
-  const shell = document.querySelector('.portal-shell');
+  const shell = document.querySelector('#portalScreen .portal-shell');
   const sidebar = document.getElementById('portalSidebar');
   const toggleBtn = document.getElementById('sidebarToggleBtn');
   const closeBtn = document.getElementById('sidebarCloseBtn');
@@ -2608,8 +2608,8 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
   const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
   const moduleTitle = document.getElementById('topbarModuleTitle');
   const pageTitle = document.getElementById('topbarPageTitle');
-  const navButtons = Array.from(document.querySelectorAll('.sidebar-nav [data-main-tab]'));
-  const groups = Array.from(document.querySelectorAll('.sidebar-group'));
+  const navButtons = Array.from(document.querySelectorAll('#portalScreen .sidebar-nav [data-main-tab]'));
+  const groups = Array.from(document.querySelectorAll('#portalScreen .sidebar-group'));
 
   const labels = {
     devis: 'Devis & Factures',
@@ -2702,8 +2702,14 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
 
   function syncResponsiveNavigation() {
     if (window.matchMedia('(min-width: 901px)').matches) closeMobileSidebar();
-    // Force le navigateur mobile à recalculer la barre après affichage du portail.
+
+    // Met à jour une valeur dépendante du viewport et force un recalcul fiable
+    // après chargement, retour sur la page ou changement d'orientation.
     document.documentElement.style.setProperty('--bast-viewport-width', `${window.innerWidth}px`);
+
+    if (shell) {
+      void shell.offsetWidth;
+    }
   }
 
   window.addEventListener('resize', syncResponsiveNavigation, { passive: true });
