@@ -5,6 +5,14 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
 (function () {
   'use strict';
 
+  function notifyPortalBusinessChange(detail) {
+    try {
+      window.parent?.BastComptaPortal?.markChanged?.('impots', detail);
+    } catch (error) {
+      console.warn('Signalement de modification indisponible', error);
+    }
+  }
+
   const SETTINGS_KEY = 'bastcompta-impots-belgique-v1';
   const COMPTA_KEY = 'comptabilite-local-v1';
   const DEVIS_KEY = 'devis-facture-style-vrai-document';
@@ -111,6 +119,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
   }
 
   function saveSettings(showAlert = false) {
+    notifyPortalBusinessChange('Paramètres fiscaux modifiés');
     settings.taxYear = toNumber(settings.incomeYear) + 1;
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings, null, 2));
     if (showAlert) alert('Réglages Impôts IPP sauvegardés.');

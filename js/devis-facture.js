@@ -9,6 +9,14 @@ let googleDriveFiles = [];
 let selectedDriveFileId = '';
 let selectedDriveFileIds = [];
 
+function notifyPortalBusinessChange(detail) {
+  try {
+    window.parent?.BastComptaPortal?.markChanged?.('devis-facture', detail);
+  } catch (error) {
+    console.warn('Signalement de modification indisponible', error);
+  }
+}
+
 function notifyParentToRefreshGoogleToken() {
   try {
     window.parent.postMessage({
@@ -1386,12 +1394,14 @@ function createEmptyLine() {
 }
 
 function addLine(docKey, section = 'lines') {
+  notifyPortalBusinessChange('Ligne ajoutée au document');
   data[docKey][section].push(createEmptyLine());
   saveData(false);
 }
 
 function deleteLine(docKey, section, index) {
   if (!confirm('Supprimer cette ligne ?')) return;
+  notifyPortalBusinessChange('Ligne supprimée du document');
   data[docKey][section].splice(index, 1);
   if (!data[docKey][section].length) {
     data[docKey][section].push(createEmptyLine());
@@ -1845,6 +1855,7 @@ function saveClientRecord(client, shouldAlert = true) {
     return;
   }
 
+  notifyPortalBusinessChange('Fiche client enregistrée');
   const list = Array.isArray(data.clients) ? [...data.clients] : [];
   const normalizedClientNumber = String(normalized.clientNumber || '').trim();
 
@@ -1924,6 +1935,7 @@ function deleteClient(clientId) {
   const client = getClients().find(item => item.id === clientId);
   if (!client) return;
   if (!confirm(`Supprimer le client ${client.name || 'sans nom'} ?`)) return;
+  notifyPortalBusinessChange('Client supprimé');
   data.clients = (data.clients || []).filter(item => item.id !== clientId);
   ['quote', 'invoice'].forEach(docKey => {
     if (data[docKey].clientId === clientId) {
@@ -3973,6 +3985,7 @@ function handleLogoUpload(event) {
 }
 
 function removeLogo() {
+  notifyPortalBusinessChange('Logo supprimé');
   data.company.logo = '';
   saveData(false);
 }
@@ -4535,6 +4548,7 @@ function renderTarifs() {
 }
 
 function addTarifPost() {
+  notifyPortalBusinessChange('Poste tarifaire ajouté');
   ensureTarifsData();
   const item = emptyTarifItem();
   data.tarifs.items.unshift(item);
@@ -4560,6 +4574,7 @@ function deleteTarifPost(id) {
   ensureTarifsData();
   const index = data.tarifs.items.findIndex(t => t.id === id);
   if (index < 0 || !confirm('Supprimer ce poste ?')) return;
+  notifyPortalBusinessChange('Poste tarifaire supprimé');
   data.tarifs.items.splice(index, 1);
   if (selectedTarifId === id) selectedTarifId = '';
   saveTarifsData();
@@ -4569,6 +4584,7 @@ function deleteTarifPost(id) {
 function updateTarifField(field, value) {
   const tarif = getSelectedTarif();
   if (!tarif) return;
+  notifyPortalBusinessChange('Tarif modifié');
   tarif[field] = value;
   saveTarifsData();
 
@@ -4610,6 +4626,7 @@ function refreshTarifNavigation() {
 function addTarifComponent() {
   const tarif = getSelectedTarif();
   if (!tarif) return;
+  notifyPortalBusinessChange('Composant tarifaire ajouté');
   tarif.composants.push(emptyTarifComponent());
   saveTarifsData();
   render();
@@ -4618,6 +4635,7 @@ function addTarifComponent() {
 function updateTarifComponent(componentIndex, field, value) {
   const tarif = getSelectedTarif();
   if (!tarif || !tarif.composants[componentIndex]) return;
+  notifyPortalBusinessChange('Composant tarifaire modifié');
   tarif.composants[componentIndex][field] = value;
   saveTarifsData();
 }
@@ -4625,6 +4643,7 @@ function updateTarifComponent(componentIndex, field, value) {
 function deleteTarifComponent(componentIndex) {
   const tarif = getSelectedTarif();
   if (!tarif || !tarif.composants[componentIndex]) return;
+  notifyPortalBusinessChange('Composant tarifaire supprimé');
   tarif.composants.splice(componentIndex, 1);
   saveTarifsData();
   render();
@@ -4639,6 +4658,7 @@ function addTarifCategoryFromInput() {
     alert('Cette catégorie existe déjà.');
     return;
   }
+  notifyPortalBusinessChange('Catégorie tarifaire ajoutée');
   data.tarifs.categories.push(value);
   data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
   tarifCategoryDrawerOpen = true;
@@ -4649,6 +4669,7 @@ function addTarifCategoryFromInput() {
 
 function deleteTarifCategory(name) {
   if (!confirm('Supprimer cette catégorie de la liste ? Les postes existants ne seront pas modifiés.')) return;
+  notifyPortalBusinessChange('Catégorie tarifaire supprimée');
   ensureTarifsData();
   data.tarifs.categories = data.tarifs.categories.filter(c => c !== name);
   saveTarifsData();
@@ -4658,6 +4679,7 @@ function deleteTarifCategory(name) {
 function duplicateTarifPost() {
   const index = getSelectedTarifIndex();
   if (index < 0) return;
+  notifyPortalBusinessChange('Poste tarifaire dupliqué');
   const source = data.tarifs.items[index];
   const copy = Object.assign({}, source, {
     id: makeTarifId(),
@@ -4681,6 +4703,7 @@ function addTarifToDocument(docKey) {
   const targetKey = docKey === 'invoice' ? 'invoice' : 'quote';
   if (!data[targetKey]) return;
 
+  notifyPortalBusinessChange('Tarif ajouté au document');
   if (!Array.isArray(data[targetKey].lines)) {
     data[targetKey].lines = [];
   }

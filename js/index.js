@@ -548,7 +548,7 @@ function updateSyncStatusIndicator() {
   const states = loaded.map(item => getModuleSyncState(item.key));
   const hasError = states.some(state => !!state.error);
   const isSyncing = portalSyncInProgress || states.some(state => state.syncing);
-  const dirtyCount = states.filter(state => state.dirty).length;
+  const dirtyCount = states.reduce((total, state) => total + (state.dirty ? Math.max(1, state.changes?.length || 0) : 0), 0);
 
   syncStatusPill.classList.remove('sync-ok', 'sync-pending', 'sync-error', 'sync-unknown');
   if (hasError) {
@@ -596,6 +596,14 @@ function markModuleDirty(key, detail = '') {
   updateSyncStatusIndicator();
 }
 
+// API appelée explicitement par les modules lorsqu'une action métier
+// ajoute, modifie ou supprime réellement une donnée.
+window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
+  markChanged(moduleKey, detail) {
+    markModuleDirty(moduleKey, detail || 'Données modifiées');
+  }
+});
+
 function getFieldDescription(target) {
   if (!target) return 'Champ modifié';
   const doc = target.ownerDocument;
@@ -623,45 +631,20 @@ function installDirtyTracking(moduleInfo) {
       if (!doc || doc.__bastComptaDirtyTracking) return;
       doc.__bastComptaDirtyTracking = true;
 
-      // Les véritables éditions de champs sont détaillées.
+      // Une vraie modification de champ est enregistrée à sa validation
+      // (change), pas à chaque frappe. Le localStorage continue de fonctionner
+      // normalement mais n'est plus observé : les caches Google et horodatages
+      // ne peuvent donc plus créer de faux positifs.
       const dirtyField = event => {
         if (!event.isTrusted) return;
         markModuleDirty(key, getFieldDescription(event.target));
       };
-      doc.addEventListener('input', dirtyField, true);
       doc.addEventListener('change', dirtyField, true);
       doc.addEventListener('submit', event => {
         if (!event.isTrusted) return;
         const formName = event.target?.getAttribute?.('aria-label') || event.target?.id || event.target?.name || 'Formulaire';
         markModuleDirty(key, `${formName} validé`);
       }, true);
-
-      // Détecte les actions importantes par leur effet réel sur les données,
-      // pas par un simple clic (ouvrir une fiche ne déclenche donc rien).
-      try {
-        const StorageProto = win?.Storage?.prototype;
-        if (StorageProto && !StorageProto.__bastComptaPatched) {
-          const originalSetItem = StorageProto.setItem;
-          const originalRemoveItem = StorageProto.removeItem;
-          StorageProto.setItem = function(storageKey, value) {
-            const oldValue = this.getItem(storageKey);
-            const result = originalSetItem.call(this, storageKey, value);
-            if (oldValue !== String(value)) {
-              markModuleDirty(key, `Données enregistrées (${storageKey})`);
-            }
-            return result;
-          };
-          StorageProto.removeItem = function(storageKey) {
-            const existed = this.getItem(storageKey) !== null;
-            const result = originalRemoveItem.call(this, storageKey);
-            if (existed) markModuleDirty(key, `Données supprimées (${storageKey})`);
-            return result;
-          };
-          StorageProto.__bastComptaPatched = true;
-        }
-      } catch (storageError) {
-        console.warn('Suivi des écritures locales indisponible pour', key, storageError);
-      }
     } catch (error) {
       console.warn('Suivi des modifications indisponible pour', key, error);
     }

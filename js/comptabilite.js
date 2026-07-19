@@ -12,6 +12,14 @@ let selectedDriveFileId = '';
 let selectedDriveFileIds = [];
 let selectedPurchasePdfRowIndex = null;
 
+function notifyPortalBusinessChange(detail) {
+  try {
+    window.parent?.BastComptaPortal?.markChanged?.('comptabilite', detail);
+  } catch (error) {
+    console.warn('Signalement de modification indisponible', error);
+  }
+}
+
 function notifyParentToRefreshGoogleToken() {
   try {
     window.parent.postMessage({
@@ -2245,6 +2253,7 @@ function ensureVatStructures() {
 }
 
 function addVatDeclaration() {
+  notifyPortalBusinessChange('Déclaration TVA ajoutée');
   ensureVatStructures();
   const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
   const existingQuarters = data.vat.declarations
@@ -2280,6 +2289,7 @@ function syncVatDeclarationPeriod(index) {
 
 function deleteVatDeclaration(index) {
   if (!confirm('Supprimer cette déclaration TVA ?')) return;
+  notifyPortalBusinessChange('Déclaration TVA supprimée');
   data.vat.declarations.splice(index, 1);
   saveData(false);
 }
@@ -2326,6 +2336,7 @@ function getVatLockMessage(dec) {
 }
 
 function updateAccountingRowField(collection, index, field, value, options = {}) {
+  notifyPortalBusinessChange('Écriture comptable modifiée');
   const row = data[collection]?.[index];
   if (!row) return false;
 
@@ -2367,6 +2378,7 @@ function deleteAccountingRow(collection, index) {
     return;
   }
   if (!confirm('Supprimer cette ligne ?')) return;
+  notifyPortalBusinessChange('Écriture comptable supprimée');
   data[collection].splice(index, 1);
   saveData(false);
   if (collection === 'purchases') syncPurchasesToChantiers(false);
@@ -2731,6 +2743,7 @@ function sortByDate(array) {
 }
 
 function addRow(key, row) {
+  notifyPortalBusinessChange('Ligne comptable ajoutée');
   if (key === 'purchases' && row && !row._id) {
     row._id = `purchase-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     row.chantierClientName = row.chantierClientName || '';
@@ -2753,6 +2766,7 @@ function deleteRow(key, index) {
     return;
   }
   if (!confirm('Supprimer cette ligne ?')) return;
+  notifyPortalBusinessChange('Ligne comptable supprimée');
   data[key].splice(index, 1);
   saveData(false);
 }

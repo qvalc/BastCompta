@@ -31,6 +31,14 @@ const statusClasses = {
   cancelled: 'danger'
 };
 
+function notifyPortalBusinessChange(detail) {
+  try {
+    window.parent?.BastComptaPortal?.markChanged?.('suivi-client', detail);
+  } catch (error) {
+    console.warn('Signalement de modification indisponible', error);
+  }
+}
+
 function uid(prefix = 'id') {
   return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 }
@@ -599,6 +607,7 @@ async function deleteCrmClientFromModal() {
     : `Supprimer définitivement le client CRM "${name}" ?`;
 
   if (!confirm(warning)) return;
+  notifyPortalBusinessChange('Client CRM supprimé');
 
   const crmData = readFullCrmDataFromLocalStorage();
   const clients = Array.isArray(crmData.clients) ? crmData.clients : [];
@@ -664,6 +673,7 @@ async function submitCrmClientForm() {
   } else {
     clients.push({ ...payload, createdAt: payload.createdAt || new Date().toISOString() });
   }
+  notifyPortalBusinessChange(index >= 0 ? 'Client CRM modifié' : 'Client CRM créé');
   crmData.clients = clients;
   forgetDeletedCrmClient(payload);
   writeFullCrmDataToLocalStorage(crmData);
@@ -1728,6 +1738,7 @@ async function deleteCrmLinkedDocument(type, itemId) {
     : `Retirer ${moneyTypeLabel(type)} ${item.ref || ''} de cette fiche client ?`;
 
   if (!confirm(message)) return;
+  notifyPortalBusinessChange('Document lié supprimé');
 
   if (hasDriveFile && googleAccessToken) {
     try {
@@ -1895,6 +1906,7 @@ async function submitProjectForm() {
     return;
   }
   payload.title = payload.clientName;
+  notifyPortalBusinessChange(editingProjectId ? 'Fiche client modifiée' : 'Fiche client créée');
 
   if (editingProjectId) {
     const project = data.projects.find(item => item.id === editingProjectId);
@@ -1920,6 +1932,7 @@ async function submitProjectForm() {
 function updateProjectField(field, value) {
   const project = getProject();
   if (!project) return;
+  notifyPortalBusinessChange('Fiche client modifiée');
   project[field] = field === 'quoteAmount' ? Number(value) || 0 : value;
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Champ "' + field + '" mis à jour.');
@@ -1931,6 +1944,7 @@ async function deleteProject(id) {
   const project = data.projects.find(item => item.id === id);
   if (!project) return;
   if (!confirm('Supprimer définitivement le suivi client "' + project.title + '" ?')) return;
+  notifyPortalBusinessChange('Fiche client supprimée');
 
   data.projects = data.projects.filter(item => item.id !== id);
   selectedProjectId = data.projects[0]?.id || '';
@@ -2668,6 +2682,7 @@ async function submitMoneyItem(type) {
   addTimeline(project, (type === 'quote' ? 'Devis' : type === 'invoice' ? 'Facture' : type === 'reminder' ? 'Rappel' : 'Coût') + ' ajouté : ' + (item.ref || formatMoney(item.amount)));
 
   closeGenericModal();
+  notifyPortalBusinessChange('Élément financier enregistré');
   await saveData();
 }
 
@@ -2675,6 +2690,7 @@ async function deleteMoneyItem(type, id) {
   const project = getProject();
   if (!project) return;
   if (!confirm('Supprimer cette ligne ?')) return;
+  notifyPortalBusinessChange('Élément financier supprimé');
 
   if (type === 'quote') project.linkedQuotes = project.linkedQuotes.filter(item => item.id !== id);
   if (type === 'invoice') project.linkedInvoices = project.linkedInvoices.filter(item => item.id !== id);
@@ -2740,6 +2756,7 @@ async function submitTask() {
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Tâche ajoutée : ' + title);
   closeGenericModal();
+  notifyPortalBusinessChange('Tâche enregistrée');
   await saveData();
 }
 
@@ -2751,6 +2768,7 @@ async function toggleTask(id, done) {
   task.done = done;
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Tâche ' + (done ? 'terminée' : 'réouverte') + ' : ' + task.title);
+  notifyPortalBusinessChange('État de tâche modifié');
   await saveData(false);
   renderMain();
 }
@@ -2758,6 +2776,7 @@ async function toggleTask(id, done) {
 async function deleteTask(id) {
   const project = getProject();
   if (!project) return;
+  notifyPortalBusinessChange('Tâche supprimée');
   project.tasks = project.tasks.filter(item => item.id !== id);
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Tâche supprimée.');
@@ -2806,12 +2825,14 @@ async function submitNote() {
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Remarque ajoutée.');
   closeGenericModal();
+  notifyPortalBusinessChange('Note enregistrée');
   await saveData();
 }
 
 async function deleteNote(id) {
   const project = getProject();
   if (!project) return;
+  notifyPortalBusinessChange('Note supprimée');
   project.notes = project.notes.filter(item => item.id !== id);
   project.updatedAt = new Date().toISOString();
   addTimeline(project, 'Remarque supprimée.');
@@ -2914,6 +2935,7 @@ async function deleteDocument(id) {
   const doc = project?.documents.find(item => item.id === id);
   if (!project || !doc) return;
   if (!confirm('Supprimer ce document de la fiche client ?')) return;
+  notifyPortalBusinessChange('Document supprimé');
 
   project.documents = project.documents.filter(item => item.id !== id);
   project.updatedAt = new Date().toISOString();
