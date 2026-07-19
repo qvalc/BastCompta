@@ -3314,6 +3314,7 @@ window.BastComptaModule = {
   name: 'Suivi client',
   save: saveFromPortalGlobal,
   saveData,
+  getChangeSnapshot: () => data,
   getStatus: () => ({ ready: true, module: 'suivi-client' })
 };
 

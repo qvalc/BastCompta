@@ -5125,6 +5125,7 @@ window.BastComptaModule = {
   name: 'Devis & Facture',
   save: saveFromPortalGlobal,
   saveData,
+  getChangeSnapshot: () => data,
   getStatus: () => ({ ready: true, module: 'devis-facture' })
 };
 

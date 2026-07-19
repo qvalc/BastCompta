@@ -537,9 +537,91 @@ let portalSyncInProgress = false;
 
 function getModuleSyncState(key) {
   if (!moduleSyncState.has(key)) {
-    moduleSyncState.set(key, { dirty: false, syncedOnce: false, syncing: false, error: '', changes: [] });
+    moduleSyncState.set(key, {
+      dirty: false,
+      syncedOnce: false,
+      syncing: false,
+      error: '',
+      changes: [],
+      baselineSnapshot: null,
+      snapshotTimer: null
+    });
   }
   return moduleSyncState.get(key);
+}
+
+function stableSnapshotString(value) {
+  const seen = new WeakSet();
+  const normalize = input => {
+    if (input === null || typeof input !== 'object') return input;
+    if (seen.has(input)) return '[Circular]';
+    seen.add(input);
+    if (Array.isArray(input)) return input.map(normalize);
+    return Object.keys(input).sort().reduce((out, key) => {
+      const item = input[key];
+      if (typeof item !== 'function' && typeof item !== 'undefined') out[key] = normalize(item);
+      return out;
+    }, {});
+  };
+  try { return JSON.stringify(normalize(value)); }
+  catch (error) {
+    console.warn('Empreinte de modification impossible.', error);
+    return null;
+  }
+}
+
+function readModuleSnapshot(key) {
+  const moduleInfo = getLoadedModuleFrames().find(item => item.key === key);
+  try {
+    const api = moduleInfo?.frame?.contentWindow?.BastComptaModule;
+    if (!api || typeof api.getChangeSnapshot !== 'function') return null;
+    return stableSnapshotString(api.getChangeSnapshot());
+  } catch (error) {
+    console.warn('Lecture de l’état du module impossible :', key, error);
+    return null;
+  }
+}
+
+function captureModuleBaseline(key) {
+  const snapshot = readModuleSnapshot(key);
+  if (snapshot === null) return false;
+  const state = getModuleSyncState(key);
+  state.baselineSnapshot = snapshot;
+  return true;
+}
+
+function evaluateModuleDifference(key, detail = '') {
+  const state = getModuleSyncState(key);
+  if (state.syncing) return;
+  const currentSnapshot = readModuleSnapshot(key);
+  if (currentSnapshot === null) {
+    markModuleDirty(key, detail);
+    return;
+  }
+  if (state.baselineSnapshot === null) {
+    state.baselineSnapshot = currentSnapshot;
+    updateSyncStatusIndicator();
+    return;
+  }
+  if (currentSnapshot === state.baselineSnapshot) {
+    state.dirty = false;
+    state.error = '';
+    state.changes = [];
+  } else {
+    state.dirty = true;
+    state.error = '';
+    if (detail) addModuleChange(key, detail);
+  }
+  updateSyncStatusIndicator();
+}
+
+function scheduleModuleDifferenceCheck(key, detail = '') {
+  const state = getModuleSyncState(key);
+  clearTimeout(state.snapshotTimer);
+  state.snapshotTimer = setTimeout(() => {
+    state.snapshotTimer = null;
+    evaluateModuleDifference(key, detail);
+  }, 250);
 }
 
 function updateSyncStatusIndicator() {
@@ -600,7 +682,9 @@ function markModuleDirty(key, detail = '') {
 // ajoute, modifie ou supprime réellement une donnée.
 window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
   markChanged(moduleKey, detail) {
-    markModuleDirty(moduleKey, detail || 'Données modifiées');
+    // La comparaison est regroupée sur 250 ms pour rester imperceptible pendant la saisie.
+    // Si l’utilisateur remet exactement les valeurs d’origine, l’indicateur disparaît.
+    scheduleModuleDifferenceCheck(moduleKey, detail || 'Données modifiées');
   }
 });
 
@@ -614,6 +698,21 @@ function installDirtyTracking(moduleInfo) {
     // ni localStorage. Chaque module signale lui-même uniquement ses vraies
     // opérations métier via BastComptaPortal.markChanged(...).
     getModuleSyncState(key);
+    // Le rendu du module peut encore terminer quelques opérations synchrones :
+    // on capture donc l’état de référence dès que son API est disponible.
+    let attempts = 0;
+    const capture = () => {
+      attempts += 1;
+      if (!captureModuleBaseline(key) && attempts < 40) setTimeout(capture, 100);
+    };
+    setTimeout(capture, 0);
+    // Certains modules terminent ensuite un chargement Drive asynchrone.
+    // On stabilise une seconde fois la référence, uniquement si l’utilisateur
+    // n’a encore rien modifié entre-temps.
+    setTimeout(() => {
+      const state = getModuleSyncState(key);
+      if (!state.dirty && !state.syncing) captureModuleBaseline(key);
+    }, 2500);
     updateSyncStatusIndicator();
   };
 
@@ -768,6 +867,8 @@ async function saveAllModulesFromPortal() {
         state.syncedOnce = true;
         state.error = '';
         state.changes = [];
+        // La version qui vient d’être confirmée devient la nouvelle référence.
+        captureModuleBaseline(item.key);
       } else {
         state.dirty = true;
         state.error = item.message || 'Erreur de sauvegarde';

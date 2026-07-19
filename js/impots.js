@@ -715,6 +715,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
     name: 'Impôts IPP',
     save: saveFromPortalGlobal,
     saveData: saveFromPortalGlobal,
+    getChangeSnapshot: () => settings,
     getStatus: () => ({ ready: true, module: 'impots' })
   };
 

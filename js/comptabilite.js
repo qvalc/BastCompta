@@ -4216,6 +4216,7 @@ window.BastComptaModule = {
   name: 'Comptabilité',
   save: saveFromPortalGlobal,
   saveData,
+  getChangeSnapshot: () => data,
   getStatus: () => ({ ready: true, module: 'comptabilite' })
 };
 
