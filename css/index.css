@@ -1968,3 +1968,83 @@ body:has(#portalScreen:not(.hidden)) {
     max-width: 92px !important;
   }
 }
+
+/* ===== V10 : barre mobile — sauvegarde visible et utilisateur bien aligné ===== */
+@media (max-width: 900px) {
+  #portalScreen .portal-topbar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    overflow: hidden !important;
+  }
+
+  #portalScreen .topbar-context {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  #portalScreen .user-actions {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 7px !important;
+    margin-left: auto !important;
+  }
+
+  #portalScreen #globalSaveBtn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+    font-size: 19px !important;
+  }
+
+  #portalScreen #currentUser.user-pill {
+    position: static !important;
+    inset: auto !important;
+    float: none !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 82px !important;
+    margin: 0 !important;
+    padding: 8px 10px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #portalScreen .portal-topbar {
+    padding-inline: 8px !important;
+    gap: 7px !important;
+  }
+
+  #portalScreen .topbar-context strong {
+    font-size: 14px !important;
+  }
+
+  #portalScreen .topbar-context span {
+    font-size: 11px !important;
+  }
+
+  #portalScreen #currentUser.user-pill {
+    max-width: 68px !important;
+    padding-inline: 8px !important;
+  }
+}
