@@ -604,50 +604,16 @@ window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
   }
 });
 
-function getFieldDescription(target) {
-  if (!target) return 'Champ modifié';
-  const doc = target.ownerDocument;
-  let label = '';
-  if (target.id) {
-    try { label = doc.querySelector(`label[for="${CSS.escape(target.id)}"]`)?.textContent?.trim() || ''; } catch { }
-  }
-  if (!label) label = target.getAttribute?.('aria-label') || target.getAttribute?.('placeholder') || target.name || target.id || '';
-  label = String(label).replace(/\s+/g, ' ').trim();
-  const value = target.type === 'checkbox' ? (target.checked ? 'coché' : 'décoché') : String(target.value ?? '').trim();
-  const safeValue = value.length > 80 ? value.slice(0, 77) + '…' : value;
-  return label ? `${label}${safeValue ? ` : ${safeValue}` : ''}` : 'Champ modifié';
-}
-
 function installDirtyTracking(moduleInfo) {
   const { key, frame } = moduleInfo;
   if (!frame || frame.dataset.dirtyTrackingInstalled === '1') return;
   frame.dataset.dirtyTrackingInstalled = '1';
 
   const attach = () => {
+    // Le portail ne surveille volontairement ni les clics, ni les champs,
+    // ni localStorage. Chaque module signale lui-même uniquement ses vraies
+    // opérations métier via BastComptaPortal.markChanged(...).
     getModuleSyncState(key);
-    try {
-      const win = frame.contentWindow;
-      const doc = frame.contentDocument || win?.document;
-      if (!doc || doc.__bastComptaDirtyTracking) return;
-      doc.__bastComptaDirtyTracking = true;
-
-      // Une vraie modification de champ est enregistrée à sa validation
-      // (change), pas à chaque frappe. Le localStorage continue de fonctionner
-      // normalement mais n'est plus observé : les caches Google et horodatages
-      // ne peuvent donc plus créer de faux positifs.
-      const dirtyField = event => {
-        if (!event.isTrusted) return;
-        markModuleDirty(key, getFieldDescription(event.target));
-      };
-      doc.addEventListener('change', dirtyField, true);
-      doc.addEventListener('submit', event => {
-        if (!event.isTrusted) return;
-        const formName = event.target?.getAttribute?.('aria-label') || event.target?.id || event.target?.name || 'Formulaire';
-        markModuleDirty(key, `${formName} validé`);
-      }, true);
-    } catch (error) {
-      console.warn('Suivi des modifications indisponible pour', key, error);
-    }
     updateSyncStatusIndicator();
   };
 

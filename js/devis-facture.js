@@ -808,7 +808,13 @@ function setField(path, value) {
   const keys = path.split('.');
   let ref = data;
   for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
-  ref[keys[keys.length - 1]] = value;
+  const lastKey = keys[keys.length - 1];
+  const previousValue = ref[lastKey];
+  ref[lastKey] = value;
+  if (String(previousValue ?? '') !== String(value ?? '')) {
+    const documentLabel = ({ quote: 'Devis', invoice: 'Facture', reminder: 'Rappel' })[keys[0]] || 'Document';
+    notifyPortalBusinessChange(`${documentLabel} modifié`);
+  }
   saveData(false);
 }
 
@@ -1410,6 +1416,7 @@ function deleteLine(docKey, section, index) {
 }
 
 function toggleSupplies(docKey, checked) {
+  notifyPortalBusinessChange(checked ? 'Fournitures activées' : 'Fournitures désactivées');
   data[docKey].suppliesEnabled = checked;
   if (!Array.isArray(data[docKey].suppliesLines) || !data[docKey].suppliesLines.length) {
     data[docKey].suppliesLines = defaultLines();
@@ -1440,6 +1447,7 @@ async function copyQuoteToInvoice() {
 
   await prepareNewDocument('invoice', 'invoice');
 
+  notifyPortalBusinessChange('Devis repris dans la facture');
   saveData(false);
   activePage = 'invoice';
   render();
@@ -1466,6 +1474,7 @@ async function copyInvoiceToReminder() {
 
   await prepareNewDocument('reminder', 'reminder');
 
+  notifyPortalBusinessChange('Facture reprise dans le rappel');
   saveData(false);
   activePage = 'reminder';
   render();
@@ -1488,6 +1497,7 @@ async function resetDocumentLocal(docKey) {
     syncCommunicationFromInvoice(false);
   }
 
+  notifyPortalBusinessChange(`Nouveau ${label} créé`);
   saveData(false);
   render();
 }
@@ -1928,6 +1938,7 @@ function applyClientToDocument(docKey, clientId) {
   data[docKey].clientNumber = client.clientNumber || '';
   data[docKey].clientVat = client.vat || '';
   if (client.email) rememberClientEmail(client.email);
+  notifyPortalBusinessChange(`Client appliqué au ${docKey === 'quote' ? 'devis' : docKey === 'invoice' ? 'facture' : 'document'}`);
   saveData(false);
 }
 
@@ -1959,6 +1970,7 @@ function duplicateClient(clientId) {
 }
 
 function createNewClient() {
+  notifyPortalBusinessChange('Nouveau client créé');
   const client = normalizeClient({
     name: `Nouveau client ${(Array.isArray(data.clients) ? data.clients.length : 0) + 1}`,
     createdAt: new Date().toISOString()
