@@ -818,6 +818,43 @@ function setField(path, value) {
   saveData(false);
 }
 
+
+function getDocumentLabel(docKey) {
+  return ({ quote: 'Devis', invoice: 'Facture', reminder: 'Rappel' })[docKey] || 'Document';
+}
+
+function setDocumentField(docKey, field, value, extraChanges = null) {
+  const doc = data[docKey];
+  if (!doc) return;
+  const previousValue = doc[field];
+  doc[field] = value;
+  if (typeof extraChanges === 'function') extraChanges(doc);
+  if (String(previousValue ?? '') !== String(value ?? '')) {
+    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} modifié`);
+  }
+  saveData(false);
+}
+
+function setDocumentLineField(docKey, section, index, field, value) {
+  const row = data?.[docKey]?.[section]?.[index];
+  if (!row) return;
+  const previousValue = row[field];
+  row[field] = value;
+  if (String(previousValue ?? '') !== String(value ?? '')) {
+    const fieldLabels = {
+      description: 'description',
+      qty: 'quantité',
+      unit: 'unité',
+      unitPrice: 'prix unitaire',
+      costPrice: 'prix de revient',
+      discount: 'remise',
+      vatRate: 'TVA'
+    };
+    notifyPortalBusinessChange(`${getDocumentLabel(docKey)} : ${fieldLabels[field] || 'ligne'} modifiée`);
+  }
+  saveData(false);
+}
+
 function lineBase(row) {
   return toNumber(row.qty) * toNumber(row.unitPrice);
 }
@@ -1497,7 +1534,8 @@ async function resetDocumentLocal(docKey) {
     syncCommunicationFromInvoice(false);
   }
 
-  notifyPortalBusinessChange(`Nouveau ${label} créé`);
+  // Un nouveau document vide devient simplement le brouillon courant.
+  // Il ne sera signalé comme modifié qu'après une vraie saisie.
   saveData(false);
   render();
 }
@@ -3675,14 +3713,14 @@ function renderMetaTable(docKey, isQuote) {
               <tr>
                 <td>
                   <div style="display:flex; gap:6px; align-items:center;">
-                    <input value="${escapeAttr(doc.documentNumber)}" onchange="data.${docKey}.documentNumber=this.value; saveData(false)">
+                    <input value="${escapeAttr(doc.documentNumber)}" onchange="setDocumentField('${docKey}', 'documentNumber', this.value)">
                     <button type="button" class="no-print" style="padding:7px 9px; box-shadow:none;" title="Attribuer le prochain numéro automatique" onclick="assignNextDocumentNumber('${docKey}')">↻</button>
                   </div>
                 </td>
-                <td><input type="date" value="${escapeAttr(isQuote ? doc.validity : doc.dueDate)}" onchange="data.${docKey}.${isQuote ? 'validity' : 'dueDate'}=this.value; saveData(false)"></td>
-                <td><input value="${escapeAttr(doc.clientNumber)}" onchange="data.${docKey}.clientNumber=this.value; saveData(false)"></td>
-                <td><input value="${escapeAttr(doc.clientVat)}" onchange="data.${docKey}.clientVat=this.value; saveData(false)"></td>
-                <td><input type="date" value="${escapeAttr(doc.date)}" onchange="data.${docKey}.date=this.value; saveData(false)"></td>
+                <td><input type="date" value="${escapeAttr(isQuote ? doc.validity : doc.dueDate)}" onchange="setDocumentField('${docKey}', '${isQuote ? 'validity' : 'dueDate'}', this.value)"></td>
+                <td><input value="${escapeAttr(doc.clientNumber)}" onchange="setDocumentField('${docKey}', 'clientNumber', this.value)"></td>
+                <td><input value="${escapeAttr(doc.clientVat)}" onchange="setDocumentField('${docKey}', 'clientVat', this.value)"></td>
+                <td><input type="date" value="${escapeAttr(doc.date)}" onchange="setDocumentField('${docKey}', 'date', this.value)"></td>
               </tr>
             </tbody>
           </table>
@@ -3715,18 +3753,18 @@ function renderLinesTable(docKey, section, title = '') {
                 <tr>
                   <td>
   <textarea
-  oninput="autoResize(this); data.${docKey}.${section}[${i}].description=this.value"
-  onchange="saveData(false)"
+  oninput="autoResize(this)"
+  onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'description', this.value)"
 >${escapeHtml(row.description || '')}</textarea>
 </td>
-                  <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="data.${docKey}.${section}[${i}].qty=parseFloat(this.value)||0; saveData(false)"></td>
-                  <td><input value="${escapeAttr(row.unit)}" onchange="data.${docKey}.${section}[${i}].unit=this.value; saveData(false)"></td>
-                  <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.${docKey}.${section}[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
-                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice)}" title="Prix de revient interne, non imprimé" onchange="data.${docKey}.${section}[${i}].costPrice=parseFloat(this.value)||0; saveData(false)"></td>` : ''}
-                  <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="data.${docKey}.${section}[${i}].discount=parseFloat(this.value)||0; saveData(false)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'qty', parseFloat(this.value)||0)"></td>
+                  <td><input value="${escapeAttr(row.unit)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unit', this.value)"></td>
+                  <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unitPrice', parseFloat(this.value)||0)"></td>
+                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice)}" title="Prix de revient interne, non imprimé" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"></td>` : ''}
+                  <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'discount', parseFloat(this.value)||0)"></td>
                   <td>${money(lineNet(row))}</td>
                   <td>
-                    <select onchange="data.${docKey}.${section}[${i}].vatRate=parseFloat(this.value)||0; saveData(false)">
+                    <select onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'vatRate', parseFloat(this.value)||0)">
                       <option value="0" ${toNumber(row.vatRate) === 0 ? 'selected' : ''}>0%</option>
                       <option value="6" ${toNumber(row.vatRate) === 6 ? 'selected' : ''}>6%</option>
                       <option value="12" ${toNumber(row.vatRate) === 12 ? 'selected' : ''}>12%</option>
@@ -3863,7 +3901,7 @@ function renderDocumentPage(docKey) {
         <select class="no-print" onchange="applyClientToDocument('${docKey}', this.value)">
           ${renderClientOptions(doc.clientId || '')}
         </select>
-        <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="data.${docKey}.clientName=this.value; saveData(false)">
+        <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="setDocumentField('${docKey}', 'clientName', this.value)">
         <input type="email" list="client-email-suggestions" placeholder="Email client" value="${escapeAttr(doc.clientEmail || '')}" onchange="setClientEmail('${docKey}', this.value)">
         <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveData(false)">${escapeHtml(doc.address || '')}</textarea>
       </div>
@@ -3875,7 +3913,7 @@ function renderDocumentPage(docKey) {
         <select class="no-print" onchange="setDocumentChantier('${docKey}', this.value)">
           ${renderChantierOptionsForDocument(doc)}
         </select>
-        <input placeholder="Nom du chantier / site" value="${escapeAttr(doc.siteName || '')}" onchange="data.${docKey}.siteName=this.value; data.${docKey}.chantierId=''; saveData(false)">
+        <input placeholder="Nom du chantier / site" value="${escapeAttr(doc.siteName || '')}" onchange="setDocumentField('${docKey}', 'siteName', this.value, doc => { doc.chantierId = ''; })">
         <div class="hint no-print">Sélectionnez un chantier existant ou tapez un nom : le document sera lié par identifiant chantier quand il existe.</div>
       </div>
     </div>
@@ -3916,7 +3954,7 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
       <div class="pay-block">
         <div class="field" style="margin-bottom:10px;">
           <label>Montant payé</label>
-          <input type="number" step="0.01" value="${num(doc.paidAmount)}" onchange="data.${docKey}.paidAmount=parseFloat(this.value)||0; saveData(false)">
+          <input type="number" step="0.01" value="${num(doc.paidAmount)}" onchange="setDocumentField('${docKey}', 'paidAmount', parseFloat(this.value)||0)">
         </div>
         <div class="pay-line"><span>Payé</span><strong>${money(paidAmount)}</strong></div>
         <div class="pay-line"><span>Solde</span><strong>${money(balance)}</strong></div>
