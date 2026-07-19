@@ -438,6 +438,17 @@ function showPortal(user, subscription = currentSubscriptionState) {
   loadProtectedFrames(currentSubscriptionState);
   authScreen.classList.add('hidden');
   portalScreen.classList.remove('hidden');
+    document.body.classList.add('portal-active');
+
+    requestAnimationFrame(() => {
+      syncResponsiveNavigation();
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    setTimeout(() => {
+      syncResponsiveNavigation();
+      window.dispatchEvent(new Event('resize'));
+    }, 150);
 
   updateCurrentUserDisplay(user, currentSubscriptionState);
   switchMainTab('devis');
@@ -455,6 +466,7 @@ function showAuth() {
   unloadProtectedFrames();
   portalScreen.classList.add('hidden');
   authScreen.classList.remove('hidden');
+    document.body.classList.remove('portal-active');
   loginForm.reset();
   registerForm.reset();
 }

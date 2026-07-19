@@ -1350,12 +1350,12 @@ iframe {
 /* ===== Correctifs de mise en page du portail (2026-07-19) ===== */
 /* Le portail connecté occupe réellement toute la fenêtre, sans reprendre
    les marges et la largeur maximale de l'écran de connexion. */
-body:has(#portalScreen:not(.hidden)) {
+body.portal-active {
   overflow: hidden;
   background: #f4f7fb;
 }
 
-.app:has(#portalScreen:not(.hidden)) {
+body.portal-active .app {
   width: 100%;
   max-width: none;
   height: 100vh;
