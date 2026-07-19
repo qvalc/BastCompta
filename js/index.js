@@ -2401,23 +2401,19 @@ sendVerificationBtn.addEventListener('click', async () => {
   }
 });
 
-function resizeIframeToContent(frame) {
+function configureModuleIframe(frame) {
   if (!frame) return;
-  frame.style.height = '3000px';
+  // L'iframe doit rester exactement à la hauteur de la zone visible.
+  // C'est son propre document qui défile, pas une iframe artificiellement haute.
+  frame.style.removeProperty('height');
+  frame.style.height = '100%';
+  frame.setAttribute('scrolling', 'yes');
 }
 
-function bindIframeAutoResize(frame) {
-  if (!frame) return;
-
-  frame.addEventListener('load', () => {
-    resizeIframeToContent(frame);
-  });
-}
-
-bindIframeAutoResize(devisFrame);
-bindIframeAutoResize(comptaFrame);
-bindIframeAutoResize(chantierFrame);
-bindIframeAutoResize(impotsFrame);
+[devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach((frame) => {
+  configureModuleIframe(frame);
+  frame?.addEventListener('load', () => configureModuleIframe(frame));
+});
 
 async function showTrialInfo(user) {
   try {
@@ -2699,24 +2695,22 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
   updateSidebarState('devis', document.querySelector('.sidebar-submenu [data-main-tab="devis"][data-page-key="quote"]'));
 })();
 
-/* Fallback de défilement pour les navigateurs qui gèrent mal overflow dans une iframe. */
+/* Le défilement reste interne à chaque module. */
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('#portalScreen iframe').forEach((frame) => {
-    frame.setAttribute('scrolling', 'yes');
+    configureModuleIframe(frame);
     frame.addEventListener('load', () => {
       try {
-        const doc = frame.contentDocument;
-        if (!doc) return;
-        doc.documentElement.style.setProperty('height', '100%', 'important');
-        doc.documentElement.style.setProperty('overflow-y', 'scroll', 'important');
-        doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
-        if (doc.body) {
-          doc.body.style.setProperty('height', 'auto', 'important');
-          doc.body.style.setProperty('min-height', '100%', 'important');
-          doc.body.style.setProperty('overflow', 'visible', 'important');
+        const childDocument = frame.contentDocument;
+        if (!childDocument) return;
+        childDocument.documentElement.style.setProperty('overflow-y', 'auto', 'important');
+        childDocument.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
+        if (childDocument.body) {
+          childDocument.body.style.setProperty('overflow-y', 'visible', 'important');
+          childDocument.body.style.setProperty('overflow-x', 'hidden', 'important');
         }
       } catch (error) {
-        console.warn('Impossible d’activer le défilement de l’iframe :', error);
+        console.warn('Impossible de configurer le défilement du module :', error);
       }
     });
   });
