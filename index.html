@@ -40,7 +40,6 @@
       <div class="auth-layout">
         <div class="showcase">
           <div class="brand">
-            <h1>Toute votre gestion. Un seul logiciel.</h1>
             <p>
               Gérez vos devis, factures, comptabilité, clients et déclarations depuis une seule plateforme
               simple et intuitive.
@@ -87,9 +86,9 @@
 
           <div class="showcase-footer">
             <div class="benefit-list" aria-label="Avantages BastCompta">
-              <span>✓ Essai gratuit de 14 jours</span>
+              <span>✓ Conçu pour gagner du temps</span>
               <span>✓ Sans installation</span>
-              <span>✓ Données sauvegardables</span>
+              <span>✓ Sauvegardes sécurisées</span>
             </div>
             <div class="bottom-note">
               © Nicolas Sébastien · BastCompta · bastcompta@outlook.be
@@ -160,130 +159,139 @@
     </section>
 
     <section id="portalScreen" class="hidden">
-    <div class="portal-shell">
-      <aside class="portal-sidebar" id="portalSidebar" aria-label="Navigation principale">
-        <div class="sidebar-brand">
-          <img src="logo.png" alt="BastCompta">
-          <button id="sidebarCloseBtn" class="sidebar-close" type="button" aria-label="Fermer le menu">✕</button>
-        </div>
-
-        <nav class="sidebar-nav">
-
-          <div class="sidebar-group open" data-sidebar-group="devis">
-            <button class="main-tab sidebar-module active" data-main-tab="devis" type="button" aria-expanded="true">
-              <span class="sidebar-icon">▤</span><span>Devis &amp; Factures</span><span class="sidebar-chevron">⌄</span>
-            </button>
-            <div class="sidebar-submenu">
-              <button data-main-tab="devis" data-page-key="quote" type="button">Devis</button>
-              <button data-main-tab="devis" data-page-key="invoice" type="button">Factures</button>
-              <button data-main-tab="devis" data-page-key="tarifs" type="button">Tarifs</button>
-              <button data-main-tab="devis" data-page-key="reminder" type="button">Rappels</button>
-              <button data-main-tab="devis" data-page-key="communication" type="button">Communications structurées</button>
-              <button data-main-tab="devis" data-page-key="peppol" type="button">Peppol / Doccle</button>
-              <button data-main-tab="devis" data-page-key="settings" type="button">Paramètres du module</button>
-            </div>
+      <div class="portal-shell">
+        <aside class="portal-sidebar" id="portalSidebar" aria-label="Navigation principale">
+          <div class="sidebar-brand">
+            <img src="logo.png" alt="BastCompta">
+            <button id="sidebarCloseBtn" class="sidebar-close" type="button" aria-label="Fermer le menu">✕</button>
           </div>
 
-          <div class="sidebar-group" data-sidebar-group="compta">
-            <button class="main-tab sidebar-module" data-main-tab="compta" type="button" aria-expanded="false">
-              <span class="sidebar-icon">▥</span><span>Comptabilité</span><span class="sidebar-chevron">⌄</span>
-            </button>
-            <div class="sidebar-submenu">
-              <button data-main-tab="compta" data-page-key="sales" type="button">Ventes</button>
-              <button data-main-tab="compta" data-page-key="purchases" type="button">Achats</button>
-              <button data-main-tab="compta" data-page-key="investments" type="button">Investissements</button>
-              <button data-main-tab="compta" data-page-key="assets" type="button">Immobilisations</button>
-              <button data-main-tab="compta" data-page-key="losses" type="button">Taxes &amp; cotisations</button>
-              <button data-main-tab="compta" data-page-key="stock" type="button">Stock</button>
-              <button data-main-tab="compta" data-page-key="km" type="button">Kilomètres</button>
-              <button data-main-tab="compta" data-page-key="result" type="button">Compte de résultat</button>
-              <button data-main-tab="compta" data-page-key="balance" type="button">Bilan simplifié</button>
-              <button data-main-tab="compta" data-page-key="vat" type="button">TVA</button>
-            </div>
-          </div>
+          <nav class="sidebar-nav">
 
-          <div class="sidebar-group" data-sidebar-group="chantier">
-            <button class="main-tab sidebar-module" data-main-tab="chantier" type="button" aria-expanded="false">
-              <span class="sidebar-icon">♙</span><span>Suivi client</span><span class="sidebar-chevron">⌄</span>
-            </button>
-            <div class="sidebar-submenu">
-              <button data-main-tab="chantier" data-client-action="overview" type="button">Vue clients</button>
-              <button data-main-tab="chantier" data-client-action="new" type="button">Nouveau client CRM</button>
-            </div>
-          </div>
-
-          <div class="sidebar-group" data-sidebar-group="impots">
-            <button class="main-tab sidebar-module" data-main-tab="impots" type="button" aria-expanded="false">
-              <span class="sidebar-icon">▧</span><span>Impôts IPP</span><span class="sidebar-chevron">⌄</span>
-            </button>
-            <div class="sidebar-submenu">
-              <button data-main-tab="impots" data-page-key="summary" type="button">Résumé fiscal</button>
-              <button data-main-tab="impots" data-page-key="codes" type="button">Codes IPP</button>
-              <button data-main-tab="impots" data-page-key="checks" type="button">Contrôles</button>
-              <button data-main-tab="impots" data-page-key="details" type="button">Détails des chiffres</button>
-              <button data-main-tab="impots" data-page-key="manual" type="button">Réglages / manuel</button>
-            </div>
-          </div>
-
-          <div class="sidebar-group sidebar-settings-group">
-            <button id="sidebarSettingsBtn" class="sidebar-module" type="button" aria-expanded="false">
-              <span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span><span class="sidebar-chevron">⌄</span>
-            </button>
-            <div id="settingsMenu" class="settings-menu">
-              <div class="settings-dropdown" id="settingsDropdown">
-                <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
-                <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
-                <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
-                <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
-                <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
-                <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
-                <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
-                <div class="settings-separator"></div>
-                <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
+            <div class="sidebar-group open" data-sidebar-group="devis">
+              <button class="main-tab sidebar-module active" data-main-tab="devis" type="button" aria-expanded="true">
+                <span class="sidebar-icon">▤</span><span>Devis &amp; Factures</span><span
+                  class="sidebar-chevron">⌄</span>
+              </button>
+              <div class="sidebar-submenu">
+                <button data-main-tab="devis" data-page-key="quote" type="button">Devis</button>
+                <button data-main-tab="devis" data-page-key="invoice" type="button">Factures</button>
+                <button data-main-tab="devis" data-page-key="tarifs" type="button">Tarifs</button>
+                <button data-main-tab="devis" data-page-key="reminder" type="button">Rappels</button>
+                <button data-main-tab="devis" data-page-key="communication" type="button">Communications
+                  structurées</button>
+                <button data-main-tab="devis" data-page-key="peppol" type="button">Peppol / Doccle</button>
+                <button data-main-tab="devis" data-page-key="settings" type="button">Paramètres du module</button>
               </div>
             </div>
+
+            <div class="sidebar-group" data-sidebar-group="compta">
+              <button class="main-tab sidebar-module" data-main-tab="compta" type="button" aria-expanded="false">
+                <span class="sidebar-icon">▥</span><span>Comptabilité</span><span class="sidebar-chevron">⌄</span>
+              </button>
+              <div class="sidebar-submenu">
+                <button data-main-tab="compta" data-page-key="sales" type="button">Ventes</button>
+                <button data-main-tab="compta" data-page-key="purchases" type="button">Achats</button>
+                <button data-main-tab="compta" data-page-key="investments" type="button">Investissements</button>
+                <button data-main-tab="compta" data-page-key="assets" type="button">Immobilisations</button>
+                <button data-main-tab="compta" data-page-key="losses" type="button">Taxes &amp; cotisations</button>
+                <button data-main-tab="compta" data-page-key="stock" type="button">Stock</button>
+                <button data-main-tab="compta" data-page-key="km" type="button">Kilomètres</button>
+                <button data-main-tab="compta" data-page-key="result" type="button">Compte de résultat</button>
+                <button data-main-tab="compta" data-page-key="balance" type="button">Bilan simplifié</button>
+                <button data-main-tab="compta" data-page-key="vat" type="button">TVA</button>
+              </div>
+            </div>
+
+            <div class="sidebar-group" data-sidebar-group="chantier">
+              <button class="main-tab sidebar-module" data-main-tab="chantier" type="button" aria-expanded="false">
+                <span class="sidebar-icon">♙</span><span>Suivi client</span><span class="sidebar-chevron">⌄</span>
+              </button>
+              <div class="sidebar-submenu">
+                <button data-main-tab="chantier" data-client-action="overview" type="button">Vue clients</button>
+                <button data-main-tab="chantier" data-client-action="new" type="button">Nouveau client CRM</button>
+              </div>
+            </div>
+
+            <div class="sidebar-group" data-sidebar-group="impots">
+              <button class="main-tab sidebar-module" data-main-tab="impots" type="button" aria-expanded="false">
+                <span class="sidebar-icon">▧</span><span>Impôts IPP</span><span class="sidebar-chevron">⌄</span>
+              </button>
+              <div class="sidebar-submenu">
+                <button data-main-tab="impots" data-page-key="summary" type="button">Résumé fiscal</button>
+                <button data-main-tab="impots" data-page-key="codes" type="button">Codes IPP</button>
+                <button data-main-tab="impots" data-page-key="checks" type="button">Contrôles</button>
+                <button data-main-tab="impots" data-page-key="details" type="button">Détails des chiffres</button>
+                <button data-main-tab="impots" data-page-key="manual" type="button">Réglages / manuel</button>
+              </div>
+            </div>
+
+            <div class="sidebar-group sidebar-settings-group">
+              <button id="sidebarSettingsBtn" class="sidebar-module" type="button" aria-expanded="false">
+                <span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span><span
+                  class="sidebar-chevron">⌄</span>
+              </button>
+              <div id="settingsMenu" class="settings-menu">
+                <div class="settings-dropdown" id="settingsDropdown">
+                  <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
+                  <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
+                  <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+                  <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
+                  <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
+                  <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
+                  <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
+                  <div class="settings-separator"></div>
+                  <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
+                </div>
+              </div>
+            </div>
+          </nav>
+        </aside>
+        <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fermer le menu"></button>
+
+        <div class="portal-main">
+          <div class="portal-topbar">
+            <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Ouvrir le menu"
+              aria-expanded="false" aria-controls="portalSidebar">☰</button>
+            <div class="topbar-context">
+              <strong id="topbarModuleTitle">Devis &amp; Factures</strong>
+              <span id="topbarPageTitle">Devis</span>
+            </div>
+            <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
+
+            <div class="user-actions">
+              <button id="globalSaveBtn" class="ghost icon-btn" type="button" title="Sauvegarder"
+                aria-label="Sauvegarder">💾</button>
+              <div id="currentUser" class="user-pill"></div>
+
+            </div>
           </div>
-        </nav>
-      </aside>
-      <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Fermer le menu"></button>
 
-      <div class="portal-main">
-        <div class="portal-topbar">
-          <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="portalSidebar">☰</button>
-          <div class="topbar-context">
-            <strong id="topbarModuleTitle">Devis &amp; Factures</strong>
-            <span id="topbarPageTitle">Devis</span>
+          <div class="workspace">
+
+            <div id="panel-devis" class="tab-panel active">
+              <iframe scrolling="yes" id="devisFrame" src="about:blank" data-src="devis-facture.html?embedded=1"
+                title="Devis et Facture"></iframe>
+            </div>
+
+            <div id="panel-compta" class="tab-panel">
+              <iframe scrolling="yes" id="comptaFrame" src="about:blank" data-src="comptabilite.html?embedded=1"
+                title="Comptabilité"></iframe>
+            </div>
+
+            <div id="panel-chantier" class="tab-panel">
+              <iframe scrolling="yes" id="chantierFrame" src="about:blank" data-src="suivi-client.html?embedded=1"
+                title="Suivi client"></iframe>
+            </div>
+
+            <div id="panel-impots" class="tab-panel">
+              <iframe scrolling="yes" id="impotsFrame" src="about:blank" data-src="impots.html?embedded=1"
+                title="Impôts IPP"></iframe>
+            </div>
+
           </div>
-          <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
-
-          <div class="user-actions">
-            <button id="globalSaveBtn" class="ghost icon-btn" type="button" title="Sauvegarder" aria-label="Sauvegarder">💾</button>
-            <div id="currentUser" class="user-pill"></div>
-
-          </div>
         </div>
-
-      <div class="workspace">
-
-        <div id="panel-devis" class="tab-panel active">
-          <iframe scrolling="yes" id="devisFrame" src="about:blank" data-src="devis-facture.html?embedded=1" title="Devis et Facture"></iframe>
-        </div>
-
-        <div id="panel-compta" class="tab-panel">
-          <iframe scrolling="yes" id="comptaFrame" src="about:blank" data-src="comptabilite.html?embedded=1" title="Comptabilité"></iframe>
-        </div>
-
-        <div id="panel-chantier" class="tab-panel">
-          <iframe scrolling="yes" id="chantierFrame" src="about:blank" data-src="suivi-client.html?embedded=1" title="Suivi client"></iframe>
-        </div>
-
-        <div id="panel-impots" class="tab-panel">
-          <iframe scrolling="yes" id="impotsFrame" src="about:blank" data-src="impots.html?embedded=1" title="Impôts IPP"></iframe>
-        </div>
-
       </div>
-      </div>
-    </div>
     </section>
   </div>
 
@@ -470,7 +478,8 @@
             <h3>Renommer correctement le document</h3>
             <p>Quand vous transformez ou reprenez un document, pensez à adapter son numéro et son type.</p>
             <p>Un devis ne doit pas garder un numéro de devis lorsqu’il devient une facture. Par exemple, un devis
-              <strong>D-2026-001</strong> doit devenir une facture <strong>F-2026-001</strong>.</p>
+              <strong>D-2026-001</strong> doit devenir une facture <strong>F-2026-001</strong>.
+            </p>
             <p>De la même manière, si un document devient un rappel, il peut être renommé avec une référence de rappel,
               par exemple <strong>R-2026-001</strong>.</p>
             <p>Cette logique évite les confusions entre devis, factures et rappels. Elle permet aussi de retrouver plus
@@ -506,7 +515,8 @@
               date, les lignes, les quantités, les prix, les remises, les taux TVA et les totaux avant de sauvegarder.
             </p>
             <p>Pensez aussi à renommer le document si son rôle change : par exemple passer de
-              <strong>D-2026-001</strong> à <strong>F-2026-001</strong> lorsque le devis devient une facture.</p>
+              <strong>D-2026-001</strong> à <strong>F-2026-001</strong> lorsque le devis devient une facture.
+            </p>
             <p>Ces boutons sont pratiques, mais ils ne remplacent pas un contrôle humain : si vous reprenez un ancien
               document, certaines informations peuvent ne plus être à jour.</p>
           </article>
@@ -801,7 +811,8 @@
             <h3>Quelles autorisations sont demandées ?</h3>
             <p>BastCompta demande notamment l’accès à l’espace Google Drive réservé aux données d’application, appelé
               <strong>appDataFolder</strong>, ainsi qu’à l’adresse email Google utilisée pour vérifier quel compte Drive
-              est connecté.</p>
+              est connecté.
+            </p>
             <p>Cet accès permet de créer, lire, mettre à jour ou supprimer les fichiers de sauvegarde utilisés par
               BastCompta dans cet espace spécifique.</p>
           </article>
