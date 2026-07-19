@@ -1724,3 +1724,27 @@ body.backup-pdf-capture .sheet {
 body.bast-embedded .tabs { display: none !important; }
 body.bast-embedded .app { max-width: none; min-height: 100vh; }
 body.bast-embedded .topbar { position: relative; top: auto; }
+
+/* Finition dans le portail : en-tête compact et contenu sans marge inutile. */
+body.bast-embedded {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body.bast-embedded .app {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 14px 18px 28px;
+}
+body.bast-embedded .topbar {
+  min-height: 44px;
+  margin: 0 0 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+body.bast-embedded .topbar .title-wrap {
+  display: none;
+}
+body.bast-embedded .topbar .actions {
+  margin-left: auto;
+}

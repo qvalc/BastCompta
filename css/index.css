@@ -1504,3 +1504,121 @@ iframe {
   .topbar-context span { font-size: 12px; }
   .portal-topbar .icon-btn { display: none; }
 }
+
+/* ===== Correctifs de mise en page du portail (2026-07-19) ===== */
+/* Le portail connecté occupe réellement toute la fenêtre, sans reprendre
+   les marges et la largeur maximale de l'écran de connexion. */
+body:has(#portalScreen:not(.hidden)) {
+  overflow: hidden;
+  background: #f4f7fb;
+}
+
+.app:has(#portalScreen:not(.hidden)) {
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+#portalScreen:not(.hidden) {
+  display: block;
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+}
+
+#portalScreen .portal-shell {
+  width: 100%;
+  height: 100vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+#portalScreen .portal-sidebar {
+  height: 100vh;
+  min-height: 0;
+  position: relative;
+  top: auto;
+}
+
+#portalScreen .sidebar-brand {
+  min-height: 76px;
+  padding: 10px 18px;
+}
+
+#portalScreen .sidebar-brand img {
+  width: 58px;
+  height: 58px;
+  max-height: none;
+  object-fit: contain;
+  object-position: center;
+  filter: none;
+  border-radius: 50%;
+  background: transparent;
+}
+
+#portalScreen .portal-main {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#portalScreen .portal-topbar {
+  flex: 0 0 68px;
+  min-height: 68px;
+  height: 68px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #dce4ef;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  position: relative;
+  top: auto;
+}
+
+#portalScreen .workspace {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: #f4f7fb;
+  overflow: hidden;
+}
+
+#portalScreen .tab-panel,
+#portalScreen .tab-panel.active {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#portalScreen .tab-panel iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  #portalScreen .portal-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+  }
+
+  #portalScreen .portal-topbar {
+    flex-basis: 62px;
+    height: 62px;
+    min-height: 62px;
+  }
+}

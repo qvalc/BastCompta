@@ -765,3 +765,6 @@ textarea {
 body.bast-embedded .tabs { display: none !important; }
 body.bast-embedded .app { max-width: none; min-height: 100vh; }
 body.bast-embedded .topbar { position: relative; top: auto; }
+
+body.bast-embedded { min-height: 100vh; overflow-x: hidden; }
+body.bast-embedded .app { width: 100%; max-width: none; margin: 0; padding: 14px 18px 28px; }
