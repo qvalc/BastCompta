@@ -2604,6 +2604,7 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
   const sidebar = document.getElementById('portalSidebar');
   const toggleBtn = document.getElementById('sidebarToggleBtn');
   const closeBtn = document.getElementById('sidebarCloseBtn');
+  const backdrop = document.getElementById('sidebarBackdrop');
   const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
   const moduleTitle = document.getElementById('topbarModuleTitle');
   const pageTitle = document.getElementById('topbarPageTitle');
@@ -2616,10 +2617,13 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     chantier: 'Suivi client',
     impots: 'Impôts IPP'
   };
-  const defaults = { devis: 'quote', compta: 'dashboard', impots: 'summary' };
+  const defaults = { devis: 'quote', compta: 'sales', impots: 'summary' };
   const frames = { devis: devisFrame, compta: comptaFrame, chantier: chantierFrame, impots: impotsFrame };
 
-  function closeMobileSidebar() { shell?.classList.remove('sidebar-open'); }
+  function closeMobileSidebar() {
+    shell?.classList.remove('sidebar-open');
+    toggleBtn?.setAttribute('aria-expanded', 'false');
+  }
 
   function openGroup(tabName) {
     groups.forEach(group => {
@@ -2680,8 +2684,12 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     }, true);
   });
 
-  toggleBtn?.addEventListener('click', () => shell?.classList.add('sidebar-open'));
+  toggleBtn?.addEventListener('click', () => {
+    shell?.classList.add('sidebar-open');
+    toggleBtn.setAttribute('aria-expanded', 'true');
+  });
   closeBtn?.addEventListener('click', closeMobileSidebar);
+  backdrop?.addEventListener('click', closeMobileSidebar);
   shell?.addEventListener('click', event => {
     if (shell.classList.contains('sidebar-open') && event.target === shell) closeMobileSidebar();
   });

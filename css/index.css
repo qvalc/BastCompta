@@ -1862,3 +1862,109 @@ body:has(#portalScreen:not(.hidden)) {
 #portalScreen #settingsMenu {
   width: 100%;
 }
+
+/* ===== V8 : navigation mobile fiable ===== */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  body:has(#portalScreen:not(.hidden)) {
+    overflow: hidden !important;
+  }
+
+  #portalScreen .portal-shell {
+    position: relative;
+  }
+
+  #portalScreen .portal-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(86vw, 300px) !important;
+    max-width: 300px !important;
+    height: 100dvh !important;
+    z-index: 1002 !important;
+    transform: translate3d(-105%, 0, 0) !important;
+    transition: transform .24s ease !important;
+    visibility: visible !important;
+  }
+
+  #portalScreen .portal-shell.sidebar-open .portal-sidebar {
+    transform: translate3d(0, 0, 0) !important;
+  }
+
+  #portalScreen .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1001;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, .48);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity .2s ease, visibility .2s ease;
+  }
+
+  #portalScreen .portal-shell.sidebar-open .sidebar-backdrop {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  /* L'ancien pseudo-fond est remplacé par un vrai bouton accessible. */
+  #portalScreen .portal-shell.sidebar-open::after {
+    content: none !important;
+  }
+
+  #portalScreen .sidebar-toggle {
+    display: inline-flex !important;
+    flex: 0 0 42px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  #portalScreen .sidebar-close {
+    display: inline-flex !important;
+  }
+
+  #portalScreen .portal-topbar {
+    padding-inline: 10px !important;
+    gap: 9px !important;
+  }
+
+  #portalScreen .topbar-context {
+    overflow: hidden;
+  }
+
+  #portalScreen .topbar-context strong,
+  #portalScreen .topbar-context span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #portalScreen .sidebar-nav {
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 480px) {
+  #portalScreen .portal-topbar {
+    min-height: 58px !important;
+    height: 58px !important;
+    flex-basis: 58px !important;
+  }
+
+  #portalScreen .sidebar-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  #portalScreen .user-pill {
+    max-width: 92px !important;
+  }
+}
