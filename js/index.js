@@ -53,6 +53,8 @@ const portalScreen = document.getElementById('portalScreen');
 const authMessage = document.getElementById('authMessage');
 const currentUserEl = document.getElementById('currentUser');
 const globalSaveBtn = document.getElementById('globalSaveBtn');
+const syncStatusPill = document.getElementById('syncStatusPill');
+const syncStatusText = document.getElementById('syncStatusText');
 const loginForm = document.getElementById('loginForm');
 const registerForm = document.getElementById('registerForm');
 const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
@@ -523,7 +525,95 @@ function getLoadedModuleFrames() {
     { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
     { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
     { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
-  ].filter(item => item.frame);
+  ].filter(item => {
+    if (!item.frame) return false;
+    const src = item.frame.getAttribute('src') || '';
+    return src && src !== 'about:blank';
+  });
+}
+
+const moduleSyncState = new Map();
+let portalSyncInProgress = false;
+
+function getModuleSyncState(key) {
+  if (!moduleSyncState.has(key)) {
+    moduleSyncState.set(key, { dirty: true, syncedOnce: false, syncing: false, error: '' });
+  }
+  return moduleSyncState.get(key);
+}
+
+function updateSyncStatusIndicator() {
+  if (!syncStatusPill || !syncStatusText) return;
+  const loaded = getLoadedModuleFrames();
+  const states = loaded.map(item => getModuleSyncState(item.key));
+  const hasError = states.some(state => !!state.error);
+  const isSyncing = portalSyncInProgress || states.some(state => state.syncing);
+  const dirtyCount = states.filter(state => state.dirty).length;
+
+  syncStatusPill.classList.remove('sync-ok', 'sync-pending', 'sync-error', 'sync-unknown');
+  if (hasError) {
+    syncStatusPill.classList.add('sync-error');
+    syncStatusText.textContent = 'Erreur Drive';
+    syncStatusPill.title = 'Une sauvegarde a échoué. Cliquez pour relancer.';
+  } else if (isSyncing) {
+    syncStatusPill.classList.add('sync-pending');
+    syncStatusText.textContent = 'Synchronisation…';
+    syncStatusPill.title = 'Sauvegarde locale et synchronisation Drive en cours.';
+  } else if (dirtyCount > 0) {
+    syncStatusPill.classList.add('sync-pending');
+    syncStatusText.textContent = `${dirtyCount} modification${dirtyCount > 1 ? 's' : ''}`;
+    syncStatusPill.title = 'Des modifications ne sont pas encore confirmées sur Drive.';
+  } else if (states.length && states.every(state => state.syncedOnce)) {
+    syncStatusPill.classList.add('sync-ok');
+    syncStatusText.textContent = 'Synchronisé';
+    syncStatusPill.title = 'Toutes les données des modules ouverts sont sauvegardées.';
+  } else {
+    syncStatusPill.classList.add('sync-unknown');
+    syncStatusText.textContent = 'À vérifier';
+    syncStatusPill.title = 'Cliquez sur la disquette pour confirmer la sauvegarde.';
+  }
+}
+
+function markModuleDirty(key) {
+  const state = getModuleSyncState(key);
+  if (state.syncing) return;
+  state.dirty = true;
+  state.error = '';
+  updateSyncStatusIndicator();
+}
+
+function installDirtyTracking(moduleInfo) {
+  const { key, frame } = moduleInfo;
+  if (!frame || frame.dataset.dirtyTrackingInstalled === '1') return;
+  frame.dataset.dirtyTrackingInstalled = '1';
+
+  const attach = () => {
+    getModuleSyncState(key); // Un module fraîchement chargé doit être confirmé une première fois.
+    try {
+      const doc = frame.contentDocument || frame.contentWindow?.document;
+      if (!doc || doc.__bastComptaDirtyTracking) return;
+      doc.__bastComptaDirtyTracking = true;
+      const dirty = () => markModuleDirty(key);
+      doc.addEventListener('input', dirty, true);
+      doc.addEventListener('change', dirty, true);
+      doc.addEventListener('submit', dirty, true);
+      doc.addEventListener('click', event => {
+        const target = event.target?.closest?.('button, [role="button"], a');
+        if (!target) return;
+        // Les clics purement liés à la navigation ne déclenchent pas une sauvegarde inutile.
+        if (target.matches('[data-page], [data-tab], .nav-item, .tab-button')) return;
+        markModuleDirty(key);
+      }, true);
+    } catch (error) {
+      console.warn('Suivi des modifications indisponible pour', key, error);
+    }
+    updateSyncStatusIndicator();
+  };
+
+  frame.addEventListener('load', attach);
+  try {
+    if ((frame.contentDocument || frame.contentWindow?.document)?.readyState === 'complete') attach();
+  } catch { }
 }
 
 function waitForFrameLoad(frame, timeoutMs = 8000) {
@@ -550,28 +640,21 @@ function waitForFrameLoad(frame, timeoutMs = 8000) {
 
 async function waitForModuleSaveApi(frame, timeoutMs = 12000) {
   await waitForFrameLoad(frame, timeoutMs);
-
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const saveApi = getFrameModuleSaveApi(frame);
     if (saveApi) return saveApi;
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-
   return null;
 }
 
 async function saveSingleModuleFromPortal(moduleInfo) {
-  const { label, frame } = moduleInfo;
-  if (!frame) return { label, ok: false, message: 'iframe introuvable' };
-
-  const targetSrc = frame.dataset.src || '';
-  if (targetSrc && (!frame.getAttribute('src') || frame.getAttribute('src') === 'about:blank')) {
-    frame.setAttribute('src', targetSrc);
-  }
+  const { key, label, frame } = moduleInfo;
+  if (!frame) return { key, label, ok: false, message: 'iframe introuvable' };
 
   const saveFn = await waitForModuleSaveApi(frame);
-  if (!saveFn) return { label, ok: false, message: 'fonction de sauvegarde indisponible' };
+  if (!saveFn) return { key, label, ok: false, message: 'fonction de sauvegarde indisponible' };
 
   const suppressedAlerts = [];
   let originalAlert = null;
@@ -589,24 +672,14 @@ async function saveSingleModuleFromPortal(moduleInfo) {
 
   try {
     const hasModuleApi = typeof frame?.contentWindow?.BastComptaModule?.save === 'function';
-    const result = hasModuleApi
-      ? await saveFn({ silent: true, source: 'portal' })
-      : await saveFn(false);
-
+    const result = hasModuleApi ? await saveFn({ silent: true, source: 'portal' }) : await saveFn(false);
     if (result === false || result?.ok === false) {
-      return {
-        label,
-        ok: false,
-        message: result?.message || suppressedAlerts.join(' | ') || 'échec signalé par le module',
-        result,
-        suppressedAlerts
-      };
+      return { key, label, ok: false, message: result?.message || suppressedAlerts.join(' | ') || 'échec signalé par le module', result, suppressedAlerts };
     }
-
-    return { label, ok: true, result, suppressedAlerts };
+    return { key, label, ok: true, result, suppressedAlerts };
   } catch (error) {
     console.error('Sauvegarde module impossible :', label, error);
-    return { label, ok: false, message: error?.message || 'erreur inconnue', suppressedAlerts };
+    return { key, label, ok: false, message: error?.message || 'erreur inconnue', suppressedAlerts };
   } finally {
     if (originalAlert) {
       try { frame.contentWindow.alert = originalAlert; } catch { }
@@ -617,7 +690,6 @@ async function saveSingleModuleFromPortal(moduleInfo) {
 function formatModuleSaveLine(item) {
   const result = item.result || {};
   if (!item.ok) return `✖ ${item.label} : ERREUR — ${item.message || 'erreur inconnue'}`;
-
   const details = [];
   if (result.local) details.push('local OK');
   if (typeof result.drive === 'boolean') details.push(result.drive ? 'Drive OK' : 'Drive non utilisé / non connecté');
@@ -625,7 +697,6 @@ function formatModuleSaveLine(item) {
   if (typeof result.exportedDocumentsCount === 'number') details.push(`${result.exportedDocumentsCount} document(s) Drive`);
   else if (Array.isArray(result.exportedDocuments)) details.push(`${result.exportedDocuments.length} document(s) Drive`);
   if (Array.isArray(result.warnings) && result.warnings.length) details.push(`avertissement(s): ${result.warnings.join(' ; ')}`);
-  if (result.alertsIntercepted) details.push(`${result.alertsIntercepted} message(s) module intercepté(s)`);
   return `✔ ${item.label} : ${details.length ? details.join(', ') : 'OK'}`;
 }
 
@@ -637,69 +708,122 @@ function showPortalSaveToast(text, state = 'working', autoHideMs = 0) {
     toast.setAttribute('role', 'status');
     toast.setAttribute('aria-live', 'polite');
     Object.assign(toast.style, {
-      position: 'fixed', right: '22px', bottom: '22px', zIndex: '10000',
-      minWidth: '260px', maxWidth: '420px', padding: '13px 16px',
-      borderRadius: '12px', color: '#fff', fontWeight: '700',
-      boxShadow: '0 10px 30px rgba(0,0,0,.24)', transition: 'opacity .2s ease',
-      pointerEvents: 'none'
+      position: 'fixed', right: '22px', bottom: '22px', zIndex: '10000', minWidth: '260px', maxWidth: '420px',
+      padding: '13px 16px', borderRadius: '12px', color: '#fff', fontWeight: '700',
+      boxShadow: '0 10px 30px rgba(0,0,0,.24)', transition: 'opacity .2s ease', pointerEvents: 'none'
     });
     document.body.appendChild(toast);
   }
-
   toast.textContent = text;
   toast.style.background = state === 'success' ? '#256b2f' : state === 'error' ? '#a61b1b' : '#273142';
   toast.style.opacity = '1';
   clearTimeout(toast._hideTimer);
-  if (autoHideMs) {
-    toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, autoHideMs);
-  }
+  if (autoHideMs) toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, autoHideMs);
 }
 
 async function saveAllModulesFromPortal() {
-  const previousLabel = globalSaveBtn?.textContent || 'Sauvegarder';
+  if (portalSyncInProgress) return false;
+  const previousLabel = globalSaveBtn?.textContent || '💾';
+  const loadedModules = getLoadedModuleFrames();
+  loadedModules.forEach(installDirtyTracking);
+  const modules = loadedModules.filter(item => {
+    const state = getModuleSyncState(item.key);
+    return state.dirty || !!state.error || !state.syncedOnce;
+  });
+
+  if (!modules.length) {
+    showPortalSaveToast('✓ Tout est déjà synchronisé', 'success', 2200);
+    updateSyncStatusIndicator();
+    return true;
+  }
+
+  portalSyncInProgress = true;
+  modules.forEach(item => {
+    const state = getModuleSyncState(item.key);
+    state.syncing = true;
+    state.error = '';
+  });
   if (globalSaveBtn) {
     globalSaveBtn.disabled = true;
     globalSaveBtn.textContent = '⏳';
   }
-
-  // La sauvegarde normale ne bloque plus l’écran. Tous les modules démarrent en parallèle.
-  showPortalSaveToast('Sauvegarde locale et synchronisation Drive…');
-  backupStatus('Sauvegarde des modules en parallèle…', 'warning');
+  updateSyncStatusIndicator();
+  showPortalSaveToast(`Synchronisation de ${modules.length} module${modules.length > 1 ? 's' : ''}…`);
+  backupStatus('Synchronisation des modules modifiés…', 'warning');
 
   try {
-    const modules = getLoadedModuleFrames();
-    const results = await Promise.all(modules.map(moduleInfo => saveSingleModuleFromPortal(moduleInfo)));
+    const results = await Promise.all(modules.map(saveSingleModuleFromPortal));
+    for (const item of results) {
+      const state = getModuleSyncState(item.key);
+      state.syncing = false;
+      if (item.ok) {
+        state.dirty = false;
+        state.syncedOnce = true;
+        state.error = '';
+      } else {
+        state.dirty = true;
+        state.error = item.message || 'Erreur de sauvegarde';
+      }
+    }
 
     const failed = results.filter(item => !item.ok);
-    const lines = results.map(formatModuleSaveLine).join('\n');
-    const intercepted = results.flatMap(item => (item.suppressedAlerts || []).filter(Boolean));
-    const interceptedText = intercepted.length
-      ? '\n\nMessages internes interceptés :\n- ' + intercepted.join('\n- ')
-      : '';
-
     if (failed.length) {
-      showPortalSaveToast(`Sauvegarde partielle : ${failed.length} module(s) en erreur`, 'error', 6500);
-      backupStatus('Sauvegarde partielle : problème détecté.', 'error');
-      alert('Sauvegarde partielle : problème détecté.\n\n' + lines + interceptedText);
+      const lines = results.map(formatModuleSaveLine).join('\n');
+      showPortalSaveToast(`Synchronisation incomplète : ${failed.length} erreur(s)`, 'error', 6500);
+      backupStatus('Synchronisation incomplète.', 'error');
+      alert('La synchronisation n’est pas totalement confirmée.\n\n' + lines);
       return false;
     }
 
-    showPortalSaveToast('✓ Sauvegarde complète réussie', 'success', 3200);
-    backupStatus('Sauvegarde complète réussie.', 'success');
+    showPortalSaveToast(`✓ ${modules.length} module${modules.length > 1 ? 's' : ''} synchronisé${modules.length > 1 ? 's' : ''}`, 'success', 3200);
+    backupStatus('Toutes les modifications sont synchronisées.', 'success');
     return true;
   } catch (error) {
+    modules.forEach(item => {
+      const state = getModuleSyncState(item.key);
+      state.syncing = false;
+      state.dirty = true;
+      state.error = error?.message || 'Erreur inconnue';
+    });
     console.error('Sauvegarde globale impossible.', error);
-    showPortalSaveToast('Sauvegarde impossible', 'error', 6500);
-    backupStatus('Erreur pendant la sauvegarde globale.', 'error');
+    showPortalSaveToast('Synchronisation impossible', 'error', 6500);
+    backupStatus('Erreur pendant la synchronisation.', 'error');
     alert('La sauvegarde globale a échoué : ' + (error?.message || 'erreur inconnue'));
     return false;
   } finally {
+    portalSyncInProgress = false;
     if (globalSaveBtn) {
       globalSaveBtn.disabled = false;
       globalSaveBtn.textContent = previousLabel;
     }
+    updateSyncStatusIndicator();
   }
 }
+
+// Mise en place du suivi pour les modules chargés maintenant ou plus tard.
+[
+  { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+  { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
+  { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
+  { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
+  { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
+].filter(item => item.frame).forEach(installDirtyTracking);
+
+syncStatusPill?.addEventListener('click', () => {
+  if (!portalSyncInProgress) saveAllModulesFromPortal();
+});
+
+window.addEventListener('beforeunload', event => {
+  const hasUnsynced = portalSyncInProgress || getLoadedModuleFrames().some(item => {
+    const state = getModuleSyncState(item.key);
+    return state.dirty || !!state.error;
+  });
+  if (!hasUnsynced) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
+updateSyncStatusIndicator();
 
 async function sendInvoiceToAccounting() {
   const getRows = getFrameApi(devisFrame, 'getInvoiceAccountingRowsForComptabilite');

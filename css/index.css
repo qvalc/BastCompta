@@ -2247,3 +2247,39 @@ body.portal-active .app {
         margin-bottom: 18px;
     }
 }
+
+
+/* État permanent de la sauvegarde intelligente */
+.sync-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.sync-status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #8b93a1;
+    box-shadow: 0 0 0 3px rgba(139,147,161,.15);
+}
+.sync-status-pill.sync-ok { color: #205f2b; border-color: rgba(37,107,47,.3); background: #f2fbf3; }
+.sync-status-pill.sync-ok .sync-status-dot { background: #2e8b3c; box-shadow: 0 0 0 3px rgba(46,139,60,.15); }
+.sync-status-pill.sync-pending { color: #765300; border-color: rgba(180,127,0,.3); background: #fff9e8; }
+.sync-status-pill.sync-pending .sync-status-dot { background: #d59a00; box-shadow: 0 0 0 3px rgba(213,154,0,.15); }
+.sync-status-pill.sync-error { color: #8f1717; border-color: rgba(166,27,27,.3); background: #fff2f2; }
+.sync-status-pill.sync-error .sync-status-dot { background: #b82020; box-shadow: 0 0 0 3px rgba(184,32,32,.15); }
+.sync-status-pill.sync-unknown .sync-status-dot { background: #7f8794; }
+@media (max-width: 760px) {
+    .sync-status-pill { padding: 0 9px; }
+    .sync-status-pill #syncStatusText { display: none; }
+}

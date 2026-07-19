@@ -260,6 +260,11 @@
             <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
 
             <div class="user-actions">
+              <button id="syncStatusPill" class="sync-status-pill sync-unknown" type="button"
+                title="État de la synchronisation" aria-label="État de la synchronisation">
+                <span class="sync-status-dot" aria-hidden="true"></span>
+                <span id="syncStatusText">À vérifier</span>
+              </button>
               <button id="globalSaveBtn" class="ghost icon-btn" type="button" title="Sauvegarder"
                 aria-label="Sauvegarder">💾</button>
               <div id="currentUser" class="user-pill"></div>
