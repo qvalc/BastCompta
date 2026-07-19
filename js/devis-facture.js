@@ -5121,11 +5121,23 @@ async function saveFromPortalGlobal(options = {}) {
   }
 }
 
+function getDevisFactureChangeSnapshot() {
+  // La communication structurée est recalculée automatiquement lors des sauvegardes.
+  // Elle ne doit donc pas maintenir artificiellement l'état « modifié ».
+  const snapshot = structuredClone(data);
+  delete snapshot.communication;
+  delete snapshot.lastAddedFromTarifs;
+  if (snapshot.tarifs && typeof snapshot.tarifs === 'object') {
+    delete snapshot.tarifs.updatedAt;
+  }
+  return snapshot;
+}
+
 window.BastComptaModule = {
   name: 'Devis & Facture',
   save: saveFromPortalGlobal,
   saveData,
-  getChangeSnapshot: () => data,
+  getChangeSnapshot: getDevisFactureChangeSnapshot,
   getStatus: () => ({ ready: true, module: 'devis-facture' })
 };
 

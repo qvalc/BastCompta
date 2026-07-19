@@ -552,12 +552,17 @@ function getModuleSyncState(key) {
 
 function stableSnapshotString(value) {
   const seen = new WeakSet();
+  const ignoredTechnicalKeys = new Set([
+    'updatedAt', 'modifiedAt', 'lastModified', 'lastSave', 'lastSavedAt',
+    'savedAt', 'syncedAt', 'lastSyncAt', 'lastAddedFromTarifs'
+  ]);
   const normalize = input => {
     if (input === null || typeof input !== 'object') return input;
     if (seen.has(input)) return '[Circular]';
     seen.add(input);
     if (Array.isArray(input)) return input.map(normalize);
     return Object.keys(input).sort().reduce((out, key) => {
+      if (ignoredTechnicalKeys.has(key)) return out;
       const item = input[key];
       if (typeof item !== 'function' && typeof item !== 'undefined') out[key] = normalize(item);
       return out;
