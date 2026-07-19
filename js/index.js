@@ -440,17 +440,17 @@ function showPortal(user, subscription = currentSubscriptionState) {
   loadProtectedFrames(currentSubscriptionState);
   authScreen.classList.add('hidden');
   portalScreen.classList.remove('hidden');
-    document.body.classList.add('portal-active');
+  document.body.classList.add('portal-active');
 
-    requestAnimationFrame(() => {
-      syncResponsiveNavigation();
-      window.dispatchEvent(new Event('resize'));
-    });
+  requestAnimationFrame(() => {
+    syncResponsiveNavigation();
+    window.dispatchEvent(new Event('resize'));
+  });
 
-    setTimeout(() => {
-      syncResponsiveNavigation();
-      window.dispatchEvent(new Event('resize'));
-    }, 150);
+  setTimeout(() => {
+    syncResponsiveNavigation();
+    window.dispatchEvent(new Event('resize'));
+  }, 150);
 
   updateCurrentUserDisplay(user, currentSubscriptionState);
   switchMainTab('devis');
@@ -468,7 +468,7 @@ function showAuth() {
   unloadProtectedFrames();
   portalScreen.classList.add('hidden');
   authScreen.classList.remove('hidden');
-    document.body.classList.remove('portal-active');
+  document.body.classList.remove('portal-active');
   loginForm.reset();
   registerForm.reset();
 }
@@ -537,7 +537,7 @@ let portalSyncInProgress = false;
 
 function getModuleSyncState(key) {
   if (!moduleSyncState.has(key)) {
-    moduleSyncState.set(key, { dirty: true, syncedOnce: false, syncing: false, error: '' });
+    moduleSyncState.set(key, { dirty: false, syncedOnce: false, syncing: false, error: '' });
   }
   return moduleSyncState.get(key);
 }
@@ -593,15 +593,27 @@ function installDirtyTracking(moduleInfo) {
       const doc = frame.contentDocument || frame.contentWindow?.document;
       if (!doc || doc.__bastComptaDirtyTracking) return;
       doc.__bastComptaDirtyTracking = true;
-      const dirty = () => markModuleDirty(key);
+      const dirty = event => {
+        // Ignore les événements générés automatiquement par le programme.
+        if (!event.isTrusted) return;
+
+        markModuleDirty(key);
+      };
+
       doc.addEventListener('input', dirty, true);
       doc.addEventListener('change', dirty, true);
       doc.addEventListener('submit', dirty, true);
+
       doc.addEventListener('click', event => {
+        // Ignore les clics générés automatiquement par le programme.
+        if (!event.isTrusted) return;
+
         const target = event.target?.closest?.('button, [role="button"], a');
         if (!target) return;
-        // Les clics purement liés à la navigation ne déclenchent pas une sauvegarde inutile.
+
+        // Les clics purement liés à la navigation ne sont pas des modifications.
         if (target.matches('[data-page], [data-tab], .nav-item, .tab-button')) return;
+
         markModuleDirty(key);
       }, true);
     } catch (error) {
