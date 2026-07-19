@@ -629,21 +629,46 @@ function formatModuleSaveLine(item) {
   return `✔ ${item.label} : ${details.length ? details.join(', ') : 'OK'}`;
 }
 
+function showPortalSaveToast(text, state = 'working', autoHideMs = 0) {
+  let toast = document.getElementById('portalSaveToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'portalSaveToast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    Object.assign(toast.style, {
+      position: 'fixed', right: '22px', bottom: '22px', zIndex: '10000',
+      minWidth: '260px', maxWidth: '420px', padding: '13px 16px',
+      borderRadius: '12px', color: '#fff', fontWeight: '700',
+      boxShadow: '0 10px 30px rgba(0,0,0,.24)', transition: 'opacity .2s ease',
+      pointerEvents: 'none'
+    });
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = text;
+  toast.style.background = state === 'success' ? '#256b2f' : state === 'error' ? '#a61b1b' : '#273142';
+  toast.style.opacity = '1';
+  clearTimeout(toast._hideTimer);
+  if (autoHideMs) {
+    toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, autoHideMs);
+  }
+}
+
 async function saveAllModulesFromPortal() {
   const previousLabel = globalSaveBtn?.textContent || 'Sauvegarder';
   if (globalSaveBtn) {
     globalSaveBtn.disabled = true;
-    globalSaveBtn.textContent = 'Sauvegarde…';
+    globalSaveBtn.textContent = '⏳';
   }
 
-  showBlockingProgress('Sauvegarde complète', 'Sauvegarde des modules en cours…');
+  // La sauvegarde normale ne bloque plus l’écran. Tous les modules démarrent en parallèle.
+  showPortalSaveToast('Sauvegarde locale et synchronisation Drive…');
+  backupStatus('Sauvegarde des modules en parallèle…', 'warning');
 
   try {
-    const results = [];
-    for (const moduleInfo of getLoadedModuleFrames()) {
-      backupStatus('Sauvegarde : ' + moduleInfo.label + '…', 'warning');
-      results.push(await saveSingleModuleFromPortal(moduleInfo));
-    }
+    const modules = getLoadedModuleFrames();
+    const results = await Promise.all(modules.map(moduleInfo => saveSingleModuleFromPortal(moduleInfo)));
 
     const failed = results.filter(item => !item.ok);
     const lines = results.map(formatModuleSaveLine).join('\n');
@@ -653,14 +678,22 @@ async function saveAllModulesFromPortal() {
       : '';
 
     if (failed.length) {
+      showPortalSaveToast(`Sauvegarde partielle : ${failed.length} module(s) en erreur`, 'error', 6500);
+      backupStatus('Sauvegarde partielle : problème détecté.', 'error');
       alert('Sauvegarde partielle : problème détecté.\n\n' + lines + interceptedText);
       return false;
     }
 
-    alert('Sauvegarde complète réussie.\n\n' + lines + interceptedText);
+    showPortalSaveToast('✓ Sauvegarde complète réussie', 'success', 3200);
+    backupStatus('Sauvegarde complète réussie.', 'success');
     return true;
+  } catch (error) {
+    console.error('Sauvegarde globale impossible.', error);
+    showPortalSaveToast('Sauvegarde impossible', 'error', 6500);
+    backupStatus('Erreur pendant la sauvegarde globale.', 'error');
+    alert('La sauvegarde globale a échoué : ' + (error?.message || 'erreur inconnue'));
+    return false;
   } finally {
-    hideBlockingProgress();
     if (globalSaveBtn) {
       globalSaveBtn.disabled = false;
       globalSaveBtn.textContent = previousLabel;
