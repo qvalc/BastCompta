@@ -260,10 +260,6 @@
 
       <div class="workspace">
 
-        <div class="workspace-head">
-          Vos outils sont chargés directement dans le portail.
-        </div>
-
         <div id="panel-devis" class="tab-panel active">
           <iframe scrolling="yes" id="devisFrame" src="about:blank" data-src="devis-facture.html?embedded=1" title="Devis et Facture"></iframe>
         </div>
@@ -927,6 +923,22 @@
   </div>
 
   <script type="module" src="js/index.js"></script>
+  <script>
+    // Secours navigation mobile : fonctionne même si le module principal rencontre une erreur.
+    document.addEventListener('DOMContentLoaded', function () {
+      var shell = document.querySelector('#portalScreen .portal-shell');
+      var toggle = document.getElementById('sidebarToggleBtn');
+      var close = document.getElementById('sidebarCloseBtn');
+      var backdrop = document.getElementById('sidebarBackdrop');
+      if (!shell || !toggle) return;
+      function openMenu() { shell.classList.add('sidebar-open'); toggle.setAttribute('aria-expanded', 'true'); }
+      function closeMenu() { shell.classList.remove('sidebar-open'); toggle.setAttribute('aria-expanded', 'false'); }
+      toggle.addEventListener('click', openMenu);
+      if (close) close.addEventListener('click', closeMenu);
+      if (backdrop) backdrop.addEventListener('click', closeMenu);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+    });
+  </script>
 </body>
 
 </html>
