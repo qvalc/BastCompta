@@ -1968,3 +1968,80 @@ body:has(#portalScreen:not(.hidden)) {
     max-width: 92px !important;
   }
 }
+
+/* ===== V9 : correctif mobile prioritaire et indépendant ===== */
+@media screen and (max-width: 1024px) {
+  #portalScreen:not(.hidden) .portal-main {
+    width: 100% !important;
+    margin-left: 0 !important;
+  }
+
+  #portalScreen:not(.hidden) .portal-topbar {
+    display: flex !important;
+    position: relative !important;
+    z-index: 900 !important;
+  }
+
+  #portalScreen:not(.hidden) #sidebarToggleBtn {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 1105 !important;
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  #portalScreen:not(.hidden) #portalSidebar {
+    display: flex !important;
+    visibility: visible !important;
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: min(88vw, 320px) !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 1200 !important;
+    transform: translateX(-110%) !important;
+    transition: transform .25s ease !important;
+    overflow: hidden !important;
+  }
+
+  #portalScreen:not(.hidden) .portal-shell.sidebar-open #portalSidebar {
+    transform: translateX(0) !important;
+  }
+
+  #portalScreen:not(.hidden) #sidebarBackdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1190 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    background: rgba(0,0,0,.48) !important;
+  }
+
+  #portalScreen:not(.hidden) .portal-shell.sidebar-open #sidebarBackdrop {
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  #portalScreen:not(.hidden) #sidebarCloseBtn {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #portalScreen:not(.hidden) .sidebar-nav {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    min-height: 0 !important;
+  }
+}
