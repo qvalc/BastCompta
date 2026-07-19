@@ -156,67 +156,108 @@
 
   <section id="portalScreen" class="hidden">
     <div class="portal-shell">
-
-      <div class="portal-topbar">
-
-        <div class="main-tabs">
-
-          <button class="main-tab active" data-main-tab="devis" type="button">
-            <span class="tab-icon tab-icon-devis" aria-hidden="true">📄</span>
-            <span>Devis &amp; Facture</span>
-          </button>
-
-          <button class="main-tab" data-main-tab="compta" type="button">
-            <span class="tab-icon tab-icon-compta" aria-hidden="true">📊</span>
-            <span>Comptabilité</span>
-          </button>
-
-          <button class="main-tab" data-main-tab="chantier" type="button">
-            <span class="tab-icon tab-icon-client" aria-hidden="true">👥</span>
-            <span>Suivi client</span>
-          </button>
-
-          <button class="main-tab" data-main-tab="impots" type="button">
-            <span class="tab-icon tab-icon-impots" aria-hidden="true">🧾</span>
-            <span>Impôts IPP</span>
-          </button>
-
-          <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
-        </div>
-
-        <div class="topbar-logo">
+      <aside class="portal-sidebar" id="portalSidebar" aria-label="Navigation principale">
+        <div class="sidebar-brand">
           <img src="logo.png" alt="BastCompta">
+          <button id="sidebarCloseBtn" class="sidebar-close" type="button" aria-label="Fermer le menu">✕</button>
         </div>
 
-        <div class="user-actions">
-          <button id="globalSaveBtn" class="ghost icon-btn" title="Sauvegarder">
-            💾
+        <nav class="sidebar-nav">
+          <button class="sidebar-home active" data-main-tab="devis" data-page-key="quote" type="button">
+            <span class="sidebar-icon">⌂</span><span>Tableau de bord</span>
           </button>
 
-          <div id="currentUser" class="user-pill"></div>
-
-          <div id="settingsMenu" class="settings-menu">
-            <button id="settingsMenuBtn" class="settings-icon-btn ghost settings-gear-btn" type="button"
-              title="Paramètres" aria-label="Paramètres">
-              ⚙️
+          <div class="sidebar-group open" data-sidebar-group="devis">
+            <button class="main-tab sidebar-module active" data-main-tab="devis" type="button" aria-expanded="true">
+              <span class="sidebar-icon">▤</span><span>Devis &amp; Factures</span><span class="sidebar-chevron">⌄</span>
             </button>
+            <div class="sidebar-submenu">
+              <button data-main-tab="devis" data-page-key="quote" type="button">Devis</button>
+              <button data-main-tab="devis" data-page-key="invoice" type="button">Factures</button>
+              <button data-main-tab="devis" data-page-key="tarifs" type="button">Tarifs</button>
+              <button data-main-tab="devis" data-page-key="reminder" type="button">Rappels</button>
+              <button data-main-tab="devis" data-page-key="communication" type="button">Communications structurées</button>
+              <button data-main-tab="devis" data-page-key="peppol" type="button">Peppol / Doccle</button>
+              <button data-main-tab="devis" data-page-key="settings" type="button">Paramètres du module</button>
+            </div>
+          </div>
 
-            <div class="settings-dropdown" id="settingsDropdown">
-              <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
-              <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
-              <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
-              <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
-              <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
-              <button id="sendVerificationBtn" type="button">Renvoyer email de vérification</button>
-              <button id="openHelpBtn" type="button">Présentation & FAQ</button>
+          <div class="sidebar-group" data-sidebar-group="compta">
+            <button class="main-tab sidebar-module" data-main-tab="compta" type="button" aria-expanded="false">
+              <span class="sidebar-icon">▥</span><span>Comptabilité</span><span class="sidebar-chevron">⌄</span>
+            </button>
+            <div class="sidebar-submenu">
+              <button data-main-tab="compta" data-page-key="dashboard" type="button">Tableau de bord</button>
+              <button data-main-tab="compta" data-page-key="sales" type="button">Ventes</button>
+              <button data-main-tab="compta" data-page-key="purchases" type="button">Achats</button>
+              <button data-main-tab="compta" data-page-key="investments" type="button">Investissements</button>
+              <button data-main-tab="compta" data-page-key="assets" type="button">Immobilisations</button>
+              <button data-main-tab="compta" data-page-key="losses" type="button">Taxes &amp; cotisations</button>
+              <button data-main-tab="compta" data-page-key="stock" type="button">Stock</button>
+              <button data-main-tab="compta" data-page-key="km" type="button">Kilomètres</button>
+              <button data-main-tab="compta" data-page-key="result" type="button">Compte de résultat</button>
+              <button data-main-tab="compta" data-page-key="balance" type="button">Bilan simplifié</button>
+              <button data-main-tab="compta" data-page-key="vat" type="button">TVA</button>
+            </div>
+          </div>
 
-              <div class="settings-separator"></div>
+          <div class="sidebar-group" data-sidebar-group="chantier">
+            <button class="main-tab sidebar-module" data-main-tab="chantier" type="button" aria-expanded="false">
+              <span class="sidebar-icon">♙</span><span>Suivi client</span><span class="sidebar-chevron">⌄</span>
+            </button>
+            <div class="sidebar-submenu">
+              <button data-main-tab="chantier" data-client-action="overview" type="button">Vue clients</button>
+              <button data-main-tab="chantier" data-client-action="new" type="button">Nouveau client CRM</button>
+            </div>
+          </div>
 
-              <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
+          <div class="sidebar-group" data-sidebar-group="impots">
+            <button class="main-tab sidebar-module" data-main-tab="impots" type="button" aria-expanded="false">
+              <span class="sidebar-icon">▧</span><span>Impôts IPP</span><span class="sidebar-chevron">⌄</span>
+            </button>
+            <div class="sidebar-submenu">
+              <button data-main-tab="impots" data-page-key="summary" type="button">Résumé fiscal</button>
+              <button data-main-tab="impots" data-page-key="codes" type="button">Codes IPP</button>
+              <button data-main-tab="impots" data-page-key="checks" type="button">Contrôles</button>
+              <button data-main-tab="impots" data-page-key="details" type="button">Détails des chiffres</button>
+              <button data-main-tab="impots" data-page-key="manual" type="button">Réglages / manuel</button>
+            </div>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <button id="sidebarSettingsBtn" type="button"><span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span></button>
+        </div>
+      </aside>
+
+      <div class="portal-main">
+        <div class="portal-topbar">
+          <button id="sidebarToggleBtn" class="sidebar-toggle" type="button" aria-label="Ouvrir le menu">☰</button>
+          <div class="topbar-context">
+            <strong id="topbarModuleTitle">Devis &amp; Factures</strong>
+            <span id="topbarPageTitle">Devis</span>
+          </div>
+          <input id="fullRestoreInput" type="file" accept="application/zip,.zip" class="hidden" />
+
+          <div class="user-actions">
+            <button id="globalSaveBtn" class="ghost icon-btn" title="Sauvegarder">💾</button>
+            <div id="currentUser" class="user-pill"></div>
+            <div id="settingsMenu" class="settings-menu">
+              <button id="settingsMenuBtn" class="settings-icon-btn ghost settings-gear-btn" type="button" title="Paramètres" aria-label="Paramètres">⚙️</button>
+              <div class="settings-dropdown" id="settingsDropdown">
+                <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
+                <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
+                <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+                <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
+                <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
+                <button id="sendVerificationBtn" type="button">Renvoyer email de vérification</button>
+                <button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
+                <div class="settings-separator"></div>
+                <button id="logoutBtn" class="danger-link" type="button">Déconnecter</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       <div class="workspace">
 
@@ -225,21 +266,22 @@
         </div>
 
         <div id="panel-devis" class="tab-panel active">
-          <iframe id="devisFrame" src="about:blank" data-src="devis-facture.html" title="Devis et Facture"></iframe>
+          <iframe id="devisFrame" src="about:blank" data-src="devis-facture.html?embedded=1" title="Devis et Facture"></iframe>
         </div>
 
         <div id="panel-compta" class="tab-panel">
-          <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html" title="Comptabilité"></iframe>
+          <iframe id="comptaFrame" src="about:blank" data-src="comptabilite.html?embedded=1" title="Comptabilité"></iframe>
         </div>
 
         <div id="panel-chantier" class="tab-panel">
-          <iframe id="chantierFrame" src="about:blank" data-src="suivi-client.html" title="Suivi client"></iframe>
+          <iframe id="chantierFrame" src="about:blank" data-src="suivi-client.html?embedded=1" title="Suivi client"></iframe>
         </div>
 
         <div id="panel-impots" class="tab-panel">
-          <iframe id="impotsFrame" src="about:blank" data-src="impots.html" title="Impôts IPP"></iframe>
+          <iframe id="impotsFrame" src="about:blank" data-src="impots.html?embedded=1" title="Impôts IPP"></iframe>
         </div>
 
+      </div>
       </div>
     </div>
   </section>

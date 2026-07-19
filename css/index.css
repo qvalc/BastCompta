@@ -1443,3 +1443,64 @@ iframe {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* ===== Navigation latérale BastCompta ===== */
+#portalScreen { min-height: 100vh; }
+.portal-shell { min-height: 100vh; display: flex; background: #f4f7fb; }
+.portal-main { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.portal-sidebar {
+  width: 286px; flex: 0 0 286px; min-height: 100vh; background: #075879; color: #fff;
+  display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; z-index: 50;
+  box-shadow: 8px 0 24px rgba(15, 23, 42, .08); overflow: hidden;
+}
+.sidebar-brand { min-height: 82px; padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; background: #064c69; border-bottom: 1px solid rgba(255,255,255,.12); }
+.sidebar-brand img { width: 174px; max-height: 50px; object-fit: contain; object-position: left center; filter: brightness(0) invert(1); }
+.sidebar-close { display: none; border: 0; background: transparent; color: white; font-size: 20px; cursor: pointer; }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 12px 0; scrollbar-width: thin; }
+.sidebar-home, .sidebar-module, .sidebar-submenu button, .sidebar-footer button {
+  width: 100%; border: 0; font-family: inherit; cursor: pointer; text-align: left;
+}
+.sidebar-home, .sidebar-module, .sidebar-footer button {
+  min-height: 48px; padding: 11px 18px; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px;
+  color: #fff; background: transparent; font-size: 15px; font-weight: 700;
+}
+.sidebar-home:hover, .sidebar-module:hover, .sidebar-footer button:hover { background: rgba(255,255,255,.09); }
+.sidebar-home.active, .sidebar-module.active { background: #fff; color: #075879; }
+.sidebar-icon { width: 24px; text-align: center; font-size: 19px; opacity: .9; }
+.sidebar-chevron { font-size: 18px; transition: transform .2s ease; }
+.sidebar-group.open .sidebar-chevron { transform: rotate(180deg); }
+.sidebar-group { border-bottom: 1px solid rgba(255,255,255,.12); }
+.sidebar-submenu { max-height: 0; overflow: hidden; background: rgba(2, 47, 68, .35); transition: max-height .25s ease; }
+.sidebar-group.open .sidebar-submenu { max-height: 620px; }
+.sidebar-submenu button { padding: 10px 18px 10px 56px; color: #d8eff8; background: transparent; font-size: 14px; position: relative; }
+.sidebar-submenu button::before { content: ''; position: absolute; left: 31px; top: 50%; width: 6px; height: 6px; border-radius: 50%; background: currentColor; transform: translateY(-50%); opacity: .55; }
+.sidebar-submenu button:hover { color: #fff; background: rgba(255,255,255,.08); }
+.sidebar-submenu button.active { color: #fff; background: rgba(255,255,255,.15); font-weight: 700; box-shadow: inset 4px 0 #ff8a00; }
+.sidebar-footer { border-top: 1px solid rgba(255,255,255,.15); background: #064c69; }
+.portal-topbar { min-height: 72px; padding: 10px 22px; display: flex; align-items: center; gap: 15px; justify-content: space-between; background: #fff; border-bottom: 1px solid #dce4ef; position: sticky; top: 0; z-index: 40; }
+.sidebar-toggle { display: none; border: 1px solid #d6dfeb; border-radius: 10px; background: #fff; width: 42px; height: 42px; font-size: 21px; cursor: pointer; }
+.topbar-context { min-width: 0; display: flex; flex-direction: column; margin-right: auto; }
+.topbar-context strong { color: #10233f; font-size: 17px; }
+.topbar-context span { color: #687890; font-size: 13px; margin-top: 2px; }
+.workspace { flex: 1; min-height: 0; padding: 0; }
+.workspace-head { display: none !important; }
+.tab-panel, .tab-panel.active { height: calc(100vh - 72px); }
+.tab-panel iframe { width: 100%; height: 100%; border: 0; background: #f4f7fb; }
+.portal-topbar .topbar-logo, .portal-topbar .main-tabs { display: none !important; }
+
+@media (max-width: 900px) {
+  .portal-sidebar { position: fixed; left: 0; top: 0; transform: translateX(-102%); transition: transform .25s ease; }
+  .portal-shell.sidebar-open .portal-sidebar { transform: translateX(0); }
+  .portal-shell.sidebar-open::after { content: ''; position: fixed; inset: 0; background: rgba(15,23,42,.42); z-index: 45; }
+  .portal-shell.sidebar-open .portal-sidebar { z-index: 60; }
+  .sidebar-toggle, .sidebar-close { display: inline-flex; align-items: center; justify-content: center; }
+  .portal-topbar { padding: 9px 12px; }
+  .user-pill { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+@media (max-width: 560px) {
+  .portal-sidebar { width: min(88vw, 310px); flex-basis: min(88vw, 310px); }
+  .topbar-context strong { font-size: 15px; }
+  .topbar-context span { font-size: 12px; }
+  .portal-topbar .icon-btn { display: none; }
+}

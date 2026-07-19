@@ -1,3 +1,4 @@
+if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Comptabilité
 
 const STORAGE_KEY = 'comptabilite-local-v1';
@@ -4217,5 +4218,15 @@ window.addEventListener('load', async () => {
     }, window.location.origin);
   } catch (error) {
     console.error('Impossible de demander le statut Drive au portail.', error);
+  }
+});
+
+// Navigation reçue depuis le menu latéral du portail.
+window.addEventListener('message', event => {
+  if (window.location.origin && window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+  const message = event.data || {};
+  if (message.type === 'BASTCOMPTA_SET_ACTIVE_PAGE' && pageDefs.some(page => page.key === message.pageKey)) {
+    activePage = message.pageKey;
+    render();
   }
 });

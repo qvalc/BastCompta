@@ -1,3 +1,4 @@
+if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Impôts IPP belge
 // Module indépendant : lit les données existantes sans modifier Devis/Facture, Comptabilité ou Suivi client.
 
@@ -723,3 +724,12 @@
     }
   });
 })();
+
+// Navigation reçue depuis le menu latéral du portail.
+window.addEventListener('message', event => {
+  if (window.location.origin && window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+  const message = event.data || {};
+  if (message.type === 'BASTCOMPTA_SET_ACTIVE_PAGE') {
+    window.goToPage?.(message.pageKey);
+  }
+});

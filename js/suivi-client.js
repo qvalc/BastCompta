@@ -1,3 +1,4 @@
+if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Suivi client
 
 const STORAGE_KEY = 'bastcompta-chantiers-v1';
@@ -3303,4 +3304,17 @@ window.addEventListener('load', () => {
     renderCrmClientDropdown();
     safePostToParent({ type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST' });
   }, 500);
+});
+
+// Actions rapides reçues depuis le menu latéral du portail.
+window.addEventListener('message', event => {
+  if (window.location.origin && window.location.origin !== 'null' && event.origin !== window.location.origin) return;
+  const message = event.data || {};
+  if (message.type !== 'BASTCOMPTA_CLIENT_ACTION') return;
+  if (message.action === 'new') window.openCrmClientModal?.();
+  if (message.action === 'overview') {
+    selectedProjectId = '';
+    render();
+    document.getElementById('searchInput')?.focus();
+  }
 });

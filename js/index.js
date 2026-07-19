@@ -2601,3 +2601,100 @@ helpTabs.forEach(tab => {
 });
 
 helpSearchInput?.addEventListener('input', filterHelpArticles);
+
+/* ===== Navigation latérale BastCompta ===== */
+(() => {
+  const shell = document.querySelector('.portal-shell');
+  const sidebar = document.getElementById('portalSidebar');
+  const toggleBtn = document.getElementById('sidebarToggleBtn');
+  const closeBtn = document.getElementById('sidebarCloseBtn');
+  const sidebarSettingsBtn = document.getElementById('sidebarSettingsBtn');
+  const moduleTitle = document.getElementById('topbarModuleTitle');
+  const pageTitle = document.getElementById('topbarPageTitle');
+  const navButtons = Array.from(document.querySelectorAll('.sidebar-nav [data-main-tab]'));
+  const groups = Array.from(document.querySelectorAll('.sidebar-group'));
+
+  const labels = {
+    devis: 'Devis & Factures',
+    compta: 'Comptabilité',
+    chantier: 'Suivi client',
+    impots: 'Impôts IPP'
+  };
+  const defaults = { devis: 'quote', compta: 'dashboard', impots: 'summary' };
+  const frames = { devis: devisFrame, compta: comptaFrame, chantier: chantierFrame, impots: impotsFrame };
+
+  function closeMobileSidebar() { shell?.classList.remove('sidebar-open'); }
+
+  function openGroup(tabName) {
+    groups.forEach(group => {
+      const open = group.dataset.sidebarGroup === tabName;
+      group.classList.toggle('open', open);
+      group.querySelector('.sidebar-module')?.setAttribute('aria-expanded', String(open));
+    });
+  }
+
+  function updateSidebarState(tabName, sourceButton = null) {
+    document.querySelectorAll('.sidebar-module').forEach(button => button.classList.toggle('active', button.dataset.mainTab === tabName));
+    document.querySelectorAll('.sidebar-home').forEach(button => button.classList.toggle('active', button === sourceButton));
+    document.querySelectorAll('.sidebar-submenu button').forEach(button => button.classList.toggle('active', button === sourceButton));
+    openGroup(tabName);
+    if (moduleTitle) moduleTitle.textContent = labels[tabName] || 'BastCompta';
+    if (pageTitle) pageTitle.textContent = sourceButton?.textContent?.trim() || labels[tabName] || '';
+  }
+
+  function sendNavigation(tabName, pageKey, clientAction) {
+    const frame = frames[tabName];
+    if (!frame) return;
+    const send = () => {
+      if (pageKey) frame.contentWindow?.postMessage({ type: 'BASTCOMPTA_SET_ACTIVE_PAGE', pageKey }, window.location.origin);
+      if (clientAction) frame.contentWindow?.postMessage({ type: 'BASTCOMPTA_CLIENT_ACTION', action: clientAction }, window.location.origin);
+    };
+    if (frame.contentDocument?.readyState === 'complete') send();
+    else frame.addEventListener('load', send, { once: true });
+  }
+
+  navButtons.forEach(button => {
+    button.addEventListener('click', event => {
+      const tabName = button.dataset.mainTab;
+      const isModuleHeader = button.classList.contains('sidebar-module');
+      const pageKey = button.dataset.pageKey || (isModuleHeader ? defaults[tabName] : '');
+      const clientAction = button.dataset.clientAction || '';
+
+      if (isModuleHeader && button.closest('.sidebar-group')?.classList.contains('open') && button.classList.contains('active')) {
+        const group = button.closest('.sidebar-group');
+        group.classList.toggle('open');
+        button.setAttribute('aria-expanded', String(group.classList.contains('open')));
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      switchMainTab(tabName);
+      const actualTab = document.querySelector('.sidebar-module.active')?.dataset.mainTab || tabName;
+      if (actualTab !== tabName) {
+        const fallback = document.querySelector(`.sidebar-submenu [data-main-tab="${actualTab}"][data-page-key="${defaults[actualTab] || ''}"]`);
+        updateSidebarState(actualTab, fallback);
+        closeMobileSidebar();
+        event.stopImmediatePropagation();
+        return;
+      }
+      updateSidebarState(tabName, isModuleHeader ? null : button);
+      sendNavigation(tabName, pageKey, clientAction);
+      closeMobileSidebar();
+      event.stopImmediatePropagation();
+    }, true);
+  });
+
+  toggleBtn?.addEventListener('click', () => shell?.classList.add('sidebar-open'));
+  closeBtn?.addEventListener('click', closeMobileSidebar);
+  shell?.addEventListener('click', event => {
+    if (shell.classList.contains('sidebar-open') && event.target === shell) closeMobileSidebar();
+  });
+  sidebarSettingsBtn?.addEventListener('click', event => {
+    settingsMenu?.classList.add('open');
+    closeMobileSidebar();
+    event.stopPropagation();
+  });
+
+  window.addEventListener('resize', () => { if (window.innerWidth > 900) closeMobileSidebar(); });
+  updateSidebarState('devis', document.querySelector('.sidebar-submenu [data-main-tab="devis"][data-page-key="quote"]'));
+})();

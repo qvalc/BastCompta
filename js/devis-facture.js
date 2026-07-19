@@ -1,3 +1,4 @@
+if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Devis & Facture
 
 const STORAGE_KEY = 'devis-facture-style-vrai-document';

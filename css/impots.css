@@ -149,3 +149,8 @@ label { display: block; color: var(--muted); font-size: 13px; font-weight: 800; 
         font-size: 16px;
     }
 }
+
+/* Affichage intégré au portail : la navigation des onglets est assurée par le menu latéral. */
+body.bast-embedded .tabs { display: none !important; }
+body.bast-embedded .app { max-width: none; min-height: 100vh; }
+body.bast-embedded .topbar { position: relative; top: auto; }
