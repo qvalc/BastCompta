@@ -4630,7 +4630,7 @@ function renderTarifs() {
         </aside>
         <section class="tarifs-main">
           <div class="tarifs-search no-print">
-            <div><label>Rechercher un poste</label><input id="tarifSearchInput" type="search" value="${escapeHtml(tarifSearchTerm)}" oninput="updateTarifSearch(this.value)" placeholder="Ex. bloc, nettoyage, haie..."></div>
+            <div><label>Rechercher un poste</label><input id="tarifSearchInput" type="search" value="${escapeHtml(tarifSearchTerm)}" oninput="updateTarifSearch(this.value)" placeholder="Recherche"></div>
             <div><label>Filtrer par catégorie</label><select onchange="tarifCategoryFilter=this.value; refreshTarifSearchResults(); render()"><option value="Toutes">Toutes les catégories</option>${renderTarifCategoryOptions(tarifCategoryFilter)}</select></div>
           </div>
           <div id="tarifSearchResultsWrap">${renderTarifSearchResults()}</div>
