@@ -1911,3 +1911,71 @@ body.bast-embedded .page.active {
 .tarif-category-group[open] {
     overflow: visible;
 }
+
+
+/* Tarifs : renommer, déplacer, conversion et glisser-déposer */
+.tarif-action-separator {
+    height: 1px;
+    margin: 4px 5px;
+    background: var(--line);
+}
+.tarif-post-row[draggable="true"] { cursor: grab; }
+.tarif-post-row[draggable="true"]:active { cursor: grabbing; }
+.tarif-post-row.is-dragging { opacity: .45; }
+.tarif-category-dropzone { transition: background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.tarif-category-dropzone.drag-over {
+    background: #eef7ee !important;
+    border-color: #6b946f !important;
+    box-shadow: inset 0 0 0 2px rgba(49, 95, 59, .16);
+}
+.tarif-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(17, 24, 39, .42);
+}
+.tarif-modal {
+    width: min(460px, 100%);
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 24px 70px rgba(17, 24, 39, .25);
+}
+.tarif-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.tarif-modal-head h3 { margin: 0; font-size: 19px; }
+.tarif-modal label { font-weight: 800; color: var(--muted); }
+.tarif-modal input,
+.tarif-modal select { border-radius: 9px; padding: 10px 11px; font-size: 14px; }
+.tarif-modal-close {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 24px;
+    color: var(--muted);
+}
+.tarif-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+.tarif-modal-confirm.primary {
+    background: #315f3b;
+    border-color: #315f3b;
+    color: #fff;
+}

@@ -4327,7 +4327,9 @@ function rememberTarifCategoryGroupState(key, isOpen) {
 }
 
 function renderTarifActionMenu(items = []) {
-  const buttons = items.map(item => `
+  const buttons = items.map(item => item.separator
+    ? '<div class="tarif-action-separator" role="separator"></div>'
+    : `
     <button type="button" class="${item.danger ? 'danger-item' : ''}" onclick="event.preventDefault(); event.stopPropagation(); this.closest('details').removeAttribute('open'); ${item.action}">${escapeHtml(item.label)}</button>
   `).join('');
   return `
@@ -4362,17 +4364,21 @@ function renderTarifPostList() {
     group.items.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }));
     const shouldOpen = tarifOpenCategoryGroups.has(group.key);
     return `
-      <details class="tarif-category-group" ${shouldOpen ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(group.key)}', this.open)">
-        <summary>
+      <details class="tarif-category-group" ${shouldOpen ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(group.key)}', this.open)" data-category-name="${escapeHtml(group.label === 'Sans catégorie' ? '' : group.label)}">
+        <summary class="tarif-category-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInCategory(event, '${escapeHtml(group.label === 'Sans catégorie' ? '' : group.label)}')">
           <span>${escapeHtml(group.label)}</span>
           <span class="tarif-category-count">${group.items.length}</span>
         </summary>
         <div class="tarif-category-items">
           ${group.items.map(t => `
-            <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
+            <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" draggable="true" ondragstart="startTarifPostDrag(event, '${escapeHtml(t.id)}')" ondragend="endTarifPostDrag(event)" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
               <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
               ${renderTarifActionMenu([
+                { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
+                { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
                 { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+                { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
+                { separator: true },
                 { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
               ])}
             </div>
@@ -4388,9 +4394,12 @@ function renderManagedTarifCategories() {
   data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
   if (!data.tarifs.categories.length) return '<p class="tarifs-muted">Aucune catégorie.</p>';
   return data.tarifs.categories.map(c => `
-    <div class="tarif-category-row">
+    <div class="tarif-category-row tarif-category-dropzone" data-category-name="${escapeHtml(c)}" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInCategory(event, '${escapeHtml(c)}')">
       <span>${escapeHtml(c)}</span>
       ${renderTarifActionMenu([
+        { label: 'Renommer', action: `renameTarifCategory('${escapeHtml(c)}')` },
+        { label: 'Convertir en poste', action: `convertTarifCategoryToPost('${escapeHtml(c)}')` },
+        { separator: true },
         { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
       ])}
     </div>
@@ -4410,7 +4419,11 @@ function renderTarifSearchResults() {
       </div>
       <button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>
       ${renderTarifActionMenu([
+        { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
+        { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
         { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+        { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
+        { separator: true },
         { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
       ])}
     </div>
@@ -4474,7 +4487,11 @@ function renderTarifEditor() {
           <button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
           <button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
           ${renderTarifActionMenu([
+            { label: 'Renommer', action: `renameTarifPost('${escapeHtml(tarif.id)}')` },
+            { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(tarif.id)}')` },
             { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` },
+            { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(tarif.id)}')` },
+            { separator: true },
             { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }
           ])}
         </div>
@@ -4752,6 +4769,163 @@ function deleteTarifCategory(name) {
   render();
 }
 
+
+function closeTarifModal() {
+  const modal = document.getElementById('tarifModalOverlay');
+  if (modal) modal.remove();
+}
+
+function openTarifModal({ title, label, value = '', type = 'text', options = [], confirmLabel = 'Enregistrer', onConfirm }) {
+  closeTarifModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'tarifModalOverlay';
+  overlay.className = 'tarif-modal-overlay';
+  const fieldHtml = type === 'select'
+    ? `<select id="tarifModalField">${options.map(option => `<option value="${escapeHtml(option.value)}" ${option.value === value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select>`
+    : `<input id="tarifModalField" type="text" value="${escapeHtml(value)}" autocomplete="off">`;
+  overlay.innerHTML = `
+    <div class="tarif-modal" role="dialog" aria-modal="true" aria-labelledby="tarifModalTitle">
+      <div class="tarif-modal-head">
+        <h3 id="tarifModalTitle">${escapeHtml(title)}</h3>
+        <button type="button" class="tarif-modal-close" aria-label="Fermer">×</button>
+      </div>
+      <label for="tarifModalField">${escapeHtml(label)}</label>
+      ${fieldHtml}
+      <div class="tarif-modal-actions">
+        <button type="button" class="tarif-modal-cancel">Annuler</button>
+        <button type="button" class="primary tarif-modal-confirm">${escapeHtml(confirmLabel)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const field = document.getElementById('tarifModalField');
+  const confirm = () => {
+    const result = String(field?.value ?? '').trim();
+    if (!result && type !== 'select') return field?.focus();
+    if (typeof onConfirm === 'function' && onConfirm(result) === false) return;
+    closeTarifModal();
+  };
+  overlay.querySelector('.tarif-modal-close').onclick = closeTarifModal;
+  overlay.querySelector('.tarif-modal-cancel').onclick = closeTarifModal;
+  overlay.querySelector('.tarif-modal-confirm').onclick = confirm;
+  overlay.addEventListener('click', event => { if (event.target === overlay) closeTarifModal(); });
+  field?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); confirm(); }
+    if (event.key === 'Escape') closeTarifModal();
+  });
+  setTimeout(() => { field?.focus(); if (type !== 'select') field?.select(); }, 0);
+}
+
+function renameTarifPost(id) {
+  ensureTarifsData();
+  const tarif = data.tarifs.items.find(item => item.id === id);
+  if (!tarif) return;
+  openTarifModal({
+    title: 'Renommer le poste', label: 'Nouveau nom', value: tarif.poste || '',
+    onConfirm: value => {
+      tarif.poste = value;
+      notifyPortalBusinessChange('Poste tarifaire renommé');
+      saveTarifsData(); render();
+    }
+  });
+}
+
+function renameTarifCategory(name) {
+  ensureTarifsData();
+  openTarifModal({
+    title: 'Renommer la catégorie', label: 'Nouveau nom', value: name,
+    onConfirm: value => {
+      if (normalizeTarifText(value) !== normalizeTarifText(name) && getTarifCategories().some(c => normalizeTarifText(c) === normalizeTarifText(value))) {
+        alert('Cette catégorie existe déjà.'); return false;
+      }
+      data.tarifs.categories = cleanTarifCategories(data.tarifs.categories.map(c => c === name ? value : c));
+      data.tarifs.items.forEach(item => { if (item.categorie === name) item.categorie = value; });
+      if (tarifCategoryFilter === name) tarifCategoryFilter = value;
+      tarifOpenCategoryGroups.delete(getTarifGroupKey(name));
+      tarifOpenCategoryGroups.add(getTarifGroupKey(value));
+      notifyPortalBusinessChange('Catégorie tarifaire renommée');
+      saveTarifsData(); render();
+    }
+  });
+}
+
+function moveTarifPostToCategory(id, category) {
+  ensureTarifsData();
+  const tarif = data.tarifs.items.find(item => item.id === id);
+  if (!tarif) return;
+  tarif.categorie = category === '__NONE__' ? '' : category;
+  if (category && category !== '__NONE__' && !data.tarifs.categories.some(c => normalizeTarifText(c) === normalizeTarifText(category))) {
+    data.tarifs.categories.push(category);
+    data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
+  }
+  tarifOpenCategoryGroups.add(getTarifGroupKey(tarif.categorie));
+  notifyPortalBusinessChange('Poste tarifaire déplacé');
+  saveTarifsData(); render();
+}
+
+function openMoveTarifPost(id) {
+  ensureTarifsData();
+  const tarif = data.tarifs.items.find(item => item.id === id);
+  if (!tarif) return;
+  const options = [{ value: '__NONE__', label: 'Sans catégorie' }, ...getTarifCategories().map(c => ({ value: c, label: c }))];
+  openTarifModal({
+    title: 'Déplacer le poste', label: 'Catégorie de destination', type: 'select',
+    value: tarif.categorie || '__NONE__', options, confirmLabel: 'Déplacer',
+    onConfirm: value => moveTarifPostToCategory(id, value)
+  });
+}
+
+function startTarifPostDrag(event, id) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', id);
+  event.currentTarget.classList.add('is-dragging');
+}
+function endTarifPostDrag(event) {
+  event.currentTarget.classList.remove('is-dragging');
+  document.querySelectorAll('.tarif-category-dropzone.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+function handleTarifDragOver(event) {
+  event.preventDefault(); event.dataTransfer.dropEffect = 'move';
+  event.currentTarget.classList.add('drag-over');
+}
+function handleTarifDragLeave(event) { event.currentTarget.classList.remove('drag-over'); }
+function dropTarifPostInCategory(event, category) {
+  event.preventDefault(); event.stopPropagation();
+  event.currentTarget.classList.remove('drag-over');
+  const id = event.dataTransfer.getData('text/plain');
+  if (id) moveTarifPostToCategory(id, category || '__NONE__');
+}
+
+function convertTarifPostToCategory(id) {
+  ensureTarifsData();
+  const index = data.tarifs.items.findIndex(item => item.id === id);
+  if (index < 0) return;
+  const tarif = data.tarifs.items[index];
+  const name = String(tarif.poste || '').trim();
+  if (!name) return alert('Donne d’abord un nom à ce poste.');
+  if (!confirm(`Convertir « ${name} » en catégorie ? La fiche du poste sera supprimée.`)) return;
+  if (!getTarifCategories().some(c => normalizeTarifText(c) === normalizeTarifText(name))) data.tarifs.categories.push(name);
+  data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
+  data.tarifs.items.splice(index, 1);
+  if (selectedTarifId === id) selectedTarifId = '';
+  notifyPortalBusinessChange('Poste converti en catégorie');
+  saveTarifsData(); render();
+}
+
+function convertTarifCategoryToPost(name) {
+  ensureTarifsData();
+  const used = data.tarifs.items.some(item => item.categorie === name);
+  if (used) return alert('Cette catégorie contient encore des postes. Déplace-les avant de la convertir.');
+  if (!confirm(`Convertir la catégorie « ${name} » en poste ?`)) return;
+  const item = emptyTarifItem();
+  item.poste = name;
+  data.tarifs.items.unshift(item);
+  data.tarifs.categories = data.tarifs.categories.filter(c => c !== name);
+  selectedTarifId = item.id;
+  tarifPostDrawerOpen = true;
+  notifyPortalBusinessChange('Catégorie convertie en poste');
+  saveTarifsData(); render();
+}
+
 function duplicateTarifPostById(id) {
   ensureTarifsData();
   const index = data.tarifs.items.findIndex(t => t.id === id);
@@ -4938,6 +5112,18 @@ Object.assign(window, {
   deleteTarifComponent,
   addTarifCategoryFromInput,
   deleteTarifCategory,
+  renameTarifPost,
+  renameTarifCategory,
+  openMoveTarifPost,
+  moveTarifPostToCategory,
+  startTarifPostDrag,
+  endTarifPostDrag,
+  handleTarifDragOver,
+  handleTarifDragLeave,
+  dropTarifPostInCategory,
+  convertTarifPostToCategory,
+  convertTarifCategoryToPost,
+  closeTarifModal,
   duplicateTarifPost,
   addTarifToDocument,
   exportTarifsJson,
