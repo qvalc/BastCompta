@@ -2283,3 +2283,86 @@ body.portal-active .app {
     .sync-status-pill { padding: 0 9px; }
     .sync-status-pill #syncStatusText { display: none; }
 }
+
+/* =========================================================
+   Menu latéral : modules défilants + paramètres fixés en bas
+   ========================================================= */
+.portal-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.sidebar-brand {
+    flex: 0 0 auto;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+}
+
+.sidebar-nav-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 0 0;
+    scrollbar-width: thin;
+}
+
+.sidebar-settings-group {
+    flex: 0 0 auto;
+    margin-top: auto;
+    position: relative;
+    z-index: 5;
+    background: #075879;
+    border-top: 1px solid rgba(255, 255, 255, .15);
+}
+
+.sidebar-settings-group .settings-menu {
+    position: relative;
+    max-height: min(420px, 55vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-settings-group .settings-dropdown {
+    position: static;
+    top: auto;
+    right: auto;
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: #064c69;
+    padding: 7px 10px 10px;
+}
+
+.sidebar-settings-group .settings-dropdown button {
+    color: #fff;
+    background: transparent;
+    border-color: rgba(255, 255, 255, .12);
+}
+
+.sidebar-settings-group .settings-dropdown button:hover {
+    background: rgba(255, 255, 255, .08);
+}
+
+.sidebar-settings-group .settings-dropdown button.danger-link {
+    color: #fecaca;
+    background: rgba(185, 28, 28, .12);
+    border-color: rgba(254, 202, 202, .25);
+}
+
+.sidebar-settings-group .settings-separator {
+    background: rgba(255, 255, 255, .15);
+}
+
