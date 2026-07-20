@@ -1789,3 +1789,125 @@ body.bast-embedded .page.active {
   max-height: none !important;
   overflow: visible !important;
 }
+
+/* ================================
+   Tarifs : menus discrets et actions
+   ================================ */
+.tarif-action-menu {
+    position: relative;
+    display: inline-block;
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.tarif-action-menu > summary {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 1px;
+    list-style: none;
+    user-select: none;
+}
+
+.tarif-action-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.tarif-action-menu > summary:hover,
+.tarif-action-menu[open] > summary {
+    color: var(--ink);
+    background: #f3f4f6;
+    border-color: var(--line);
+}
+
+.tarif-action-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 60;
+    min-width: 170px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 14px 34px rgba(17, 24, 39, 0.16);
+    display: grid;
+    gap: 3px;
+}
+
+.tarif-action-panel button {
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    text-align: left;
+    font-weight: 700;
+    box-shadow: none;
+}
+
+.tarif-action-panel button:hover {
+    background: #f3f4f6;
+}
+
+.tarif-action-panel button.danger-item {
+    color: var(--danger);
+}
+
+.tarif-action-panel button.danger-item:hover {
+    background: #fff1f2;
+}
+
+.tarif-post-row,
+.tarif-category-row,
+.tarif-result-item,
+.tarif-card-head,
+.tarif-components-table td {
+    overflow: visible;
+}
+
+/* Deux actions proches du style des devis, mais clairement différenciées. */
+.tarif-card-actions .tarif-add-quote,
+.tarif-card-actions .tarif-add-invoice {
+    color: #fff;
+    border-radius: 9px;
+    box-shadow: 0 3px 10px rgba(17, 24, 39, 0.10);
+}
+
+.tarif-card-actions .tarif-add-quote {
+    background: #315f3b;
+    border-color: #315f3b;
+}
+
+.tarif-card-actions .tarif-add-quote:hover {
+    background: #294f32;
+    border-color: #294f32;
+}
+
+.tarif-card-actions .tarif-add-invoice {
+    background: #526276;
+    border-color: #526276;
+}
+
+.tarif-card-actions .tarif-add-invoice:hover {
+    background: #445264;
+    border-color: #445264;
+}
+
+.tarifs-drawer[open],
+.tarif-category-group[open] {
+    overflow: visible;
+}

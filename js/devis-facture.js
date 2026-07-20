@@ -4176,7 +4176,7 @@ let tarifCategoryFilter = 'Toutes';
 let selectedTarifId = '';
 let tarifPostDrawerOpen = false;
 let tarifCategoryDrawerOpen = false;
-let tarifOpenCategoryGroups = new Set(['__default_open__']);
+let tarifOpenCategoryGroups = new Set();
 let lastTarifAddClickAt = 0;
 
 function ensureTarifsData() {
@@ -4326,6 +4326,18 @@ function rememberTarifCategoryGroupState(key, isOpen) {
   }
 }
 
+function renderTarifActionMenu(items = []) {
+  const buttons = items.map(item => `
+    <button type="button" class="${item.danger ? 'danger-item' : ''}" onclick="event.preventDefault(); event.stopPropagation(); this.closest('details').removeAttribute('open'); ${item.action}">${escapeHtml(item.label)}</button>
+  `).join('');
+  return `
+    <details class="tarif-action-menu" onclick="event.stopPropagation()" ontoggle="if(this.open) document.querySelectorAll('.tarif-action-menu[open]').forEach(menu => { if (menu !== this) menu.removeAttribute('open'); })">
+      <summary title="Actions" aria-label="Actions">•••</summary>
+      <div class="tarif-action-panel">${buttons}</div>
+    </details>
+  `;
+}
+
 function renderTarifPostList() {
   ensureTarifsData();
   if (!data.tarifs.items.length) return '<p class="tarifs-muted">Aucun poste.</p>';
@@ -4348,8 +4360,7 @@ function renderTarifPostList() {
 
   return sortedGroups.map(group => {
     group.items.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }));
-    const containsSelected = group.items.some(t => t.id === selectedTarifId);
-    const shouldOpen = containsSelected || tarifOpenCategoryGroups.has(group.key) || tarifOpenCategoryGroups.has('__default_open__');
+    const shouldOpen = tarifOpenCategoryGroups.has(group.key);
     return `
       <details class="tarif-category-group" ${shouldOpen ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(group.key)}', this.open)">
         <summary>
@@ -4360,7 +4371,10 @@ function renderTarifPostList() {
           ${group.items.map(t => `
             <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
               <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
-              <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+              ${renderTarifActionMenu([
+                { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+                { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
+              ])}
             </div>
           `).join('')}
         </div>
@@ -4376,7 +4390,9 @@ function renderManagedTarifCategories() {
   return data.tarifs.categories.map(c => `
     <div class="tarif-category-row">
       <span>${escapeHtml(c)}</span>
-      <button type="button" class="tarif-x" onclick="deleteTarifCategory('${escapeHtml(c)}')" title="Supprimer" aria-label="Supprimer">×</button>
+      ${renderTarifActionMenu([
+        { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
+      ])}
     </div>
   `).join('');
 }
@@ -4393,7 +4409,10 @@ function renderTarifSearchResults() {
         <span>${escapeHtml(t.categorie || 'Sans catégorie')} · ${money(tarifNumber(t.prix))} HTVA / ${escapeHtml(t.mesure || 'unité')}</span>
       </div>
       <button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>
-      <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(t.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+      ${renderTarifActionMenu([
+        { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+        { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
+      ])}
     </div>
   `).join('')}</div>`;
 }
@@ -4423,7 +4442,9 @@ function renderTarifComponents(tarif) {
       <td><input value="${escapeHtml(component.quantite)}" oninput="updateTarifComponent(${componentIndex}, 'quantite', this.value)" inputmode="decimal"></td>
       <td><input value="${escapeHtml(component.prixUnitaire)}" oninput="updateTarifComponent(${componentIndex}, 'prixUnitaire', this.value)" inputmode="decimal"></td>
       <td>${money(tarifComponentTotal(component))}</td>
-      <td class="no-print"><button type="button" class="tarif-x" onclick="deleteTarifComponent(${componentIndex})" title="Supprimer" aria-label="Supprimer">×</button></td>
+      <td class="no-print">${renderTarifActionMenu([
+        { label: 'Supprimer', action: `deleteTarifComponent(${componentIndex})`, danger: true }
+      ])}</td>
     </tr>
   `).join('');
 }
@@ -4450,10 +4471,12 @@ function renderTarifEditor() {
           </div>
         </div>
         <div class="tarif-card-actions no-print">
-          <button type="button" class="primary" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
-          <button type="button" class="primary" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
-          <button type="button" onclick="duplicateTarifPost()">Copier fiche</button>
-          <button type="button" class="tarif-x" onclick="deleteTarifPost('${escapeHtml(tarif.id)}')" title="Supprimer" aria-label="Supprimer">×</button>
+          <button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
+          <button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
+          ${renderTarifActionMenu([
+            { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` },
+            { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }
+          ])}
         </div>
       </div>
       <div class="tarif-grid">
@@ -4729,8 +4752,9 @@ function deleteTarifCategory(name) {
   render();
 }
 
-function duplicateTarifPost() {
-  const index = getSelectedTarifIndex();
+function duplicateTarifPostById(id) {
+  ensureTarifsData();
+  const index = data.tarifs.items.findIndex(t => t.id === id);
   if (index < 0) return;
   notifyPortalBusinessChange('Poste tarifaire dupliqué');
   const source = data.tarifs.items[index];
@@ -4743,6 +4767,11 @@ function duplicateTarifPost() {
   selectedTarifId = copy.id;
   saveTarifsData();
   render();
+}
+
+function duplicateTarifPost() {
+  const tarif = getSelectedTarif();
+  if (tarif) duplicateTarifPostById(tarif.id);
 }
 
 function addTarifToDocument(docKey) {
