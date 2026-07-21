@@ -1998,3 +1998,55 @@ body.bast-embedded .page.active {
 .tarif-no-subcategory { padding:5px 8px; font-style:italic; }
 .tarif-subcategory-dropzone.drag-over { background:#eef7ee !important; border-color:#6b946f !important; box-shadow:inset 0 0 0 2px rgba(49,95,59,.16); }
 .tarif-modal select + label { margin-top:4px; }
+
+/* ================================
+   Correctif mobile : tableau des informations du document
+   Conserve toutes les colonnes sur une seule ligne et permet
+   le défilement horizontal au doigt, comme le tableau des lignes.
+   ================================ */
+.meta-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+
+@media (max-width: 700px) {
+    .meta-table {
+        width: 760px;
+        min-width: 760px;
+        table-layout: fixed;
+    }
+
+    .meta-table th,
+    .meta-table td {
+        min-width: 0;
+    }
+
+    .meta-table th:nth-child(1),
+    .meta-table td:nth-child(1) {
+        width: 168px;
+    }
+
+    .meta-table th:nth-child(2),
+    .meta-table td:nth-child(2) {
+        width: 160px;
+    }
+
+    .meta-table th:nth-child(3),
+    .meta-table td:nth-child(3) {
+        width: 145px;
+    }
+
+    .meta-table th:nth-child(4),
+    .meta-table td:nth-child(4) {
+        width: 145px;
+    }
+
+    .meta-table th:nth-child(5),
+    .meta-table td:nth-child(5) {
+        width: 142px;
+    }
+}
