@@ -3293,6 +3293,23 @@ function normalizeVatNumber(value) {
   return peppolTrim(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+function getBelgianEnterpriseNumber(value) {
+  const normalized = normalizeVatNumber(value);
+  const digits = normalized.replace(/\D/g, '');
+  return digits.length === 10 ? digits : '';
+}
+
+function isValidBelgianEnterpriseNumber(value) {
+  const number = getBelgianEnterpriseNumber(value);
+  if (!number) return false;
+
+  const base = Number(number.slice(0, 8));
+  const check = Number(number.slice(8));
+  const expected = 97 - (base % 97);
+
+  return check === expected;
+}
+
 function getVatCountry(vatNumber) {
   const normalized = normalizeVatNumber(vatNumber);
   return /^[A-Z]{2}/.test(normalized) ? normalized.slice(0, 2) : 'BE';
@@ -3328,10 +3345,10 @@ function getPeppolChecks() {
     { ok: !!peppolTrim(invoice.dueDate), label: 'Date d’échéance renseignée' },
     { ok: !!peppolTrim(invoice.clientName), label: 'Nom du client renseigné' },
     { ok: !!peppolTrim(invoice.address), label: 'Adresse client renseignée' },
-    { ok: !!peppolTrim(invoice.clientVat), label: 'N° TVA client renseigné' },
+    { ok: isValidBelgianEnterpriseNumber(invoice.clientVat), label: 'N° d’entreprise Peppol client belge valide (10 chiffres)' },
     { ok: !!peppolTrim(invoice.clientEmail), label: 'Email client renseigné' },
     { ok: !!peppolTrim(data.company.name), label: 'Nom de votre société renseigné' },
-    { ok: !!peppolTrim(data.company.vat), label: 'N° TVA de votre société renseigné' },
+    { ok: isValidBelgianEnterpriseNumber(data.company.vat), label: 'N° d’entreprise Peppol vendeur belge valide (10 chiffres)' },
     { ok: !!peppolTrim(data.company.iban), label: 'IBAN renseigné' },
     { ok: lines.length > 0, label: 'Au moins une ligne de facture présente' },
     { ok: totals.tvac > 0, label: 'Montant total supérieur à 0 €' }
@@ -3421,8 +3438,21 @@ function buildPeppolXml() {
   const customerVat = normalizeVatNumber(invoice.clientVat);
   const supplierCountry = getVatCountry(supplierVat);
   const customerCountry = getVatCountry(customerVat);
-  const supplierEndpoint = supplierVat || 'BE0000000000';
-  const customerEndpoint = customerVat || 'BE0000000000';
+  const supplierEndpoint = getBelgianEnterpriseNumber(supplierVat);
+  const customerEndpoint = getBelgianEnterpriseNumber(customerVat);
+
+  if (!isValidBelgianEnterpriseNumber(supplierEndpoint)) {
+    throw new Error(
+      'Le numéro d’entreprise Peppol du vendeur est invalide. Indiquez un numéro BCE belge valide de 10 chiffres.'
+    );
+  }
+
+  if (!isValidBelgianEnterpriseNumber(customerEndpoint)) {
+    throw new Error(
+      'Le numéro d’entreprise Peppol du client est invalide. Indiquez un numéro BCE belge valide de 10 chiffres.'
+    );
+  }
+
   const issueDate = invoice.date || new Date().toISOString().slice(0, 10);
   const dueDate = invoice.dueDate || issueDate;
   const invoiceNumber = peppolTrim(invoice.documentNumber) || 'FACTURE-SANS-NUMERO';
@@ -3559,7 +3589,14 @@ ${invoiceLines}
 function downloadPeppolXmlForCurrentInvoice() {
   const readiness = getPeppolReadiness();
   if (readiness.level === 'danger' && !confirm('La facture est encore incomplète. Exporter quand même le XML ?')) return;
-  const xml = buildPeppolXml();
+  let xml;
+  try {
+    xml = buildPeppolXml();
+  } catch (error) {
+    alert(error?.message || 'Impossible de générer le fichier Peppol.');
+    return;
+  }
+
   const number = peppolSafeFileName(data.invoice.documentNumber, 'facture');
   const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
