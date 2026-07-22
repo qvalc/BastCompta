@@ -3552,10 +3552,10 @@ function buildPeppolXml() {
         <cbc:StreetName>${xmlEscape(invoice.address)}</cbc:StreetName>
         <cac:Country><cbc:IdentificationCode>${xmlEscape(customerCountry)}</cbc:IdentificationCode></cac:Country>
       </cac:PostalAddress>
-      <cac:PartyTaxScheme>
+      ${customerVat ? `<cac:PartyTaxScheme>
         <cbc:CompanyID>${xmlEscape(customerVat)}</cbc:CompanyID>
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-      </cac:PartyTaxScheme>
+      </cac:PartyTaxScheme>` : ''}
       <cac:PartyLegalEntity><cbc:RegistrationName>${xmlEscape(invoice.clientName)}</cbc:RegistrationName></cac:PartyLegalEntity>
       <cac:Contact><cbc:ElectronicMail>${xmlEscape(invoice.clientEmail)}</cbc:ElectronicMail></cac:Contact>
     </cac:Party>
