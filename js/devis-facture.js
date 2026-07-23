@@ -3761,7 +3761,7 @@ function renderMetaTable(docKey, isQuote) {
                 </td>
                 <td><input type="date" value="${escapeAttr(isQuote ? doc.validity : doc.dueDate)}" onchange="setDocumentField('${docKey}', '${isQuote ? 'validity' : 'dueDate'}', this.value)"></td>
                 <td><input value="${escapeAttr(doc.clientNumber)}" onchange="setDocumentField('${docKey}', 'clientNumber', this.value)"></td>
-                <td><input value="${escapeAttr(doc.clientVat)}" onchange="setDocumentField('${docKey}', 'clientVat', this.value)"></td>
+                <td><input value="${escapeAttr(doc.clientVat)}" placeholder="Ex. BE0123456789" onchange="setDocumentField('${docKey}', 'clientVat', this.value)"></td>
                 <td><input type="date" value="${escapeAttr(doc.date)}" onchange="setDocumentField('${docKey}', 'date', this.value)"></td>
               </tr>
             </tbody>
@@ -4242,7 +4242,7 @@ function saveTarifsData() {
       window.dispatchEvent(new CustomEvent('BASTCOMPTA_TARIFS_CHANGED', {
         detail: { source: 'devis-facture', tarifs: data.tarifs, updatedAt: new Date().toISOString() }
       }));
-    } catch {}
+    } catch { }
   } catch (error) {
     console.error('Sauvegarde tarifs impossible.', error);
   }
@@ -4413,13 +4413,13 @@ function renderTarifPostList() {
             <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" draggable="true" ondragstart="startTarifPostDrag(event, '${escapeHtml(t.id)}')" ondragend="endTarifPostDrag(event)" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
               <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
               ${renderTarifActionMenu([
-                { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
-                { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
-                { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
-                { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
-                { separator: true },
-                { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
-              ])}
+      { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
+      { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
+      { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+      { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
+      { separator: true },
+      { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
+    ])}
             </div>
           `).join('')}
         </div>
@@ -4436,11 +4436,11 @@ function renderManagedTarifCategories() {
     <div class="tarif-category-row tarif-category-dropzone" data-category-name="${escapeHtml(c)}" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInCategory(event, '${escapeHtml(c)}')">
       <span>${escapeHtml(c)}</span>
       ${renderTarifActionMenu([
-        { label: 'Renommer', action: `renameTarifCategory('${escapeHtml(c)}')` },
-        { label: 'Convertir en poste', action: `convertTarifCategoryToPost('${escapeHtml(c)}')` },
-        { separator: true },
-        { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
-      ])}
+    { label: 'Renommer', action: `renameTarifCategory('${escapeHtml(c)}')` },
+    { label: 'Convertir en poste', action: `convertTarifCategoryToPost('${escapeHtml(c)}')` },
+    { separator: true },
+    { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
+  ])}
     </div>
   `).join('');
 }
@@ -4458,13 +4458,13 @@ function renderTarifSearchResults() {
       </div>
       <button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>
       ${renderTarifActionMenu([
-        { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
-        { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
-        { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
-        { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
-        { separator: true },
-        { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
-      ])}
+    { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
+    { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
+    { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+    { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
+    { separator: true },
+    { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
+  ])}
     </div>
   `).join('')}</div>`;
 }
@@ -4495,8 +4495,8 @@ function renderTarifComponents(tarif) {
       <td><input value="${escapeHtml(component.prixUnitaire)}" oninput="updateTarifComponent(${componentIndex}, 'prixUnitaire', this.value)" inputmode="decimal"></td>
       <td>${money(tarifComponentTotal(component))}</td>
       <td class="no-print">${renderTarifActionMenu([
-        { label: 'Supprimer', action: `deleteTarifComponent(${componentIndex})`, danger: true }
-      ])}</td>
+    { label: 'Supprimer', action: `deleteTarifComponent(${componentIndex})`, danger: true }
+  ])}</td>
     </tr>
   `).join('');
 }
@@ -4526,13 +4526,13 @@ function renderTarifEditor() {
           <button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
           <button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
           ${renderTarifActionMenu([
-            { label: 'Renommer', action: `renameTarifPost('${escapeHtml(tarif.id)}')` },
-            { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(tarif.id)}')` },
-            { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` },
-            { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(tarif.id)}')` },
-            { separator: true },
-            { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }
-          ])}
+    { label: 'Renommer', action: `renameTarifPost('${escapeHtml(tarif.id)}')` },
+    { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(tarif.id)}')` },
+    { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` },
+    { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(tarif.id)}')` },
+    { separator: true },
+    { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }
+  ])}
         </div>
       </div>
       <div class="tarif-grid">
@@ -5455,7 +5455,7 @@ function getTarifSubcategories(parent = '') {
   ensureTarifsData();
   return data.tarifs.subcategories
     .filter(s => !parent || s.parent === parent)
-    .sort((a,b) => a.name.localeCompare(b.name, 'fr', {sensitivity:'base'}));
+    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 }
 function tarifSubcategoryExists(parent, name) {
   return getTarifSubcategories(parent).some(s => normalizeTarifText(s.name) === normalizeTarifText(name));
@@ -5484,12 +5484,12 @@ function renderTarifPostRow(t) {
   return `<div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" draggable="true" ondragstart="startTarifPostDrag(event, '${escapeHtml(t.id)}')" ondragend="endTarifPostDrag(event)" data-tarif-id="${escapeHtml(t.id)}">
     <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
     ${renderTarifActionMenu([
-      { label:'Renommer', action:`renameTarifPost('${escapeHtml(t.id)}')` },
-      { label:'Déplacer', action:`openMoveTarifPost('${escapeHtml(t.id)}')` },
-      { label:'Copier', action:`duplicateTarifPostById('${escapeHtml(t.id)}')` },
-      { label:'Convertir en catégorie', action:`convertTarifPostToCategory('${escapeHtml(t.id)}')` },
-      { separator:true }, { label:'Supprimer', action:`deleteTarifPost('${escapeHtml(t.id)}')`, danger:true }
-    ])}
+    { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
+    { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
+    { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
+    { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
+    { separator: true }, { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
+  ])}
   </div>`;
 }
 function renderTarifPostList() {
@@ -5503,46 +5503,46 @@ function renderTarifPostList() {
     if (!categoryMap.get(cat).has(sub)) categoryMap.get(cat).set(sub, []);
     categoryMap.get(cat).get(sub).push(t);
   });
-  return Array.from(categoryMap.entries()).sort((a,b)=>a[0].localeCompare(b[0],'fr')).map(([cat, subMap]) => {
+  return Array.from(categoryMap.entries()).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([cat, subMap]) => {
     const catRaw = cat === 'Sans catégorie' ? '' : cat;
-    const count = Array.from(subMap.values()).reduce((n,rows)=>n+rows.length,0);
+    const count = Array.from(subMap.values()).reduce((n, rows) => n + rows.length, 0);
     const catKey = getTarifGroupKey(cat);
-    return `<details class="tarif-category-group" ${tarifOpenCategoryGroups.has(catKey)?'open':''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(catKey)}', this.open)">
+    return `<details class="tarif-category-group" ${tarifOpenCategoryGroups.has(catKey) ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(catKey)}', this.open)">
       <summary class="tarif-category-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInPath(event, '${encodeTarifArg(catRaw)}', '')"><span>${escapeHtml(cat)}</span><span class="tarif-category-count">${count}</span></summary>
-      <div class="tarif-subcategory-list">${Array.from(subMap.entries()).sort((a,b)=>{if(a[0]==='Sans sous-catégorie')return 1;if(b[0]==='Sans sous-catégorie')return -1;return a[0].localeCompare(b[0],'fr')}).map(([sub, rows])=>{
-        rows.sort((a,b)=>String(a.poste||'').localeCompare(String(b.poste||''),'fr'));
-        const subRaw = sub === 'Sans sous-catégorie' ? '' : sub;
-        const subKey = getTarifSubGroupKey(cat, sub);
-        return `<details class="tarif-subcategory-group" ${tarifOpenCategoryGroups.has(subKey)?'open':''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(subKey)}', this.open)">
+      <div class="tarif-subcategory-list">${Array.from(subMap.entries()).sort((a, b) => { if (a[0] === 'Sans sous-catégorie') return 1; if (b[0] === 'Sans sous-catégorie') return -1; return a[0].localeCompare(b[0], 'fr') }).map(([sub, rows]) => {
+      rows.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr'));
+      const subRaw = sub === 'Sans sous-catégorie' ? '' : sub;
+      const subKey = getTarifSubGroupKey(cat, sub);
+      return `<details class="tarif-subcategory-group" ${tarifOpenCategoryGroups.has(subKey) ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(subKey)}', this.open)">
           <summary class="tarif-subcategory-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInPath(event, '${encodeTarifArg(catRaw)}', '${encodeTarifArg(subRaw)}')"><span>${escapeHtml(sub)}</span><span class="tarif-category-count">${rows.length}</span></summary>
           <div class="tarif-category-items">${rows.map(renderTarifPostRow).join('')}</div>
         </details>`;
-      }).join('')}</div>
+    }).join('')}</div>
     </details>`;
   }).join('');
 }
 function renderManagedTarifCategories() {
   ensureTarifsData();
   if (!data.tarifs.categories.length) return '<p class="tarifs-muted">Aucune catégorie.</p>';
-  return data.tarifs.categories.slice().sort((a,b)=>a.localeCompare(b,'fr')).map(c => {
+  return data.tarifs.categories.slice().sort((a, b) => a.localeCompare(b, 'fr')).map(c => {
     const subs = getTarifSubcategories(c);
     return `<div class="tarif-managed-category">
       <div class="tarif-category-row tarif-category-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInPath(event, '${encodeTarifArg(c)}', '')">
         <strong>${escapeHtml(c)}</strong>
         ${renderTarifActionMenu([
-          {label:'Ajouter une sous-catégorie', action:`addTarifSubcategory('${encodeTarifArg(c)}')`},
-          {label:'Renommer', action:`renameTarifCategory('${escapeHtml(c)}')`},
-          {label:'Convertir en poste', action:`convertTarifCategoryToPost('${escapeHtml(c)}')`},
-          {separator:true}, {label:'Supprimer', action:`deleteTarifCategory('${escapeHtml(c)}')`, danger:true}
-        ])}
+      { label: 'Ajouter une sous-catégorie', action: `addTarifSubcategory('${encodeTarifArg(c)}')` },
+      { label: 'Renommer', action: `renameTarifCategory('${escapeHtml(c)}')` },
+      { label: 'Convertir en poste', action: `convertTarifCategoryToPost('${escapeHtml(c)}')` },
+      { separator: true }, { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
+    ])}
       </div>
       <div class="tarif-managed-subcategories">${subs.length ? subs.map(s => `<div class="tarif-subcategory-row tarif-subcategory-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInPath(event, '${encodeTarifArg(c)}', '${encodeTarifArg(s.name)}')">
         <span>${escapeHtml(s.name)}</span>
         ${renderTarifActionMenu([
-          {label:'Renommer', action:`renameTarifSubcategory('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')`},
-          {label:'Déplacer', action:`moveTarifSubcategoryDialog('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')`},
-          {separator:true}, {label:'Supprimer', action:`deleteTarifSubcategory('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')`, danger:true}
-        ])}
+      { label: 'Renommer', action: `renameTarifSubcategory('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')` },
+      { label: 'Déplacer', action: `moveTarifSubcategoryDialog('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')` },
+      { separator: true }, { label: 'Supprimer', action: `deleteTarifSubcategory('${encodeTarifArg(c)}','${encodeTarifArg(s.name)}')`, danger: true }
+    ])}
       </div>`).join('') : '<div class="tarifs-muted tarif-no-subcategory">Aucune sous-catégorie</div>'}</div>
     </div>`;
   }).join('');
@@ -5552,70 +5552,70 @@ function renderTarifSearchResults() {
   if (!hasSearch) return '';
   const rows = getFilteredTarifs();
   if (!rows.length) return '<div class="tarifs-empty small">Aucun poste trouvé.</div>';
-  return `<div class="tarif-results">${rows.slice(0,30).map(t=>`<div class="tarif-result-item"><div><strong>${escapeHtml(t.poste||'Poste sans nom')}</strong><span>${escapeHtml(getTarifPathLabel(t))} · ${money(tarifNumber(t.prix))} HTVA / ${escapeHtml(t.mesure||'unité')}</span></div><button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>${renderTarifActionMenu([{label:'Renommer',action:`renameTarifPost('${escapeHtml(t.id)}')`},{label:'Déplacer',action:`openMoveTarifPost('${escapeHtml(t.id)}')`},{label:'Copier',action:`duplicateTarifPostById('${escapeHtml(t.id)}')`},{separator:true},{label:'Supprimer',action:`deleteTarifPost('${escapeHtml(t.id)}')`,danger:true}])}</div>`).join('')}</div>`;
+  return `<div class="tarif-results">${rows.slice(0, 30).map(t => `<div class="tarif-result-item"><div><strong>${escapeHtml(t.poste || 'Poste sans nom')}</strong><span>${escapeHtml(getTarifPathLabel(t))} · ${money(tarifNumber(t.prix))} HTVA / ${escapeHtml(t.mesure || 'unité')}</span></div><button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>${renderTarifActionMenu([{ label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` }, { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` }, { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` }, { separator: true }, { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }])}</div>`).join('')}</div>`;
 }
 function renderTarifEditor() {
   const tarif = getSelectedTarif();
   if (!tarif) return '<div class="tarifs-empty"><strong>Aucun poste sélectionné</strong><br>Recherche un poste, sélectionne-le, ou crée un nouveau poste dans le volet de gauche.</div>';
-  const cost=tarifTotalCost(tarif), price=tarifNumber(tarif.prix), margin=price-cost, marginPct=price>0?(margin/price)*100:0;
-  return `<article class="tarif-card"><div class="tarif-card-head"><div><input id="tarifPosteNameInput" class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste',this.value)" placeholder="Nom du poste / prestation"><div class="tarif-meta-line"><span>${escapeHtml(getTarifPathLabel(tarif))}</span><span>${money(price)} HTVA / ${escapeHtml(tarif.mesure||'unité')}</span><span>Coût ${money(cost)}</span><span class="${marginPct>=35?'good':marginPct>=15?'low':'bad'}">Marge ${money(margin)} (${num(marginPct,1)} %)</span></div></div><div class="tarif-card-actions no-print"><button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button><button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>${renderTarifActionMenu([{label:'Renommer',action:`renameTarifPost('${escapeHtml(tarif.id)}')`},{label:'Déplacer',action:`openMoveTarifPost('${escapeHtml(tarif.id)}')`},{label:'Copier la fiche',action:`duplicateTarifPostById('${escapeHtml(tarif.id)}')`},{separator:true},{label:'Supprimer la fiche',action:`deleteTarifPost('${escapeHtml(tarif.id)}')`,danger:true}])}</div></div>
-  <div class="tarif-grid"><div><label>Catégorie</label><select onchange="updateTarifField('categorie',this.value); updateTarifSubcategorySelect(this.value,'')"><option value="">Sans catégorie</option>${renderTarifCategoryOptions(tarif.categorie)}</select></div><div><label>Sous-catégorie</label><select id="tarifSubcategorySelect" onchange="updateTarifField('sousCategorie',this.value)">${renderTarifSubcategoryOptions(tarif.categorie,tarif.sousCategorie)}</select></div><div><label>Unité / mesure</label><input value="${escapeHtml(tarif.mesure)}" oninput="updateTarifField('mesure',this.value)" placeholder="m², ml, h, forfait..."></div><div><label>Prix HTVA</label><input value="${escapeHtml(tarif.prix)}" oninput="updateTarifField('prix',this.value)" inputmode="decimal"></div><div><label>TVA %</label><input value="${escapeHtml(tarif.tva)}" oninput="updateTarifField('tva',this.value)" inputmode="decimal"></div><div><label>Prix TVAC</label><input value="${escapeHtml(money(price*(1+tarifNumber(tarif.tva)/100)))}" readonly></div><div><label>Coût composants</label><input value="${escapeHtml(money(cost))}" readonly></div><div><label>Marge €</label><input value="${escapeHtml(money(margin))}" readonly></div><div><label>Marge %</label><input value="${escapeHtml(num(marginPct,1)+' %')}" readonly></div></div>
+  const cost = tarifTotalCost(tarif), price = tarifNumber(tarif.prix), margin = price - cost, marginPct = price > 0 ? (margin / price) * 100 : 0;
+  return `<article class="tarif-card"><div class="tarif-card-head"><div><input id="tarifPosteNameInput" class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste',this.value)" placeholder="Nom du poste / prestation"><div class="tarif-meta-line"><span>${escapeHtml(getTarifPathLabel(tarif))}</span><span>${money(price)} HTVA / ${escapeHtml(tarif.mesure || 'unité')}</span><span>Coût ${money(cost)}</span><span class="${marginPct >= 35 ? 'good' : marginPct >= 15 ? 'low' : 'bad'}">Marge ${money(margin)} (${num(marginPct, 1)} %)</span></div></div><div class="tarif-card-actions no-print"><button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button><button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>${renderTarifActionMenu([{ label: 'Renommer', action: `renameTarifPost('${escapeHtml(tarif.id)}')` }, { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(tarif.id)}')` }, { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` }, { separator: true }, { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }])}</div></div>
+  <div class="tarif-grid"><div><label>Catégorie</label><select onchange="updateTarifField('categorie',this.value); updateTarifSubcategorySelect(this.value,'')"><option value="">Sans catégorie</option>${renderTarifCategoryOptions(tarif.categorie)}</select></div><div><label>Sous-catégorie</label><select id="tarifSubcategorySelect" onchange="updateTarifField('sousCategorie',this.value)">${renderTarifSubcategoryOptions(tarif.categorie, tarif.sousCategorie)}</select></div><div><label>Unité / mesure</label><input value="${escapeHtml(tarif.mesure)}" oninput="updateTarifField('mesure',this.value)" placeholder="m², ml, h, forfait..."></div><div><label>Prix HTVA</label><input value="${escapeHtml(tarif.prix)}" oninput="updateTarifField('prix',this.value)" inputmode="decimal"></div><div><label>TVA %</label><input value="${escapeHtml(tarif.tva)}" oninput="updateTarifField('tva',this.value)" inputmode="decimal"></div><div><label>Prix TVAC</label><input value="${escapeHtml(money(price * (1 + tarifNumber(tarif.tva) / 100)))}" readonly></div><div><label>Coût composants</label><input value="${escapeHtml(money(cost))}" readonly></div><div><label>Marge €</label><input value="${escapeHtml(money(margin))}" readonly></div><div><label>Marge %</label><input value="${escapeHtml(num(marginPct, 1) + ' %')}" readonly></div></div>
   <div class="tarif-grid two"><div><label>Mots-clés</label><input value="${escapeHtml(tarif.tags)}" oninput="updateTarifField('tags',this.value)"></div><div><label>Remarque</label><textarea oninput="updateTarifField('remarque',this.value)">${escapeHtml(tarif.remarque)}</textarea></div></div>
   <details class="tarif-details" open><summary>Détail coût de revient / composants</summary><div class="tarif-table-wrap"><table class="tarif-components-table"><thead><tr><th>Élément</th><th>Unité</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th><th class="no-print">Action</th></tr></thead><tbody>${renderTarifComponents(tarif)}</tbody></table></div><div class="tarif-component-actions no-print"><button type="button" onclick="addTarifComponent()">+ Ajouter un composant</button></div></details>
   <details class="tarif-details"><summary>Prix multiples et historique</summary><div class="tarif-grid"><div><label>Prix simple</label><input value="${escapeHtml(tarif.prixSimple)}" oninput="updateTarifField('prixSimple',this.value)"></div><div><label>Prix moyen</label><input value="${escapeHtml(tarif.prixMoyen)}" oninput="updateTarifField('prixMoyen',this.value)"></div><div><label>Prix difficile</label><input value="${escapeHtml(tarif.prixDifficile)}" oninput="updateTarifField('prixDifficile',this.value)"></div><div><label>Historique des prix</label><textarea oninput="updateTarifField('historique',this.value)">${escapeHtml(tarif.historique)}</textarea></div></div></details></article>`;
 }
 function updateTarifField(field, value) {
-  const tarif=getSelectedTarif(); if(!tarif)return;
+  const tarif = getSelectedTarif(); if (!tarif) return;
   notifyPortalBusinessChange('Tarif modifié');
-  tarif[field]=value;
-  if(field==='categorie' && tarif.sousCategorie && !tarifSubcategoryExists(value,tarif.sousCategorie)) tarif.sousCategorie='';
+  tarif[field] = value;
+  if (field === 'categorie' && tarif.sousCategorie && !tarifSubcategoryExists(value, tarif.sousCategorie)) tarif.sousCategorie = '';
   saveTarifsData();
-  if(field==='categorie'||field==='sousCategorie'){ const list=document.querySelector('.tarifs-post-list'); if(list)list.innerHTML=renderTarifPostList(); refreshTarifSearchResults(); return; }
+  if (field === 'categorie' || field === 'sousCategorie') { const list = document.querySelector('.tarifs-post-list'); if (list) list.innerHTML = renderTarifPostList(); refreshTarifSearchResults(); return; }
   refreshTarifNavigation();
 }
 function refreshTarifNavigation() {
-  const tarif=getSelectedTarif(); if(!tarif)return;
-  document.querySelectorAll('.tarif-post-row').forEach(row=>{const b=row.querySelector('.tarif-post-open');if(b&&(b.getAttribute('onclick')||'').includes(tarif.id))b.textContent=tarif.poste||'Poste sans nom';});
-  document.querySelectorAll('.tarif-result-item').forEach(item=>{const b=item.querySelector('[onclick*="selectTarifPost"]');if(!b||!(b.getAttribute('onclick')||'').includes(tarif.id))return;const title=item.querySelector('strong'),meta=item.querySelector('span');if(title)title.textContent=tarif.poste||'Poste sans nom';if(meta)meta.textContent=`${getTarifPathLabel(tarif)} · ${money(tarifNumber(tarif.prix))} HTVA / ${tarif.mesure||'unité'}`;});
+  const tarif = getSelectedTarif(); if (!tarif) return;
+  document.querySelectorAll('.tarif-post-row').forEach(row => { const b = row.querySelector('.tarif-post-open'); if (b && (b.getAttribute('onclick') || '').includes(tarif.id)) b.textContent = tarif.poste || 'Poste sans nom'; });
+  document.querySelectorAll('.tarif-result-item').forEach(item => { const b = item.querySelector('[onclick*="selectTarifPost"]'); if (!b || !(b.getAttribute('onclick') || '').includes(tarif.id)) return; const title = item.querySelector('strong'), meta = item.querySelector('span'); if (title) title.textContent = tarif.poste || 'Poste sans nom'; if (meta) meta.textContent = `${getTarifPathLabel(tarif)} · ${money(tarifNumber(tarif.prix))} HTVA / ${tarif.mesure || 'unité'}`; });
 }
 function openMoveTarifPost(id) {
-  ensureTarifsData(); const tarif=data.tarifs.items.find(i=>i.id===id); if(!tarif)return;
+  ensureTarifsData(); const tarif = data.tarifs.items.find(i => i.id === id); if (!tarif) return;
   closeTarifModal();
-  const overlay=document.createElement('div'); overlay.id='tarifModalOverlay'; overlay.className='tarif-modal-overlay';
-  overlay.innerHTML=`<div class="tarif-modal"><div class="tarif-modal-head"><h3>Déplacer le poste</h3><button type="button" class="tarif-modal-close">×</button></div><label>Catégorie de destination</label><select id="moveTarifCategory"><option value="">Sans catégorie</option>${renderTarifCategoryOptions(tarif.categorie)}</select><label>Sous-catégorie</label><select id="moveTarifSubcategory">${renderTarifSubcategoryOptions(tarif.categorie,tarif.sousCategorie)}</select><div class="tarif-modal-actions"><button type="button" class="tarif-modal-cancel">Annuler</button><button type="button" class="primary tarif-modal-confirm">Déplacer</button></div></div>`;
-  document.body.appendChild(overlay); const cat=overlay.querySelector('#moveTarifCategory'),sub=overlay.querySelector('#moveTarifSubcategory');
-  cat.onchange=()=>{sub.innerHTML=renderTarifSubcategoryOptions(cat.value,'');};
-  overlay.querySelector('.tarif-modal-close').onclick=closeTarifModal; overlay.querySelector('.tarif-modal-cancel').onclick=closeTarifModal;
-  overlay.querySelector('.tarif-modal-confirm').onclick=()=>{moveTarifPostToPath(id,cat.value,sub.value);closeTarifModal();};
-  overlay.onclick=e=>{if(e.target===overlay)closeTarifModal();};
+  const overlay = document.createElement('div'); overlay.id = 'tarifModalOverlay'; overlay.className = 'tarif-modal-overlay';
+  overlay.innerHTML = `<div class="tarif-modal"><div class="tarif-modal-head"><h3>Déplacer le poste</h3><button type="button" class="tarif-modal-close">×</button></div><label>Catégorie de destination</label><select id="moveTarifCategory"><option value="">Sans catégorie</option>${renderTarifCategoryOptions(tarif.categorie)}</select><label>Sous-catégorie</label><select id="moveTarifSubcategory">${renderTarifSubcategoryOptions(tarif.categorie, tarif.sousCategorie)}</select><div class="tarif-modal-actions"><button type="button" class="tarif-modal-cancel">Annuler</button><button type="button" class="primary tarif-modal-confirm">Déplacer</button></div></div>`;
+  document.body.appendChild(overlay); const cat = overlay.querySelector('#moveTarifCategory'), sub = overlay.querySelector('#moveTarifSubcategory');
+  cat.onchange = () => { sub.innerHTML = renderTarifSubcategoryOptions(cat.value, ''); };
+  overlay.querySelector('.tarif-modal-close').onclick = closeTarifModal; overlay.querySelector('.tarif-modal-cancel').onclick = closeTarifModal;
+  overlay.querySelector('.tarif-modal-confirm').onclick = () => { moveTarifPostToPath(id, cat.value, sub.value); closeTarifModal(); };
+  overlay.onclick = e => { if (e.target === overlay) closeTarifModal(); };
 }
-function moveTarifPostToPath(id, category, subcategory='') {
-  ensureTarifsData(); const tarif=data.tarifs.items.find(i=>i.id===id); if(!tarif)return;
-  tarif.categorie=category||''; tarif.sousCategorie=category?(subcategory||''):'';
-  if(category&&!getTarifCategories().some(c=>normalizeTarifText(c)===normalizeTarifText(category))) data.tarifs.categories.push(category);
-  if(category&&subcategory&&!tarifSubcategoryExists(category,subcategory)) data.tarifs.subcategories.push({parent:category,name:subcategory});
-  tarifOpenCategoryGroups.add(getTarifGroupKey(category)); if(subcategory)tarifOpenCategoryGroups.add(getTarifSubGroupKey(category,subcategory));
+function moveTarifPostToPath(id, category, subcategory = '') {
+  ensureTarifsData(); const tarif = data.tarifs.items.find(i => i.id === id); if (!tarif) return;
+  tarif.categorie = category || ''; tarif.sousCategorie = category ? (subcategory || '') : '';
+  if (category && !getTarifCategories().some(c => normalizeTarifText(c) === normalizeTarifText(category))) data.tarifs.categories.push(category);
+  if (category && subcategory && !tarifSubcategoryExists(category, subcategory)) data.tarifs.subcategories.push({ parent: category, name: subcategory });
+  tarifOpenCategoryGroups.add(getTarifGroupKey(category)); if (subcategory) tarifOpenCategoryGroups.add(getTarifSubGroupKey(category, subcategory));
   notifyPortalBusinessChange('Poste tarifaire déplacé'); saveTarifsData(); render();
 }
-function moveTarifPostToCategory(id, category) { moveTarifPostToPath(id, category==='__NONE__'?'':category, ''); }
-function dropTarifPostInPath(event, encodedCategory, encodedSubcategory) { event.preventDefault();event.stopPropagation();event.currentTarget.classList.remove('drag-over');const id=event.dataTransfer.getData('text/plain');if(id)moveTarifPostToPath(id,decodeTarifArg(encodedCategory),decodeTarifArg(encodedSubcategory)); }
+function moveTarifPostToCategory(id, category) { moveTarifPostToPath(id, category === '__NONE__' ? '' : category, ''); }
+function dropTarifPostInPath(event, encodedCategory, encodedSubcategory) { event.preventDefault(); event.stopPropagation(); event.currentTarget.classList.remove('drag-over'); const id = event.dataTransfer.getData('text/plain'); if (id) moveTarifPostToPath(id, decodeTarifArg(encodedCategory), decodeTarifArg(encodedSubcategory)); }
 function addTarifSubcategory(encodedParent) {
-  const parent=decodeTarifArg(encodedParent); openTarifModal({title:'Ajouter une sous-catégorie',label:`Sous-catégorie de ${parent}`,onConfirm:name=>{if(tarifSubcategoryExists(parent,name)){alert('Cette sous-catégorie existe déjà.');return false;}data.tarifs.subcategories.push({parent,name});notifyPortalBusinessChange('Sous-catégorie ajoutée');saveTarifsData();render();}});
+  const parent = decodeTarifArg(encodedParent); openTarifModal({ title: 'Ajouter une sous-catégorie', label: `Sous-catégorie de ${parent}`, onConfirm: name => { if (tarifSubcategoryExists(parent, name)) { alert('Cette sous-catégorie existe déjà.'); return false; } data.tarifs.subcategories.push({ parent, name }); notifyPortalBusinessChange('Sous-catégorie ajoutée'); saveTarifsData(); render(); } });
 }
 function renameTarifSubcategory(encodedParent, encodedName) {
-  const parent=decodeTarifArg(encodedParent),name=decodeTarifArg(encodedName); openTarifModal({title:'Renommer la sous-catégorie',label:'Nouveau nom',value:name,onConfirm:value=>{if(normalizeTarifText(value)!==normalizeTarifText(name)&&tarifSubcategoryExists(parent,value)){alert('Cette sous-catégorie existe déjà.');return false;}data.tarifs.subcategories.forEach(s=>{if(s.parent===parent&&s.name===name)s.name=value;});data.tarifs.items.forEach(t=>{if(t.categorie===parent&&t.sousCategorie===name)t.sousCategorie=value;});notifyPortalBusinessChange('Sous-catégorie renommée');saveTarifsData();render();}});
+  const parent = decodeTarifArg(encodedParent), name = decodeTarifArg(encodedName); openTarifModal({ title: 'Renommer la sous-catégorie', label: 'Nouveau nom', value: name, onConfirm: value => { if (normalizeTarifText(value) !== normalizeTarifText(name) && tarifSubcategoryExists(parent, value)) { alert('Cette sous-catégorie existe déjà.'); return false; } data.tarifs.subcategories.forEach(s => { if (s.parent === parent && s.name === name) s.name = value; }); data.tarifs.items.forEach(t => { if (t.categorie === parent && t.sousCategorie === name) t.sousCategorie = value; }); notifyPortalBusinessChange('Sous-catégorie renommée'); saveTarifsData(); render(); } });
 }
 function moveTarifSubcategoryDialog(encodedParent, encodedName) {
-  const parent=decodeTarifArg(encodedParent),name=decodeTarifArg(encodedName); const opts=getTarifCategories().filter(c=>c!==parent).map(c=>({value:c,label:c})); if(!opts.length)return alert('Crée d’abord une autre catégorie principale.'); openTarifModal({title:'Déplacer la sous-catégorie',label:'Nouvelle catégorie principale',type:'select',value:opts[0].value,options:opts,confirmLabel:'Déplacer',onConfirm:newParent=>{if(tarifSubcategoryExists(newParent,name)){alert('Une sous-catégorie du même nom existe déjà dans cette catégorie.');return false;}data.tarifs.subcategories.forEach(s=>{if(s.parent===parent&&s.name===name)s.parent=newParent;});data.tarifs.items.forEach(t=>{if(t.categorie===parent&&t.sousCategorie===name)t.categorie=newParent;});notifyPortalBusinessChange('Sous-catégorie déplacée');saveTarifsData();render();}});
+  const parent = decodeTarifArg(encodedParent), name = decodeTarifArg(encodedName); const opts = getTarifCategories().filter(c => c !== parent).map(c => ({ value: c, label: c })); if (!opts.length) return alert('Crée d’abord une autre catégorie principale.'); openTarifModal({ title: 'Déplacer la sous-catégorie', label: 'Nouvelle catégorie principale', type: 'select', value: opts[0].value, options: opts, confirmLabel: 'Déplacer', onConfirm: newParent => { if (tarifSubcategoryExists(newParent, name)) { alert('Une sous-catégorie du même nom existe déjà dans cette catégorie.'); return false; } data.tarifs.subcategories.forEach(s => { if (s.parent === parent && s.name === name) s.parent = newParent; }); data.tarifs.items.forEach(t => { if (t.categorie === parent && t.sousCategorie === name) t.categorie = newParent; }); notifyPortalBusinessChange('Sous-catégorie déplacée'); saveTarifsData(); render(); } });
 }
 function deleteTarifSubcategory(encodedParent, encodedName) {
-  const parent=decodeTarifArg(encodedParent),name=decodeTarifArg(encodedName); const used=data.tarifs.items.filter(t=>t.categorie===parent&&t.sousCategorie===name).length; if(!confirm(`Supprimer la sous-catégorie « ${name} » ?${used?` Les ${used} poste(s) resteront dans « ${parent} » sans sous-catégorie.`:''}`))return;data.tarifs.subcategories=data.tarifs.subcategories.filter(s=>!(s.parent===parent&&s.name===name));data.tarifs.items.forEach(t=>{if(t.categorie===parent&&t.sousCategorie===name)t.sousCategorie='';});notifyPortalBusinessChange('Sous-catégorie supprimée');saveTarifsData();render();
+  const parent = decodeTarifArg(encodedParent), name = decodeTarifArg(encodedName); const used = data.tarifs.items.filter(t => t.categorie === parent && t.sousCategorie === name).length; if (!confirm(`Supprimer la sous-catégorie « ${name} » ?${used ? ` Les ${used} poste(s) resteront dans « ${parent} » sans sous-catégorie.` : ''}`)) return; data.tarifs.subcategories = data.tarifs.subcategories.filter(s => !(s.parent === parent && s.name === name)); data.tarifs.items.forEach(t => { if (t.categorie === parent && t.sousCategorie === name) t.sousCategorie = ''; }); notifyPortalBusinessChange('Sous-catégorie supprimée'); saveTarifsData(); render();
 }
 // Étend les opérations de catégorie aux sous-catégories.
 const renameTarifCategoryV2 = renameTarifCategory;
-renameTarifCategory = function(name) { ensureTarifsData(); openTarifModal({title:'Renommer la catégorie',label:'Nouveau nom',value:name,onConfirm:value=>{if(normalizeTarifText(value)!==normalizeTarifText(name)&&getTarifCategories().some(c=>normalizeTarifText(c)===normalizeTarifText(value))){alert('Cette catégorie existe déjà.');return false;}data.tarifs.categories=cleanTarifCategories(data.tarifs.categories.map(c=>c===name?value:c));data.tarifs.subcategories.forEach(s=>{if(s.parent===name)s.parent=value;});data.tarifs.items.forEach(t=>{if(t.categorie===name)t.categorie=value;});if(tarifCategoryFilter===name)tarifCategoryFilter=value;notifyPortalBusinessChange('Catégorie tarifaire renommée');saveTarifsData();render();}}); };
+renameTarifCategory = function (name) { ensureTarifsData(); openTarifModal({ title: 'Renommer la catégorie', label: 'Nouveau nom', value: name, onConfirm: value => { if (normalizeTarifText(value) !== normalizeTarifText(name) && getTarifCategories().some(c => normalizeTarifText(c) === normalizeTarifText(value))) { alert('Cette catégorie existe déjà.'); return false; } data.tarifs.categories = cleanTarifCategories(data.tarifs.categories.map(c => c === name ? value : c)); data.tarifs.subcategories.forEach(s => { if (s.parent === name) s.parent = value; }); data.tarifs.items.forEach(t => { if (t.categorie === name) t.categorie = value; }); if (tarifCategoryFilter === name) tarifCategoryFilter = value; notifyPortalBusinessChange('Catégorie tarifaire renommée'); saveTarifsData(); render(); } }); };
 const deleteTarifCategoryV2 = deleteTarifCategory;
-deleteTarifCategory = function(name) { const used=data.tarifs.items.filter(t=>t.categorie===name).length,subs=getTarifSubcategories(name).length;if(!confirm(`Supprimer la catégorie « ${name} » ?${used||subs?' Les postes seront placés sans catégorie et les sous-catégories seront supprimées.':''}`))return;data.tarifs.categories=data.tarifs.categories.filter(c=>c!==name);data.tarifs.subcategories=data.tarifs.subcategories.filter(s=>s.parent!==name);data.tarifs.items.forEach(t=>{if(t.categorie===name){t.categorie='';t.sousCategorie='';}});notifyPortalBusinessChange('Catégorie tarifaire supprimée');saveTarifsData();render(); };
+deleteTarifCategory = function (name) { const used = data.tarifs.items.filter(t => t.categorie === name).length, subs = getTarifSubcategories(name).length; if (!confirm(`Supprimer la catégorie « ${name} » ?${used || subs ? ' Les postes seront placés sans catégorie et les sous-catégories seront supprimées.' : ''}`)) return; data.tarifs.categories = data.tarifs.categories.filter(c => c !== name); data.tarifs.subcategories = data.tarifs.subcategories.filter(s => s.parent !== name); data.tarifs.items.forEach(t => { if (t.categorie === name) { t.categorie = ''; t.sousCategorie = ''; } }); notifyPortalBusinessChange('Catégorie tarifaire supprimée'); saveTarifsData(); render(); };
 
 window.addEventListener('load', async () => {
   applyOpenDocumentParamsFromUrl();
