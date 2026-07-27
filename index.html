@@ -4,8 +4,103 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Portail BastCompta</title>
-  <link rel="stylesheet" href="css/index.css?v=16">
+  <title>BastCompta - Gestion et comptabilité simplifiée pour indépendants belges</title>
+
+  <meta name="description"
+    content="BastCompta est un outil belge pour indépendants. Créez gratuitement vos devis, factures, rappels et tarifs, puis débloquez les modules avancés de comptabilité, TVA, IPP et sauvegardes.">
+
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="author" content="Nicolas Sébastien">
+  <meta name="application-name" content="BastCompta">
+  <meta name="theme-color" content="#2456d8">
+
+  <link rel="canonical" href="https://bastcompta.bast-amenagement.com/">
+  <link rel="icon" href="logo.png" type="image/png">
+  <link rel="apple-touch-icon" href="logo.png">
+
+  <!-- Référencement social -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_BE">
+  <meta property="og:site_name" content="BastCompta">
+  <meta property="og:title" content="BastCompta - Gestion et comptabilité simplifiée">
+  <meta property="og:description"
+    content="Devis, factures, rappels et onglet Tarifs gratuits sans limite de durée. Modules avancés de comptabilité, TVA, IPP et sauvegardes disponibles en Premium.">
+  <meta property="og:url" content="https://bastcompta.bast-amenagement.com/">
+  <meta property="og:image" content="https://bastcompta.bast-amenagement.com/logo.png">
+  <meta property="og:image:alt" content="Logo BastCompta">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="BastCompta - Gestion et comptabilité simplifiée">
+  <meta name="twitter:description"
+    content="Un outil simple pour les indépendants belges et les indépendants à titre complémentaire.">
+  <meta name="twitter:image" content="https://bastcompta.bast-amenagement.com/logo.png">
+
+  <!-- Données structurées pour aider les moteurs à identifier BastCompta comme un logiciel -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "BastCompta",
+    "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "AccountingApplication",
+    "operatingSystem": "Web",
+    "url": "https://bastcompta.bast-amenagement.com/",
+    "image": "https://bastcompta.bast-amenagement.com/logo.png",
+    "description": "Outil belge de gestion, d'organisation et de comptabilité simplifiée conçu pour les indépendants et indépendants à titre complémentaire.",
+    "inLanguage": "fr-BE",
+    "audience": {
+      "@type": "Audience",
+      "audienceType": "Indépendants et indépendants à titre complémentaire en Belgique"
+    },
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Module Devis & Factures gratuit",
+        "description": "Accès gratuit sans limite de durée au module Devis & Factures, y compris l'onglet Tarifs.",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium mensuel",
+        "price": "4.99",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium trimestriel",
+        "price": "12.99",
+        "priceCurrency": "EUR"
+      },
+      {
+        "@type": "Offer",
+        "name": "BastCompta Premium annuel",
+        "price": "49.99",
+        "priceCurrency": "EUR"
+      }
+    ],
+    "creator": {
+      "@type": "Person",
+      "name": "Nicolas Sébastien"
+    }
+  }
+  </script>
+
+  <style>
+    .seo-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+  </style>
+
+  <link rel="stylesheet" href="css/index.css?v=19">
   <script src="js/storage.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js"></script>
@@ -40,6 +135,7 @@
       <div class="auth-layout">
         <div class="showcase">
           <div class="brand">
+            <h1 class="seo-only">BastCompta - Gestion et comptabilité simplifiée pour indépendants belges</h1>
             <p>
               Gérez vos devis, factures, comptabilité, clients et déclarations depuis une seule plateforme
               simple et intuitive.
@@ -49,8 +145,8 @@
           <div class="feature-grid">
             <div class="feature-card">
               <div class="feature-icon" aria-hidden="true">📄</div>
-              <h3>Devis &amp; Factures</h3>
-              <p>Créez, imprimez et gérez vos documents professionnels en quelques clics.</p>
+              <h3>Devis, Factures &amp; Tarifs <span class="feature-free-label">Gratuit</span></h3>
+              <p>Créez, imprimez et gérez vos documents professionnels ainsi que vos tarifs en quelques clics.</p>
             </div>
 
             <div class="feature-card">
@@ -98,7 +194,7 @@
 
         <div class="auth-card">
           <div class="auth-logo">
-            <img src="logo.png" alt="Logo BastCompta">
+            <img src="logo.png" alt="BastCompta - outil de gestion et de comptabilité simplifiée">
           </div>
 
           <div class="auth-head">
@@ -155,6 +251,383 @@
 
           <div id="authMessage" class="message"></div>
         </div>
+      </div>
+
+      <div class="landing-site" id="decouvrir-bastcompta">
+        <nav class="landing-nav" aria-label="Navigation de présentation">
+          <a class="landing-nav-brand" href="#authScreen" aria-label="Retour en haut">
+            <img src="logo.png" alt="" aria-hidden="true">
+            <span>BastCompta</span>
+          </a>
+          <div class="landing-nav-links">
+            <a href="#fonctionnalites">Fonctionnalités</a>
+            <a href="#avantages">Avantages</a>
+            <a href="#fonctionnement">Fonctionnement</a>
+            <a href="#tarifs">Gratuit &amp; Premium</a>
+            <a href="#faq">FAQ</a>
+          </div>
+          <a class="landing-button landing-button-small landing-register-link" href="#authScreen">Créer un compte</a>
+        </nav>
+
+        <main class="landing-main">
+          <section class="landing-section landing-intro landing-reveal" aria-labelledby="landingIntroTitle">
+            <div class="landing-section-heading">
+              <span class="landing-eyebrow">Un outil pensé en Belgique</span>
+              <h2 id="landingIntroTitle">Toute votre activité indépendante, réunie au même endroit</h2>
+              <p>
+                BastCompta centralise les tâches essentielles d'un indépendant : documents commerciaux,
+                suivi comptable, clients, préparation TVA et IPP, ainsi que les sauvegardes.
+                L'objectif est simple : vous permettre de gérer votre activité sans vous perdre dans un logiciel lourd.
+              </p>
+            </div>
+
+            <div class="landing-stat-grid" aria-label="Les points forts de BastCompta">
+              <article class="landing-stat-card">
+                <strong>1 portail</strong>
+                <span>pour vos devis, factures, clients et données de gestion</span>
+              </article>
+              <article class="landing-stat-card">
+                <strong>0 installation</strong>
+                <span>un simple navigateur suffit pour accéder à BastCompta</span>
+              </article>
+              <article class="landing-stat-card">
+                <strong>2 sauvegardes</strong>
+                <span>possibilité de conserver une copie locale et une copie Google Drive</span>
+              </article>
+              <article class="landing-stat-card">
+                <strong>Belgique</strong>
+                <span>un fonctionnement adapté aux indépendants belges</span>
+              </article>
+            </div>
+          </section>
+
+          <section class="landing-section" id="fonctionnalites" aria-labelledby="featuresTitle">
+            <div class="landing-section-heading landing-reveal">
+              <span class="landing-eyebrow">Fonctionnalités</span>
+              <h2 id="featuresTitle">Les outils essentiels, sans les menus inutiles</h2>
+              <p>
+                Chaque module répond à un besoin concret de votre activité. Vous gardez une vue claire,
+                cohérente et accessible sur vos documents et vos chiffres.
+              </p>
+            </div>
+
+            <div class="landing-feature-grid">
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">📄</span>
+                <h3>Devis, factures et tarifs — gratuit</h3>
+                <p>Le module Devis &amp; Factures reste gratuit, sans limite de durée. Créez vos documents et préparez vos prix depuis un même espace.</p>
+                <ul>
+                  <li>Devis, factures et rappels personnalisables</li>
+                  <li>Onglet Tarifs pour enregistrer vos articles, prestations et prix habituels</li>
+                  <li>Reprise rapide d'un devis en facture</li>
+                  <li>PDF, communications structurées et préparation Peppol / Doccle</li>
+                </ul>
+              </article>
+
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">📊</span>
+                <h3>Comptabilité simplifiée</h3>
+                <p>Suivez les mouvements utiles à la gestion de votre activité sans transformer votre quotidien en cours de comptabilité.</p>
+                <ul>
+                  <li>Ventes et achats</li>
+                  <li>Frais, taxes et cotisations</li>
+                  <li>Investissements et immobilisations</li>
+                  <li>Résultat et bilan simplifié</li>
+                </ul>
+              </article>
+
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">👥</span>
+                <h3>Suivi client et prestations</h3>
+                <p>Centralisez les informations importantes et conservez l'historique de vos contacts et de vos chantiers.</p>
+                <ul>
+                  <li>Fiches clients</li>
+                  <li>Documents liés</li>
+                  <li>Coûts et marge</li>
+                  <li>Notes et historique</li>
+                </ul>
+              </article>
+
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">📑</span>
+                <h3>Préparation TVA</h3>
+                <p>Regroupez vos ventes, achats et montants de TVA par période pour préparer plus sereinement vos contrôles.</p>
+                <ul>
+                  <li>Périodes mensuelles ou trimestrielles</li>
+                  <li>TVA due et déductible</li>
+                  <li>Statuts payé et clôturé</li>
+                  <li>Contrôles avant déclaration</li>
+                </ul>
+              </article>
+
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">🧾</span>
+                <h3>Préparation IPP</h3>
+                <p>Rassemblez les données utiles à votre déclaration en personne physique et obtenez une vue claire des chiffres préparés.</p>
+                <ul>
+                  <li>Résumé fiscal</li>
+                  <li>Codes IPP</li>
+                  <li>Contrôles et détails</li>
+                  <li>Export d'un récapitulatif</li>
+                </ul>
+              </article>
+
+              <article class="landing-feature-card landing-reveal">
+                <span class="landing-card-icon">💾</span>
+                <h3>Sauvegardes et Google Drive</h3>
+                <p>Protégez vos données grâce aux sauvegardes ZIP et à l'espace Google Drive réservé à l'application.</p>
+                <ul>
+                  <li>Sauvegarde locale complète</li>
+                  <li>Restauration ZIP</li>
+                  <li>Connexion Google Drive</li>
+                  <li>Consultation des fichiers cachés</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="landing-section landing-split-section" id="avantages" aria-labelledby="advantagesTitle">
+            <div class="landing-benefit-panel landing-reveal">
+              <span class="landing-eyebrow">Pourquoi BastCompta ?</span>
+              <h2 id="advantagesTitle">Conçu pour rester simple, même quand votre activité évolue</h2>
+              <p>
+                BastCompta ne cherche pas à remplacer votre comptable ni les plateformes officielles.
+                Il vous aide à mieux préparer, classer et contrôler les informations avant vos démarches.
+              </p>
+              <div class="landing-check-list">
+                <div><span>✓</span><p><strong>Pensé pour les indépendants</strong> et particulièrement les activités complémentaires.</p></div>
+                <div><span>✓</span><p><strong>Une interface cohérente</strong> pour éviter les doubles encodages inutiles.</p></div>
+                <div><span>✓</span><p><strong>Accessible partout</strong> depuis un ordinateur équipé d'un navigateur.</p></div>
+                <div><span>✓</span><p><strong>Vos données restent exportables</strong> grâce aux sauvegardes ZIP.</p></div>
+                <div><span>✓</span><p><strong>Des mises à jour régulières</strong> pour faire évoluer les fonctionnalités.</p></div>
+              </div>
+            </div>
+
+            <div class="landing-dashboard-preview landing-reveal" aria-label="Aperçu illustré de BastCompta">
+              <div class="landing-preview-top">
+                <span></span><span></span><span></span>
+                <strong>BastCompta</strong>
+              </div>
+              <div class="landing-preview-body">
+                <aside>
+                  <b>▤ Devis &amp; Factures</b>
+                  <span>▥ Comptabilité</span>
+                  <span>♙ Suivi client</span>
+                  <span>▧ Impôts IPP</span>
+                  <span>⚙ Sauvegardes</span>
+                </aside>
+                <div class="landing-preview-content">
+                  <div class="landing-preview-title">
+                    <div><small>Vue générale</small><strong>Votre activité</strong></div>
+                    <span>Synchronisé</span>
+                  </div>
+                  <div class="landing-preview-metrics">
+                    <div><small>Ventes</small><strong>12 480 €</strong></div>
+                    <div><small>Achats</small><strong>4 260 €</strong></div>
+                    <div><small>Résultat estimé</small><strong>8 220 €</strong></div>
+                  </div>
+                  <div class="landing-preview-chart">
+                    <i style="height:34%"></i><i style="height:52%"></i><i style="height:44%"></i>
+                    <i style="height:72%"></i><i style="height:63%"></i><i style="height:88%"></i>
+                  </div>
+                  <div class="landing-preview-lines">
+                    <span></span><span></span><span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="landing-section" id="fonctionnement" aria-labelledby="stepsTitle">
+            <div class="landing-section-heading landing-reveal">
+              <span class="landing-eyebrow">Comment ça fonctionne ?</span>
+              <h2 id="stepsTitle">Commencez rapidement, puis avancez à votre rythme</h2>
+              <p>La logique de BastCompta suit simplement le déroulement réel de votre activité.</p>
+            </div>
+
+            <div class="landing-steps">
+              <article class="landing-step landing-reveal">
+                <span>01</span>
+                <h3>Créez votre compte</h3>
+                <p>Inscrivez-vous avec votre adresse mail et accédez à votre espace personnel.</p>
+              </article>
+              <article class="landing-step landing-reveal">
+                <span>02</span>
+                <h3>Configurez vos informations</h3>
+                <p>Ajoutez vos coordonnées, paramètres de facturation et préférences de sauvegarde.</p>
+              </article>
+              <article class="landing-step landing-reveal">
+                <span>03</span>
+                <h3>Gérez vos documents</h3>
+                <p>Créez vos clients, devis, factures, achats et autres données utiles.</p>
+              </article>
+              <article class="landing-step landing-reveal">
+                <span>04</span>
+                <h3>Contrôlez et sauvegardez</h3>
+                <p>Vérifiez vos périodes TVA, vos résultats et conservez régulièrement une copie de sécurité.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="landing-section landing-pricing-section" id="tarifs" aria-labelledby="pricingTitle">
+            <div class="landing-section-heading landing-reveal">
+              <span class="landing-eyebrow">Gratuit pour commencer</span>
+              <h2 id="pricingTitle">Devis &amp; Factures reste gratuit</h2>
+              <p>
+                Créez votre compte et utilisez gratuitement le module Devis &amp; Factures,
+                y compris l'onglet Tarifs pour enregistrer vos prestations, articles et prix habituels.
+                L'abonnement sert uniquement à débloquer les autres modules avancés de BastCompta.
+              </p>
+            </div>
+
+            <div class="landing-free-plan landing-reveal">
+              <div class="landing-free-plan-main">
+                <span class="landing-free-icon" aria-hidden="true">🎁</span>
+                <div>
+                  <span class="landing-price-label">Gratuit sans limite de durée</span>
+                  <h3>Devis &amp; Factures</h3>
+                  <p>
+                    Une base complète pour créer vos documents commerciaux et gérer vos prix,
+                    sans abonnement et sans carte bancaire.
+                  </p>
+                </div>
+                <div class="landing-free-price">
+                  <strong>0 €</strong>
+                  <span>pour toujours*</span>
+                </div>
+              </div>
+
+              <div class="landing-free-features">
+                <div><span>✓</span><strong>Devis</strong><small>création, impression PDF et suivi</small></div>
+                <div><span>✓</span><strong>Factures</strong><small>documents professionnels et numérotation</small></div>
+                <div><span>✓</span><strong>Onglet Tarifs</strong><small>articles, prestations, unités et prix habituels</small></div>
+                <div><span>✓</span><strong>Rappels</strong><small>suivi des factures et communications</small></div>
+                <div><span>✓</span><strong>Reprise de documents</strong><small>transformez rapidement un devis en facture</small></div>
+                <div><span>✓</span><strong>Préparation Peppol / Doccle</strong><small>outils intégrés au module commercial</small></div>
+              </div>
+
+              <div class="landing-free-action">
+                <p>Aucune carte bancaire nécessaire pour utiliser le module gratuit.</p>
+                <a class="landing-button landing-register-link" href="#authScreen">Créer mon compte gratuitement</a>
+              </div>
+            </div>
+
+            <div class="landing-premium-heading landing-reveal">
+              <span class="landing-eyebrow">BastCompta Premium</span>
+              <h3>Besoin d'aller plus loin ?</h3>
+              <p>
+                L'abonnement débloque la comptabilité, la préparation TVA et IPP,
+                le suivi client avancé, les investissements, les résultats et les sauvegardes Google Drive.
+              </p>
+            </div>
+
+            <div class="landing-premium-features landing-reveal">
+              <span>📊 Comptabilité complète</span>
+              <span>📑 Préparation TVA</span>
+              <span>🧾 Préparation IPP</span>
+              <span>👥 Suivi client avancé</span>
+              <span>💾 Sauvegardes Google Drive</span>
+              <span>📈 Résultat et bilan simplifié</span>
+            </div>
+
+            <div class="landing-pricing-grid">
+              <article class="landing-price-card landing-reveal">
+                <span class="landing-price-label">Souple</span>
+                <h3>Mensuel</h3>
+                <div class="landing-price"><strong>4,99 €</strong><span>/ mois</span></div>
+                <p>Accès aux modules Premium avec une liberté maximale.</p>
+                <a class="landing-button landing-register-link" href="#authScreen">Choisir le mensuel</a>
+              </article>
+
+              <article class="landing-price-card landing-price-featured landing-reveal">
+                <span class="landing-price-badge">Le plus avantageux</span>
+                <span class="landing-price-label">Économique</span>
+                <h3>Annuel</h3>
+                <div class="landing-price"><strong>49,99 €</strong><span>/ an</span></div>
+                <p>Une année complète d'accès Premium avec le meilleur tarif.</p>
+                <a class="landing-button landing-register-link" href="#authScreen">Choisir l'annuel</a>
+              </article>
+
+              <article class="landing-price-card landing-reveal">
+                <span class="landing-price-label">Intermédiaire</span>
+                <h3>Trimestriel</h3>
+                <div class="landing-price"><strong>12,99 €</strong><span>/ trimestre</span></div>
+                <p>Un bon compromis pour accéder aux modules avancés pendant plusieurs mois.</p>
+                <a class="landing-button landing-register-link" href="#authScreen">Choisir le trimestriel</a>
+              </article>
+            </div>
+
+            <p class="landing-pricing-note landing-reveal">
+              * Le module Devis &amp; Factures, y compris l'onglet Tarifs, est gratuit sans limite de durée.
+              BastCompta reste un outil d'aide à la gestion et à la préparation administrative :
+              il ne remplace pas un comptable, Tax-on-web, Intervat ou une plateforme officielle.
+            </p>
+          </section>
+
+          <section class="landing-section landing-faq-section" id="faq" aria-labelledby="faqTitle">
+            <div class="landing-section-heading landing-reveal">
+              <span class="landing-eyebrow">Questions fréquentes</span>
+              <h2 id="faqTitle">Ce qu'il faut savoir avant de commencer</h2>
+            </div>
+
+            <div class="landing-faq-grid">
+              <details class="landing-faq-item landing-reveal">
+                <summary>Que puis-je utiliser gratuitement ?</summary>
+                <p>Le module Devis &amp; Factures est gratuit sans limite de durée. Il comprend notamment les devis, factures, rappels, PDF, reprise de documents et l'onglet Tarifs pour enregistrer vos articles, prestations et prix habituels. Seuls les modules avancés nécessitent un abonnement.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>BastCompta remplace-t-il un comptable ?</summary>
+                <p>Non. BastCompta aide à organiser, préparer et contrôler vos données. Les déclarations officielles et les situations particulières doivent rester vérifiées par un professionnel ou via les plateformes compétentes.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>À qui s'adresse BastCompta ?</summary>
+                <p>Principalement aux indépendants en personne physique, aux indépendants à titre complémentaire, aux artisans et aux petits prestataires qui souhaitent garder une gestion claire.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>Dois-je installer un programme ?</summary>
+                <p>Non. BastCompta fonctionne dans votre navigateur. Une connexion internet est nécessaire pour accéder au portail et utiliser les fonctions en ligne.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>Mes données peuvent-elles être sauvegardées ?</summary>
+                <p>Oui. Vous pouvez créer une sauvegarde ZIP locale et connecter Google Drive pour conserver des fichiers dans l'espace réservé à BastCompta.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>Puis-je préparer ma TVA et mon IPP ?</summary>
+                <p>Oui. Les modules regroupent les informations utiles et proposent des contrôles. Les chiffres doivent toutefois toujours être vérifiés avant une démarche officielle.</p>
+              </details>
+              <details class="landing-faq-item landing-reveal">
+                <summary>Comment obtenir de l'aide ?</summary>
+                <p>Un centre d'aide complet est intégré dans le portail. Vous pouvez également écrire à bastcompta@outlook.be en précisant le module et le problème rencontré.</p>
+              </details>
+            </div>
+          </section>
+
+          <section class="landing-section landing-cta landing-reveal" aria-labelledby="ctaTitle">
+            <div>
+              <span class="landing-eyebrow">Commencez gratuitement</span>
+              <h2 id="ctaTitle">Créez vos premiers devis et factures</h2>
+              <p>Le module Devis &amp; Factures, avec son onglet Tarifs, est gratuit sans limite de durée. Les modules Premium restent disponibles lorsque vous en avez besoin.</p>
+            </div>
+            <div class="landing-cta-actions">
+              <a class="landing-button landing-register-link" href="#authScreen">Créer mon compte gratuitement</a>
+              <a class="landing-button landing-button-secondary" href="mailto:bastcompta@outlook.be">Poser une question</a>
+            </div>
+          </section>
+        </main>
+
+        <footer class="landing-footer">
+          <div class="landing-footer-brand">
+            <img src="logo.png" alt="BastCompta">
+            <p>Gestion · Comptabilité · Simplicité</p>
+          </div>
+          <div class="landing-footer-links">
+            <a href="#fonctionnalites">Fonctionnalités</a>
+            <a href="#tarifs">Gratuit &amp; Premium</a>
+            <a href="#faq">FAQ</a>
+            <a href="mailto:bastcompta@outlook.be">Contact</a>
+          </div>
+          <p>© Nicolas Sébastien · BastCompta · Belgique</p>
+        </footer>
       </div>
     </section>
 
@@ -403,8 +876,8 @@
           data-subtitle="Comprendre le rôle de BastCompta et son positionnement.">
           <article class="help-article">
             <h3>Qu’est-ce que BastCompta ?</h3>
-            <p>BastCompta est un outil de gestion, d’organisation et de préparation administrative pour les indépendants
-              et petites structures.</p>
+            <p>BastCompta est un outil de gestion, d’organisation et de préparation administrative conçu pour les indépendants
+              et les indépendants à titre complémentaire.</p>
             <p>Il sert à centraliser les devis, factures, clients, documents, données TVA, rappels, informations utiles
               et sauvegardes dans un seul portail.</p>
             <p>BastCompta n’a pas pour but de remplacer un comptable, Tax-on-web, Intervat ou les plateformes
@@ -414,8 +887,8 @@
 
           <article class="help-article">
             <h3>À qui s’adresse l’outil ?</h3>
-            <p>L’outil est surtout pensé pour les indépendants complémentaires, artisans, petites activités, petits
-              prestataires et structures qui veulent une gestion claire sans utiliser un logiciel lourd.</p>
+            <p>L’outil est surtout pensé pour les indépendants à titre complémentaire, artisans et petits prestataires
+              qui veulent une gestion claire sans utiliser un logiciel lourd.</p>
             <p>Il convient particulièrement lorsque le volume de documents reste raisonnable et que l’utilisateur
               souhaite garder une vue simple sur son activité.</p>
           </article>
@@ -949,6 +1422,35 @@
   </div>
 
   <script type="module" src="js/index.js?v=16"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      document.querySelectorAll(".landing-register-link").forEach(function (link) {
+        link.addEventListener("click", function () {
+          window.setTimeout(function () {
+            const registerTab = document.querySelector('[data-auth-tab="register"]');
+            const authCard = document.querySelector(".auth-card");
+            if (registerTab) registerTab.click();
+            if (authCard) authCard.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 50);
+        });
+      });
+
+      const revealItems = document.querySelectorAll(".landing-reveal");
+      if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+        revealItems.forEach(function (item) { observer.observe(item); });
+      } else {
+        revealItems.forEach(function (item) { item.classList.add("is-visible"); });
+      }
+    });
+  </script>
 
 </body>
 
