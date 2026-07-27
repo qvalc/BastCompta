@@ -1,0 +1,25 @@
+===========================================
+
+BastCompta - robots.txt
+
+===========================================
+
+User-agent: *
+
+Autoriser l’ensemble du site
+
+Allow: /
+
+Bloquer les vues internes de l’application
+
+Disallow: /devis-facture.html Disallow: /comptabilite.html Disallow:
+/suivi-client.html Disallow: /impots.html
+
+Dossiers techniques (si présents)
+
+Disallow: /api/ Disallow: /ajax/ Disallow: /includes/ Disallow: /config/
+Disallow: /vendor/
+
+Sitemap
+
+Sitemap: https://bastcompta.bast-amenagement.com/sitemap.xml
