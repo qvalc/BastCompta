@@ -2975,7 +2975,7 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     devis: 'Devis & Factures',
     compta: 'Comptabilité',
     chantier: 'Suivi client',
-    terrain: 'Terrain',
+    terrain: 'Mode terrain',
     impots: 'Impôts IPP'
   };
   const defaults = { devis: 'quote', compta: 'sales', impots: 'summary' };
