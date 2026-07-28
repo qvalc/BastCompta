@@ -8,6 +8,7 @@ import {
   signOut,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDK3VeC-TOfXliPrY9IrHN0tFPf7KEm_j0',
@@ -21,8 +22,16 @@ const firebaseConfig = {
 const STORAGE_KEY = 'devis-facture-style-vrai-document';
 const DRAFTS_KEY = 'bastcompta-terrain-drafts-v1';
 const FAVORITES_KEY = 'bastcompta-terrain-favorites-v1';
+const CHANTIERS_KEY = 'bastcompta-chantiers-v1';
+const CRM_DRIVE_FILE = 'bastcompta-crm-sync.json';
+const CHANTIERS_DRIVE_FILE = 'bastcompta-chantiers-sync.json';
+const DRAFTS_DRIVE_FILE = 'bastcompta-terrain-drafts.json';
+const GOOGLE_CLIENT_ID = '724620573737-7o7bc9rn9r97r8fhqsfvlcl9dtaa7d7c.apps.googleusercontent.com';
+const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
+const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
 const app = initializeApp(firebaseConfig, 'bastcompta-terrain');
 const auth = getAuth(app);
+const db = getFirestore(app);
 await setPersistence(auth, browserLocalPersistence);
 
 const $ = selector => document.querySelector(selector);
@@ -44,7 +53,10 @@ let state = {
   selectedClientId: '',
   activeDraft: null,
   query: '',
-  currentUser: null
+  currentUser: null,
+  subscription: { status: 'free', allowed: false, data: null },
+  chantiers: { projects: [] },
+  drive: { token: '', expiresAt: 0, client: null, syncing: false }
 };
 
 function clone(value) {
@@ -80,23 +92,192 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-function loadAllData() {
-  state.data = readJson(STORAGE_KEY, { company: {}, quote: {}, clients: [], tarifs: { categories: [], items: [] } });
+async function loadAllData() {
+  const fallback = { company: {}, quote: {}, clients: [], tarifs: { categories: [], subcategories: [], items: [] } };
+  state.data = window.BastStorage ? await BastStorage.getJson(STORAGE_KEY, fallback) : readJson(STORAGE_KEY, fallback);
+  if (!state.data || typeof state.data !== 'object') state.data = clone(fallback);
   if (!Array.isArray(state.data.clients)) state.data.clients = [];
-  if (!state.data.tarifs || typeof state.data.tarifs !== 'object') state.data.tarifs = { categories: [], items: [] };
+  if (!state.data.tarifs || typeof state.data.tarifs !== 'object') state.data.tarifs = { categories: [], subcategories: [], items: [] };
   if (!Array.isArray(state.data.tarifs.items)) state.data.tarifs.items = [];
-  state.drafts = readJson(DRAFTS_KEY, []);
+  state.drafts = window.BastStorage ? await BastStorage.getJson(DRAFTS_KEY, []) : readJson(DRAFTS_KEY, []);
   if (!Array.isArray(state.drafts)) state.drafts = [];
-  state.favorites = readJson(FAVORITES_KEY, []);
+  state.favorites = window.BastStorage ? await BastStorage.getJson(FAVORITES_KEY, []) : readJson(FAVORITES_KEY, []);
   if (!Array.isArray(state.favorites)) state.favorites = [];
+  state.chantiers = window.BastStorage ? await BastStorage.getJson(CHANTIERS_KEY, { projects: [] }) : readJson(CHANTIERS_KEY, { projects: [] });
+  if (!state.chantiers || typeof state.chantiers !== 'object') state.chantiers = { projects: [] };
+  if (!Array.isArray(state.chantiers.projects)) state.chantiers.projects = [];
 }
 
-function saveMainData() {
-  writeJson(STORAGE_KEY, state.data);
+async function saveMainData(syncDrive = true) {
+  if (window.BastStorage) await BastStorage.setJson(STORAGE_KEY, state.data);
+  else writeJson(STORAGE_KEY, state.data);
+  if (syncDrive && isDriveConnected()) await saveCrmToDrive(false);
 }
 
-function saveDrafts() {
-  writeJson(DRAFTS_KEY, state.drafts);
+async function saveDrafts(syncDrive = true) {
+  if (window.BastStorage) await BastStorage.setJson(DRAFTS_KEY, state.drafts);
+  else writeJson(DRAFTS_KEY, state.drafts);
+  if (syncDrive && isDriveConnected()) await saveJsonToDrive(DRAFTS_DRIVE_FILE, state.drafts, false);
+}
+
+function hasPremiumAccess() {
+  return ['owner', 'active', 'trial'].includes(state.subscription?.status);
+}
+
+async function checkSubscription(user) {
+  try {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    let status = data.subscriptionStatus || 'free';
+    let allowed = false;
+    if (status === 'owner' && data.subscriptionActive === true) allowed = true;
+    if (status === 'active' && data.subscriptionActive === true) {
+      const end = new Date(data.subscriptionEndsAt || 0);
+      allowed = !Number.isNaN(end.getTime()) && Date.now() <= end.getTime();
+      if (!allowed) status = 'expired';
+    }
+    if (status === 'trial' && data.subscriptionActive === true) {
+      const end = new Date(data.trialEndsAt || 0);
+      allowed = !Number.isNaN(end.getTime()) && Date.now() <= end.getTime();
+      if (!allowed) status = 'expired';
+    }
+    state.subscription = { status, allowed, data };
+  } catch (error) {
+    console.warn('Statut abonnement indisponible', error);
+    state.subscription = { status: 'free', allowed: false, data: null };
+  }
+}
+
+function isDriveConnected() {
+  return !!state.drive.token && Date.now() < (state.drive.expiresAt - 60000);
+}
+
+function updateSyncLine(text, mode = '') {
+  const el = document.getElementById('syncText');
+  const line = document.getElementById('syncLine');
+  if (el) el.textContent = text;
+  if (line) line.dataset.status = mode;
+}
+
+function initGoogleDrive() {
+  if (!window.google?.accounts?.oauth2) return false;
+  if (state.drive.client) return true;
+  state.drive.client = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: () => {}
+  });
+  return true;
+}
+
+function requestDriveToken(interactive = true) {
+  return new Promise((resolve, reject) => {
+    if (!initGoogleDrive()) return reject(new Error('Google Drive pas encore prêt.'));
+    const client = state.drive.client;
+    client.callback = response => {
+      if (response?.error || !response?.access_token) return reject(new Error(response?.error || 'Autorisation refusée'));
+      state.drive.token = response.access_token;
+      state.drive.expiresAt = Date.now() + Number(response.expires_in || 3600) * 1000;
+      localStorage.setItem(GOOGLE_WAS_CONNECTED_KEY, '1');
+      resolve(state.drive.token);
+    };
+    client.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+
+async function driveListByName(fileName) {
+  const q = new URLSearchParams({ spaces: 'appDataFolder', q: `name='${String(fileName).replace(/'/g, "\'")}' and trashed=false`, fields: 'files(id,name,modifiedTime)', pageSize: '10', orderBy: 'modifiedTime desc' });
+  const res = await fetch('https://www.googleapis.com/drive/v3/files?' + q.toString(), { headers: { Authorization: 'Bearer ' + state.drive.token } });
+  if (res.status === 401) { state.drive.token = ''; throw new Error('Session Google Drive expirée'); }
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).files || [];
+}
+
+async function loadJsonFromDrive(fileName) {
+  const files = await driveListByName(fileName);
+  if (!files.length) return null;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${files[0].id}?alt=media`, { headers: { Authorization: 'Bearer ' + state.drive.token } });
+  if (!res.ok) throw new Error(await res.text());
+  return await res.json();
+}
+
+async function saveJsonToDrive(fileName, payload, showErrors = true) {
+  if (!isDriveConnected()) return false;
+  try {
+    const files = await driveListByName(fileName);
+    const metadata = files.length ? { name: fileName } : { name: fileName, parents: ['appDataFolder'] };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const url = files.length
+      ? `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+    const res = await fetch(url, { method: files.length ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + state.drive.token }, body: form });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  } catch (error) {
+    console.error(error);
+    if (showErrors) showToast('Sauvegarde Drive impossible.');
+    return false;
+  }
+}
+
+async function saveCrmToDrive(showErrors = true) {
+  const payload = {
+    company: state.data.company || {},
+    clients: Array.isArray(state.data.clients) ? state.data.clients : [],
+    mail: state.data.mail || {},
+    tarifs: state.data.tarifs || { categories: [], subcategories: [], items: [] }
+  };
+  updateSyncLine('Synchronisation Google Drive…', 'working');
+  const ok = await saveJsonToDrive(CRM_DRIVE_FILE, payload, showErrors);
+  updateSyncLine(ok ? 'Synchronisé avec Google Drive' : 'Données locales — Drive non synchronisé', ok ? 'ok' : 'warning');
+  return ok;
+}
+
+async function syncFromDrive() {
+  if (!isDriveConnected()) return false;
+  updateSyncLine('Chargement depuis Google Drive…', 'working');
+  try {
+    const crm = await loadJsonFromDrive(CRM_DRIVE_FILE);
+    if (crm && typeof crm === 'object') {
+      if (crm.company) state.data.company = crm.company;
+      if (Array.isArray(crm.clients)) state.data.clients = crm.clients;
+      if (crm.mail) state.data.mail = crm.mail;
+      if (crm.tarifs) state.data.tarifs = crm.tarifs;
+      await saveMainData(false);
+    }
+    const drafts = await loadJsonFromDrive(DRAFTS_DRIVE_FILE);
+    if (Array.isArray(drafts)) { state.drafts = drafts; await saveDrafts(false); }
+    if (hasPremiumAccess()) {
+      const chantiers = await loadJsonFromDrive(CHANTIERS_DRIVE_FILE);
+      if (chantiers && typeof chantiers === 'object') {
+        state.chantiers = chantiers;
+        if (window.BastStorage) await BastStorage.setJson(CHANTIERS_KEY, chantiers); else writeJson(CHANTIERS_KEY, chantiers);
+      }
+    }
+    updateSyncLine('Synchronisé avec Google Drive', 'ok');
+    render();
+    return true;
+  } catch (error) {
+    console.warn(error);
+    updateSyncLine('Données locales — connexion Drive nécessaire', 'warning');
+    return false;
+  }
+}
+
+async function connectAndSyncDrive(interactive = true) {
+  try {
+    await requestDriveToken(interactive);
+    await syncFromDrive();
+    showToast('Google Drive connecté.');
+    return true;
+  } catch (error) {
+    console.warn(error);
+    updateSyncLine('Google Drive non connecté', 'warning');
+    if (interactive) showToast('Connexion Google Drive annulée ou impossible.');
+    return false;
+  }
 }
 
 function showOnly(screen) {
@@ -214,13 +395,13 @@ function ensureActiveDraft() {
   if (!Array.isArray(state.activeDraft.lines)) state.activeDraft.lines = [];
 }
 
-function persistActiveDraft(message = '') {
+async function persistActiveDraft(message = '') {
   ensureActiveDraft();
   state.activeDraft.updatedAt = new Date().toISOString();
   const index = state.drafts.findIndex(item => item.id === state.activeDraft.id);
   if (index >= 0) state.drafts[index] = clone(state.activeDraft);
   else state.drafts.unshift(clone(state.activeDraft));
-  saveDrafts();
+  await saveDrafts();
   if (message) showToast(message);
 }
 
@@ -254,7 +435,7 @@ function renderClients() {
         <div class="list-main" data-action="client-detail" data-id="${escapeHtml(client.id)}">
           <strong>${client.favorite ? '★ ' : ''}${escapeHtml(clientDisplay(client))}</strong>
           <small>${escapeHtml(client.phone || client.email || client.address || 'Aucune coordonnée')}</small>
-          ${client.notes ? `<div class="client-note">${escapeHtml(client.notes)}</div>` : ''}
+          ${hasPremiumAccess() && client.notes ? `<div class="client-note">${escapeHtml(client.notes)}</div>` : ''}
         </div>
         <div class="list-actions"><button class="mini-btn" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Devis</button><button class="mini-btn" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">✎</button></div>
       </article>`).join('') : '<div class="empty">Aucun client trouvé.</div>'}</div>`;
@@ -271,10 +452,20 @@ function renderClientForm() {
       <div class="field"><label for="cfAddress">Adresse</label><textarea id="cfAddress" rows="2">${escapeHtml(client.address || '')}</textarea></div>
       <div class="field-row"><div class="field"><label for="cfNumber">N° client</label><input id="cfNumber" value="${escapeHtml(client.clientNumber || '')}"></div><div class="field"><label for="cfVat">TVA</label><input id="cfVat" value="${escapeHtml(client.vat || '')}"></div></div>
       <div class="field"><label for="cfContact">Personne de contact</label><input id="cfContact" value="${escapeHtml(client.contact || '')}"></div>
-      <div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>
+      ${hasPremiumAccess() ? `<div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Les notes et chantiers restent réservés au module Suivi client.</span></div>`}
       <label class="field"><span>Favori</span><select id="cfFavorite"><option value="0" ${!client.favorite ? 'selected' : ''}>Non</option><option value="1" ${client.favorite ? 'selected' : ''}>Oui</option></select></label>
       <div class="form-actions"><button class="secondary-button" type="button" data-action="cancel-client">Annuler</button><button class="primary-button" type="button" data-action="save-client">Enregistrer</button></div>
     </div>`;
+}
+
+function renderClientProjects(client) {
+  const key = normalizeText(client.id || client.name || '');
+  const projects = (state.chantiers.projects || []).filter(project => {
+    const values = [project.clientId, project.clientName, project.customerName, project.title].map(normalizeText);
+    return values.some(value => value && (value === key || value.includes(normalizeText(client.name || ''))));
+  });
+  if (!projects.length) return '<div class="client-note">Aucun chantier lié.</div>';
+  return `<div><strong>Chantiers / suivi</strong><div class="list">${projects.slice(0,8).map(project => `<div class="client-note"><strong>${escapeHtml(project.title || project.name || 'Chantier')}</strong><br><small>${escapeHtml(project.status || project.address || '')}</small></div>`).join('')}</div></div>`;
 }
 
 function renderClientDetail() {
@@ -288,7 +479,7 @@ function renderClientDetail() {
       ${client.email ? `<a href="mailto:${escapeHtml(client.email)}">✉️ ${escapeHtml(client.email)}</a>` : ''}
       ${client.address ? `<div>📍 ${escapeHtml(client.address)}</div>` : ''}
       ${client.vat ? `<div>TVA : ${escapeHtml(client.vat)}</div>` : ''}
-      ${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}
+      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
       <div class="form-actions"><button class="secondary-button" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">Modifier</button><button class="primary-button" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Nouveau devis</button></div>
     </article>
     <div class="section-head"><h2>Devis terrain (${drafts.length})</h2></div>
@@ -452,7 +643,7 @@ function saveClientFromForm(returnToQuote = false) {
     name,
     phone: $('#cfPhone').value.trim(), email: $('#cfEmail').value.trim(), address: $('#cfAddress').value.trim(),
     clientNumber: $('#cfNumber').value.trim(), vat: $('#cfVat').value.trim(), contact: $('#cfContact').value.trim(),
-    notes: $('#cfNotes').value.trim(), favorite: $('#cfFavorite').value === '1', createdAt: existing.createdAt || new Date().toISOString()
+    notes: hasPremiumAccess() ? ($('#cfNotes')?.value.trim() || existing.notes || '') : (existing.notes || ''), favorite: $('#cfFavorite').value === '1', createdAt: existing.createdAt || new Date().toISOString()
   };
   if (existingIndex >= 0) state.data.clients[existingIndex] = client;
   else state.data.clients.push(client);
@@ -474,7 +665,7 @@ function selectClientForQuote(clientId) {
   setView('quote-lines');
 }
 
-function transferQuoteToMain() {
+async function transferQuoteToMain() {
   ensureActiveDraft();
   const d = state.activeDraft;
   if (!d.clientName) return showToast('Choisis d’abord un client.');
@@ -488,12 +679,12 @@ function transferQuoteToMain() {
     validity: d.validity || '', siteName: d.siteName || '', chantierId: '',
     lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [], notes: d.notes || ''
   };
-  saveMainData();
+  await saveMainData(true);
   d.status = 'transferred';
   d.transferredAt = new Date().toISOString();
   persistActiveDraft();
   showToast('Devis transféré dans BastCompta.');
-  setTimeout(() => { window.location.href = 'devis-facture.html?terrain=1'; }, 650);
+  setTimeout(() => { window.location.href = 'index.html?terrain=1'; }, 650);
 }
 
 viewRoot.addEventListener('click', event => {
@@ -573,25 +764,28 @@ const accountMenu = $('#terrainAccountMenu');
 $('#terrainAccountBtn').addEventListener('click', () => accountMenu.classList.remove('hidden'));
 $('#closeAccountBtn').addEventListener('click', () => accountMenu.classList.add('hidden'));
 $('#terrainLogoutBtn').addEventListener('click', async () => { accountMenu.classList.add('hidden'); await signOut(auth); });
-$('#reloadDataBtn').addEventListener('click', () => { loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
+$('#reloadDataBtn').addEventListener('click', async () => { await loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
+$('#connectDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); await connectAndSyncDrive(true); });
+$('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
 
 window.addEventListener('storage', event => {
   if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { loadAllData(); render(); }
 });
 
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && state.currentUser) { loadAllData(); render(); }
-});
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && state.currentUser) { await loadAllData(); render(); } });
 
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async user => {
   state.currentUser = user;
   if (user) {
-    loadAllData();
-    $('#terrainUserEmail').textContent = user.email || 'Compte BastCompta connecté';
+    await checkSubscription(user);
+    await loadAllData();
+    $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Premium' : 'Gratuit'}`;
     setAuthMessage('');
     showOnly(appScreen);
     state.view = 'home'; state.history = []; state.activeDraft = null;
     render();
+    updateSyncLine('Données locales BastCompta chargées', 'ok');
+    if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
   } else {
     passwordInput.value = '';
     showOnly(authScreen);

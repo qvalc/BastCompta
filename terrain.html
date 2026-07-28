@@ -7,8 +7,9 @@
   <meta name="description" content="BastCompta Terrain — devis rapides reliés à BastCompta.">
   <title>BastCompta Terrain</title>
   <link rel="icon" href="logo.png">
-  <link rel="stylesheet" href="css/terrain.css?v=2">
+  <link rel="stylesheet" href="css/terrain.css?v=3">
   <script src="js/storage.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
   <main class="terrain-shell">
@@ -68,13 +69,15 @@
           <h2 id="accountTitle">Mon compte</h2>
           <p id="terrainUserEmail"></p>
           <a class="sheet-link" href="index.html">Ouvrir BastCompta complet</a>
-          <button id="reloadDataBtn" class="secondary-button" type="button">Recharger les données</button>
+          <button id="connectDriveBtn" class="primary-button" type="button">Connecter Google Drive</button>
+          <button id="syncDriveBtn" class="secondary-button" type="button">Synchroniser maintenant</button>
+          <button id="reloadDataBtn" class="secondary-button" type="button">Recharger les données locales</button>
           <button id="terrainLogoutBtn" class="danger-button" type="button">Se déconnecter</button>
         </div>
       </div>
     </section>
   </main>
 
-  <script type="module" src="js/terrain.js?v=2"></script>
+  <script type="module" src="js/terrain.js?v=3"></script>
 </body>
 </html>
