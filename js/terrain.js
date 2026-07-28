@@ -8,7 +8,7 @@ import {
   signOut,
   onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyDK3VeC-TOfXliPrY9IrHN0tFPf7KEm_j0',
@@ -121,25 +121,48 @@ async function saveDrafts(syncDrive = true) {
 }
 
 function hasPremiumAccess() {
-  return ['owner', 'active', 'trial'].includes(state.subscription?.status);
+  return state.subscription?.allowed === true && ['owner', 'active', 'trial'].includes(state.subscription?.status);
+}
+
+function requirePremium(feature = 'Cette fonction') {
+  if (hasPremiumAccess()) return true;
+  showToast(`${feature} est réservé au module Premium.`);
+  return false;
 }
 
 async function checkSubscription(user) {
+  if (!user?.uid) {
+    state.subscription = { status: 'free', allowed: false, data: null };
+    return;
+  }
   try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
     const data = snap.exists() ? (snap.data() || {}) : {};
+    const now = new Date();
     let status = data.subscriptionStatus || 'free';
     let allowed = false;
-    if (status === 'owner' && data.subscriptionActive === true) allowed = true;
-    if (status === 'active' && data.subscriptionActive === true) {
+
+    if (status === 'owner' && data.subscriptionActive === true) {
+      allowed = true;
+    } else if (status === 'active' && data.subscriptionActive === true) {
       const end = new Date(data.subscriptionEndsAt || 0);
-      allowed = !Number.isNaN(end.getTime()) && Date.now() <= end.getTime();
-      if (!allowed) status = 'expired';
-    }
-    if (status === 'trial' && data.subscriptionActive === true) {
+      allowed = !Number.isNaN(end.getTime()) && now <= end;
+      if (!allowed) {
+        status = 'expired';
+        await updateDoc(userRef, {
+          subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString()
+        }).catch(() => {});
+      }
+    } else if (status === 'trial' && data.subscriptionActive === true) {
       const end = new Date(data.trialEndsAt || 0);
-      allowed = !Number.isNaN(end.getTime()) && Date.now() <= end.getTime();
-      if (!allowed) status = 'expired';
+      allowed = !Number.isNaN(end.getTime()) && now <= end;
+      if (!allowed) {
+        status = 'expired';
+        await updateDoc(userRef, {
+          subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString()
+        }).catch(() => {});
+      }
     }
     state.subscription = { status, allowed, data };
   } catch (error) {
@@ -159,6 +182,44 @@ function updateSyncLine(text, mode = '') {
   if (line) line.dataset.status = mode;
 }
 
+function normalizeEmail(value = '') {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function getGoogleDriveEmail(accessToken) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: 'Bearer ' + accessToken }
+  });
+  if (!response.ok) throw new Error('Impossible de vérifier le compte Google Drive.');
+  const profile = await response.json();
+  return normalizeEmail(profile.email);
+}
+
+async function validateDriveAccountForCurrentUser(accessToken) {
+  const user = auth.currentUser;
+  if (!user?.uid) throw new Error('Utilisateur BastCompta non connecté.');
+  const driveEmail = await getGoogleDriveEmail(accessToken);
+  if (!driveEmail) throw new Error('Adresse email Google Drive introuvable.');
+
+  const userRef = doc(db, 'users', user.uid);
+  const snap = await getDoc(userRef);
+  const data = snap.exists() ? (snap.data() || {}) : {};
+  const savedDriveEmail = normalizeEmail(data.driveEmail);
+
+  if (!savedDriveEmail) {
+    await setDoc(userRef, {
+      driveEmail,
+      driveLinkedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return driveEmail;
+  }
+  if (savedDriveEmail !== driveEmail) {
+    throw new Error('Ce compte BastCompta est déjà lié au Google Drive : ' + savedDriveEmail);
+  }
+  return driveEmail;
+}
+
 function initGoogleDrive() {
   if (!window.google?.accounts?.oauth2) return false;
   if (state.drive.client) return true;
@@ -174,12 +235,19 @@ function requestDriveToken(interactive = true) {
   return new Promise((resolve, reject) => {
     if (!initGoogleDrive()) return reject(new Error('Google Drive pas encore prêt.'));
     const client = state.drive.client;
-    client.callback = response => {
+    client.callback = async response => {
       if (response?.error || !response?.access_token) return reject(new Error(response?.error || 'Autorisation refusée'));
       state.drive.token = response.access_token;
       state.drive.expiresAt = Date.now() + Number(response.expires_in || 3600) * 1000;
-      localStorage.setItem(GOOGLE_WAS_CONNECTED_KEY, '1');
-      resolve(state.drive.token);
+      try {
+        await validateDriveAccountForCurrentUser(state.drive.token);
+        localStorage.setItem(GOOGLE_WAS_CONNECTED_KEY, '1');
+        resolve(state.drive.token);
+      } catch (error) {
+        state.drive.token = '';
+        state.drive.expiresAt = 0;
+        reject(error);
+      }
     };
     client.requestAccessToken({ prompt: interactive ? 'consent' : '' });
   });
@@ -202,7 +270,7 @@ async function loadJsonFromDrive(fileName) {
 }
 
 async function saveJsonToDrive(fileName, payload, showErrors = true) {
-  if (!isDriveConnected()) return false;
+  if (!hasPremiumAccess() || !isDriveConnected()) return false;
   try {
     const files = await driveListByName(fileName);
     const metadata = files.length ? { name: fileName } : { name: fileName, parents: ['appDataFolder'] };
@@ -223,6 +291,7 @@ async function saveJsonToDrive(fileName, payload, showErrors = true) {
 }
 
 async function saveCrmToDrive(showErrors = true) {
+  if (!hasPremiumAccess()) return false;
   const payload = {
     company: state.data.company || {},
     clients: Array.isArray(state.data.clients) ? state.data.clients : [],
@@ -236,6 +305,10 @@ async function saveCrmToDrive(showErrors = true) {
 }
 
 async function syncFromDrive() {
+  if (!hasPremiumAccess()) {
+    updateSyncLine('Google Drive est réservé au Premium', 'warning');
+    return false;
+  }
   if (!isDriveConnected()) return false;
   updateSyncLine('Chargement depuis Google Drive…', 'working');
   try {
@@ -267,6 +340,10 @@ async function syncFromDrive() {
 }
 
 async function connectAndSyncDrive(interactive = true) {
+  if (!requirePremium('Google Drive')) {
+    updateSyncLine('Google Drive est réservé au Premium', 'warning');
+    return false;
+  }
   try {
     await requestDriveToken(interactive);
     await syncFromDrive();
@@ -416,7 +493,7 @@ function renderHome() {
       <button class="primary-button" type="button" data-action="start-quote">＋ Nouveau devis</button>
     </section>
     <section class="quick-grid">
-      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${currentClient} client${currentClient === 1 ? '' : 's'}</strong><small>Recherche et suivi</small></div></button>
+      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Module Premium'}</small></div></button>
       <button class="quick-card" type="button" data-action="nav-prices"><span>🏷️</span><div><strong>${prices} tarif${prices === 1 ? '' : 's'}</strong><small>Prestations disponibles</small></div></button>
       <button class="quick-card" type="button" data-action="nav-drafts"><span>📄</span><div><strong>${state.drafts.length} brouillon${state.drafts.length === 1 ? '' : 's'}</strong><small>Reprendre un devis</small></div></button>
       <a class="quick-card link-button" href="index.html"><span>🖥️</span><div><strong>Version complète</strong><small>Gestion BastCompta</small></div></a>
@@ -426,6 +503,16 @@ function renderHome() {
 }
 
 function renderClients() {
+  if (!hasPremiumAccess()) {
+    viewRoot.innerHTML = `
+      <section class="form-card premium-lock-page">
+        <div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>La liste générale des clients, les fiches, notes, chantiers et l’historique font partie du module Suivi client.</span></div>
+        <p class="muted">La création d’un devis reste gratuite : la sélection ou l’ajout d’un client reste disponible uniquement pendant la création du devis.</p>
+        <button class="primary-button" type="button" data-action="start-quote">Créer un devis gratuit</button>
+        <a class="secondary-button link-button" href="index.html">Voir les abonnements dans BastCompta</a>
+      </section>`;
+    return;
+  }
   const clients = filteredClients();
   viewRoot.innerHTML = `
     <div class="section-head"><h2>${state.data.clients.length} client${state.data.clients.length === 1 ? '' : 's'}</h2><button type="button" data-action="new-client">＋ Ajouter</button></div>
@@ -435,7 +522,7 @@ function renderClients() {
         <div class="list-main" data-action="client-detail" data-id="${escapeHtml(client.id)}">
           <strong>${client.favorite ? '★ ' : ''}${escapeHtml(clientDisplay(client))}</strong>
           <small>${escapeHtml(client.phone || client.email || client.address || 'Aucune coordonnée')}</small>
-          ${hasPremiumAccess() && client.notes ? `<div class="client-note">${escapeHtml(client.notes)}</div>` : ''}
+          ${client.notes ? `<div class="client-note">${escapeHtml(client.notes)}</div>` : ''}
         </div>
         <div class="list-actions"><button class="mini-btn" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Devis</button><button class="mini-btn" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">✎</button></div>
       </article>`).join('') : '<div class="empty">Aucun client trouvé.</div>'}</div>`;
@@ -443,6 +530,7 @@ function renderClients() {
 }
 
 function renderClientForm() {
+  if (!hasPremiumAccess() && !state.activeDraft) { renderClients(); return; }
   const existing = state.selectedClientId ? state.data.clients.find(item => item.id === state.selectedClientId) : null;
   const client = existing || { id: '', name: '', contact: '', email: '', phone: '', address: '', clientNumber: '', vat: '', notes: '', favorite: false };
   viewRoot.innerHTML = `
@@ -469,6 +557,7 @@ function renderClientProjects(client) {
 }
 
 function renderClientDetail() {
+  if (!hasPremiumAccess()) { renderClients(); return; }
   const client = state.data.clients.find(item => item.id === state.selectedClientId);
   if (!client) return setView('clients', { push: false });
   const drafts = state.drafts.filter(d => d.clientId === client.id);
@@ -696,10 +785,10 @@ viewRoot.addEventListener('click', event => {
   else if (action === 'nav-clients') setView('clients');
   else if (action === 'nav-prices') setView('prices');
   else if (action === 'nav-drafts') setView('drafts');
-  else if (action === 'new-client') { state.selectedClientId = ''; setView('client-form'); }
+  else if (action === 'new-client') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = ''; setView('client-form'); }
   else if (action === 'new-client-from-quote') { state.selectedClientId = ''; setView('client-form'); }
-  else if (action === 'edit-client') { state.selectedClientId = id; setView('client-form'); }
-  else if (action === 'client-detail') { state.selectedClientId = id; setView('client-detail'); }
+  else if (action === 'edit-client') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = id; setView('client-form'); }
+  else if (action === 'client-detail') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = id; setView('client-detail'); }
   else if (action === 'cancel-client') goBack();
   else if (action === 'save-client') saveClientFromForm(!!state.activeDraft);
   else if (action === 'quote-for-client') { const client = state.data.clients.find(c => c.id === id); state.activeDraft = makeBlankDraft(client); setView('quote-lines'); }
@@ -760,13 +849,26 @@ $('#terrainForgotBtn').addEventListener('click', async () => {
   catch (error) { setAuthMessage(friendlyAuthError(error), 'error'); }
 });
 
+function updateAccountPermissionsUi() {
+  const connect = $('#connectDriveBtn');
+  const sync = $('#syncDriveBtn');
+  const premium = hasPremiumAccess();
+  if (connect) {
+    connect.disabled = !premium;
+    connect.textContent = premium ? (isDriveConnected() ? 'Google Drive connecté' : 'Connecter Google Drive') : 'Google Drive — Premium';
+  }
+  if (sync) sync.disabled = !premium;
+  const clientNav = bottomNav?.querySelector('[data-nav="clients"] small');
+  if (clientNav) clientNav.textContent = premium ? 'Clients' : 'Clients 🔒';
+}
+
 const accountMenu = $('#terrainAccountMenu');
-$('#terrainAccountBtn').addEventListener('click', () => accountMenu.classList.remove('hidden'));
+$('#terrainAccountBtn').addEventListener('click', () => { updateAccountPermissionsUi(); accountMenu.classList.remove('hidden'); });
 $('#closeAccountBtn').addEventListener('click', () => accountMenu.classList.add('hidden'));
 $('#terrainLogoutBtn').addEventListener('click', async () => { accountMenu.classList.add('hidden'); await signOut(auth); });
 $('#reloadDataBtn').addEventListener('click', async () => { await loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
 $('#connectDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); await connectAndSyncDrive(true); });
-$('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
+$('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!requirePremium('Google Drive')) return; if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
 
 window.addEventListener('storage', event => {
   if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { loadAllData(); render(); }
@@ -784,8 +886,9 @@ onAuthStateChanged(auth, async user => {
     showOnly(appScreen);
     state.view = 'home'; state.history = []; state.activeDraft = null;
     render();
-    updateSyncLine('Données locales BastCompta chargées', 'ok');
-    if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
+    updateAccountPermissionsUi();
+    updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — Drive et suivi client verrouillés', hasPremiumAccess() ? 'ok' : 'warning');
+    if (hasPremiumAccess() && localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
   } else {
     passwordInput.value = '';
     showOnly(authScreen);
