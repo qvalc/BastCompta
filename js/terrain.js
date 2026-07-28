@@ -59,7 +59,8 @@ let state = {
   subscription: { status: 'free', allowed: false, data: null },
   chantiers: { projects: [] },
   drive: { token: '', expiresAt: 0, client: null, syncing: false },
-  photoBusy: false
+  photoBusy: false,
+  photoTarget: 'client'
 };
 
 const photoObjectUrls = new Map();
@@ -415,6 +416,116 @@ function renderClientPhotos(client) {
   </section>`;
 }
 
+
+function renderQuotePhotos(draft) {
+  const photos = Array.isArray(draft.photos) ? draft.photos : [];
+  const driveReady = isDriveConnected();
+  return `<section class="client-photos-section quote-photos-section">
+    <div class="section-head photo-section-head"><h2>Photos du devis (${photos.length})</h2></div>
+    <p class="muted photo-help">Ces photos resteront liées à ce devis et au client sélectionné.</p>
+    ${driveReady ? `<div class="photo-actions">
+      <button class="primary-button" type="button" data-action="take-quote-photo">📷 Prendre une photo</button>
+      <button class="secondary-button" type="button" data-action="choose-quote-photo">🖼️ Galerie</button>
+    </div>` : `<div class="premium-lock"><strong>Google Drive requis</strong><span>Connecte Google Drive pour ajouter des photos à ce devis.</span><button class="mini-btn" type="button" data-action="connect-drive-for-quote-photos">Connecter Drive</button></div>`}
+    <div id="quotePhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
+    <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
+      <button class="client-photo-open" type="button" data-action="open-quote-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
+        <span class="photo-placeholder">📷</span><img data-drive-photo="${escapeHtml(photo.driveFileId || '')}" alt="Photo du devis" loading="lazy">
+      </button>
+      <div class="client-photo-info"><small>${escapeHtml(formatPhotoDate(photo.takenAt))}</small>${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}</div>
+      <button class="client-photo-delete" type="button" data-action="delete-quote-photo" data-id="${escapeHtml(photo.id)}" aria-label="Supprimer la photo" title="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+    </article>`).join('') : '<div class="empty photo-empty">Aucune photo liée à ce devis.</div>'}</div>
+  </section>`;
+}
+
+async function uploadQuotePhoto(draft, file, note = '') {
+  if (!hasPremiumAccess()) throw new Error('Les photos de devis sont réservées au Premium.');
+  if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
+  const compressed = await compressPhoto(file);
+  const extension = compressed.type === 'image/png' ? 'png' : 'jpg';
+  const fileName = `devis-${String(draft.id || 'terrain').replace(/[^a-z0-9_-]/gi,'-')}-${Date.now()}.${extension}`;
+  const metadata = {
+    name: fileName,
+    parents: ['appDataFolder'],
+    appProperties: {
+      bastType: 'quote-photo',
+      draftId: String(draft.id || ''),
+      clientId: String(draft.clientId || '')
+    }
+  };
+  const boundary = `bast_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+    `--${boundary}\r\nContent-Type: ${compressed.type || 'image/jpeg'}\r\n\r\n`,
+    compressed,
+    `\r\n--${boundary}--`
+  ]);
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime', {
+    method: 'POST', headers: { Authorization: `Bearer ${state.drive.token}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+  });
+  if (!response.ok) throw new Error('Envoi de la photo impossible.');
+  const driveFile = await response.json();
+  const photo = {
+    id: uid('photo'), driveFileId: driveFile.id, fileName: driveFile.name || fileName,
+    takenAt: new Date().toISOString(), note: String(note || '').trim(), scope: 'quote',
+    draftId: draft.id || '', clientId: draft.clientId || ''
+  };
+  if (!Array.isArray(draft.photos)) draft.photos = [];
+  draft.photos.unshift(photo);
+  await persistActiveDraft();
+  return photo;
+}
+
+async function handleQuotePhotoFiles(files) {
+  ensureActiveDraft();
+  const draft = state.activeDraft;
+  if (state.photoBusy || !files?.length) return;
+  if (!isDriveConnected()) return showToast('Connecte Google Drive avant d’ajouter une photo.');
+  const note = files.length === 1 ? (prompt('Ajouter une note à cette photo (facultatif) :', '') || '') : '';
+  state.photoBusy = true;
+  const progress = document.getElementById('quotePhotoProgress');
+  progress?.classList.remove('hidden');
+  try {
+    for (const file of files) await uploadQuotePhoto(draft, file, note);
+    showToast(files.length > 1 ? `${files.length} photos ajoutées au devis.` : 'Photo ajoutée au devis.');
+    renderQuoteLines();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Envoi de la photo impossible.');
+  } finally {
+    state.photoBusy = false;
+  }
+}
+
+async function deleteQuotePhoto(draft, photoId) {
+  const photo = (draft.photos || []).find(item => item.id === photoId);
+  if (!photo) return;
+  if (photo.driveFileId && isDriveConnected()) {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${state.drive.token}` }
+    });
+    if (!response.ok && response.status !== 404) throw new Error('Suppression Drive impossible.');
+    const url = photoObjectUrls.get(photo.driveFileId);
+    if (url) URL.revokeObjectURL(url);
+    photoObjectUrls.delete(photo.driveFileId);
+  }
+  draft.photos = (draft.photos || []).filter(item => item.id !== photoId);
+  await persistActiveDraft();
+}
+
+async function openQuotePhoto(draft, photoId) {
+  const photo = (draft.photos || []).find(item => item.id === photoId);
+  if (!photo) return;
+  const url = await fetchPhotoObjectUrl(photo);
+  if (!url) return showToast('Impossible de charger cette photo.');
+  const overlay = document.createElement('div');
+  overlay.className = 'photo-viewer';
+  overlay.innerHTML = `<button class="photo-viewer-close" type="button" aria-label="Fermer">✕</button><img src="${escapeHtml(url)}" alt="Photo du devis">${photo.note ? `<p>${escapeHtml(photo.note)}</p>` : ''}`;
+  overlay.querySelector('.photo-viewer-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', event => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 async function handleClientPhotoFiles(files) {
   const client = state.data.clients.find(item => item.id === state.selectedClientId);
   if (!client || state.photoBusy || !files?.length) return;
@@ -727,13 +838,15 @@ function makeBlankDraft(client = null) {
     date: today,
     validity: '',
     notes: '',
-    lines: []
+    lines: [],
+    photos: []
   };
 }
 
 function ensureActiveDraft() {
   if (!state.activeDraft) state.activeDraft = makeBlankDraft();
   if (!Array.isArray(state.activeDraft.lines)) state.activeDraft.lines = [];
+  if (!Array.isArray(state.activeDraft.photos)) state.activeDraft.photos = [];
 }
 
 async function persistActiveDraft(message = '') {
@@ -897,6 +1010,7 @@ function renderQuoteLines() {
     ${favoriteItems.length ? `<div class="section-head"><h2>Favoris</h2><button type="button" data-action="browse-prices">Tous les tarifs</button></div><div class="favorite-strip">${favoriteItems.map(item => `<button type="button" data-action="add-tarif" data-id="${escapeHtml(item.id)}">＋ ${escapeHtml(item.poste)}</button>`).join('')}</div>` : `<button class="add-line-btn" type="button" data-action="browse-prices">🏷 Choisir dans les tarifs</button>`}
     <div id="quoteLines" class="quote-lines">${draft.lines.length ? draft.lines.map(lineMarkup).join('') : '<div class="empty">Aucune prestation ajoutée.</div>'}</div>
     <button class="add-line-btn" type="button" data-action="add-custom-line">＋ Ligne libre</button>
+    ${renderQuotePhotos(draft)}
     <div class="totals compact-totals">
       <div class="compact-total-copy">
         <small><span>HTVA <strong id="quoteTotalHtva">${money(totals.htva)}</strong></span><span>TVA <strong id="quoteTotalVat">${money(totals.vat)}</strong></span></small>
@@ -905,6 +1019,7 @@ function renderQuoteLines() {
       <div class="quote-actions"><button class="outline" type="button" data-action="save-draft">Enregistrer</button><button class="light" type="button" data-action="quote-next">Continuer</button></div>
     </div>`;
   bindQuoteFields();
+  if (isDriveConnected()) setTimeout(() => hydrateClientPhotos().catch(console.warn), 0);
 }
 
 function renderQuoteFinal() {
@@ -1055,7 +1170,8 @@ async function transferQuoteToMain() {
     clientNumber: d.clientNumber || '', clientVat: d.clientVat || '', clientId: d.clientId || '',
     clientName: d.clientName || '', clientEmail: d.clientEmail || '', address: d.address || '', date: d.date || '',
     validity: d.validity || '', siteName: d.siteName || '', chantierId: '',
-    lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [], notes: d.notes || ''
+    lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [], notes: d.notes || '',
+    photos: clone(Array.isArray(d.photos) ? d.photos : [])
   };
   await saveMainData(true);
   d.status = 'transferred';
@@ -1097,8 +1213,19 @@ viewRoot.addEventListener('click', async event => {
   else if (action === 'transfer-quote') transferQuoteToMain();
   else if (action === 'open-draft') { const draft = state.drafts.find(d => d.id === id); if (draft) { state.activeDraft = clone(draft); setView('quote-lines'); } }
   else if (action === 'delete-draft') { if (confirm('Supprimer ce brouillon ?')) { state.drafts = state.drafts.filter(d => d.id !== id); saveDrafts(); render(); } }
-  else if (action === 'take-client-photo') document.getElementById('clientCameraInput')?.click();
-  else if (action === 'choose-client-photo') document.getElementById('clientGalleryInput')?.click();
+  else if (action === 'take-quote-photo') { state.photoTarget = 'quote'; document.getElementById('terrainCameraInput')?.click(); }
+  else if (action === 'choose-quote-photo') { state.photoTarget = 'quote'; document.getElementById('terrainGalleryInput')?.click(); }
+  else if (action === 'connect-drive-for-quote-photos') { if (await connectAndSyncDrive(true)) renderQuoteLines(); }
+  else if (action === 'open-quote-photo') { ensureActiveDraft(); await openQuotePhoto(state.activeDraft, id); }
+  else if (action === 'delete-quote-photo') {
+    ensureActiveDraft();
+    if (confirm('Supprimer définitivement cette photo du devis ?')) {
+      try { await deleteQuotePhoto(state.activeDraft, id); showToast('Photo supprimée du devis.'); renderQuoteLines(); }
+      catch (error) { console.error(error); showToast(error.message || 'Suppression impossible.'); }
+    }
+  }
+  else if (action === 'take-client-photo') { state.photoTarget = 'client'; document.getElementById('terrainCameraInput')?.click(); }
+  else if (action === 'choose-client-photo') { state.photoTarget = 'client'; document.getElementById('terrainGalleryInput')?.click(); }
   else if (action === 'connect-drive-for-photos') { if (await connectAndSyncDrive(true)) renderClientDetail(); }
   else if (action === 'open-client-photo') { const client = state.data.clients.find(item => item.id === state.selectedClientId); if (client) await openClientPhoto(client, id); }
   else if (action === 'delete-client-photo') {
@@ -1111,11 +1238,11 @@ viewRoot.addEventListener('click', async event => {
   else if (action === 'open-full-prices') window.location.href = 'devis-facture.html';
 });
 
-viewRoot.addEventListener('change', event => {
-  if (event.target?.id === 'clientCameraInput' || event.target?.id === 'clientGalleryInput') {
+document.addEventListener('change', event => {
+  if (event.target?.id === 'terrainCameraInput' || event.target?.id === 'terrainGalleryInput') {
     const files = [...(event.target.files || [])];
     event.target.value = '';
-    handleClientPhotoFiles(files);
+    if (state.photoTarget === 'quote') handleQuotePhotoFiles(files); else handleClientPhotoFiles(files);
   }
 });
 

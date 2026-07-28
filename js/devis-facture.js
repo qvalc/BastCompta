@@ -3869,6 +3869,62 @@ function renderConditionsPages(docKey, label) {
       `;
 }
 
+
+const bastDocumentPhotoUrls = new Map();
+
+function renderDocumentPhotos(docKey, doc) {
+  const photos = Array.isArray(doc?.photos) ? doc.photos : [];
+  if (!photos.length) return '';
+  return `<div class="document-photos no-print">
+    <div class="box-title">Photos liées au ${docKey === 'quote' ? 'devis' : 'document'} (${photos.length})</div>
+    <div class="document-photo-grid">
+      ${photos.map(photo => `<article class="document-photo-card">
+        <button type="button" class="document-photo-open" data-doc-photo-id="${escapeAttr(photo.id || '')}" data-doc-photo-file="${escapeAttr(photo.driveFileId || '')}" title="Ouvrir la photo">
+          <span>📷</span><img data-bast-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="Photo liée au devis" loading="lazy">
+        </button>
+        <div class="document-photo-meta"><small>${escapeHtml(photo.takenAt ? new Date(photo.takenAt).toLocaleString('fr-BE') : '')}</small>${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}</div>
+      </article>`).join('')}
+    </div>
+    ${googleAccessToken ? '' : '<div class="hint">Connectez Google Drive pour afficher les photos.</div>'}
+  </div>`;
+}
+
+async function getBastDocumentPhotoUrl(fileId) {
+  if (!fileId || !googleAccessToken) return '';
+  if (bastDocumentPhotoUrls.has(fileId)) return bastDocumentPhotoUrls.get(fileId);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  });
+  if (!response.ok) return '';
+  const url = URL.createObjectURL(await response.blob());
+  bastDocumentPhotoUrls.set(fileId, url);
+  return url;
+}
+
+async function hydrateBastDocumentPhotos() {
+  if (!googleAccessToken) return;
+  const images = [...document.querySelectorAll('img[data-bast-drive-photo]')];
+  await Promise.all(images.map(async image => {
+    const fileId = image.dataset.bastDrivePhoto;
+    const url = await getBastDocumentPhotoUrl(fileId);
+    if (url) {
+      image.src = url;
+      image.closest('.document-photo-card')?.classList.add('is-loaded');
+    }
+  }));
+}
+
+async function openBastDocumentPhoto(fileId) {
+  const url = await getBastDocumentPhotoUrl(fileId);
+  if (!url) return alert('Impossible de charger cette photo. Vérifiez la connexion Google Drive.');
+  const viewer = document.createElement('div');
+  viewer.className = 'document-photo-viewer';
+  viewer.innerHTML = `<button type="button" aria-label="Fermer">✕</button><img src="${escapeAttr(url)}" alt="Photo liée au devis">`;
+  viewer.querySelector('button').addEventListener('click', () => viewer.remove());
+  viewer.addEventListener('click', event => { if (event.target === viewer) viewer.remove(); });
+  document.body.appendChild(viewer);
+}
+
 function renderDocumentPage(docKey) {
   const doc = data[docKey];
   const totals = totalsFor(docKey);
@@ -3966,6 +4022,8 @@ function renderDocumentPage(docKey) {
             ${docKey === 'invoice' ? `<div class="simple-box" style="margin-bottom:12px;"><strong>Statut :</strong> ${escapeHtml(getInvoiceStatusLabel(invoiceStatus))}${doc.linkedInvoiceNumber ? ` · <strong>Facture liée :</strong> ${escapeHtml(doc.linkedInvoiceNumber)}` : ''}${doc.creditNoteReason ? `<br>${escapeHtml(doc.creditNoteReason)}` : ''}</div>` : ''}
 
             ${renderLinesTable(docKey, 'lines')}
+
+            ${renderDocumentPhotos(docKey, doc)}
 
             <div class="toggle-row no-print">
               <input class="check-inline" type="checkbox" id="${docKey}-supplies-toggle" ${doc.suppliesEnabled ? 'checked' : ''} onchange="toggleSupplies('${docKey}', this.checked)">
@@ -5202,10 +5260,17 @@ function render() {
 
   setTimeout(() => {
     document.querySelectorAll('textarea').forEach(autoResize);
+    hydrateBastDocumentPhotos().catch(console.warn);
   }, 0);
 }
 
 document.addEventListener('click', (event) => {
+  const photoButton = event.target.closest('[data-doc-photo-file]');
+  if (photoButton) {
+    event.preventDefault();
+    openBastDocumentPhoto(photoButton.dataset.docPhotoFile);
+    return;
+  }
   if (!event.target.closest('[data-menu-root]')) {
     closeToolbarMenus();
   }

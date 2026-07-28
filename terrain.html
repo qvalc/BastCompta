@@ -7,7 +7,7 @@
   <meta name="description" content="BastCompta Terrain — devis rapides reliés à BastCompta.">
   <title>BastCompta Terrain</title>
   <link rel="icon" href="logo.png">
-  <link rel="stylesheet" href="css/terrain.css?v=8">
+  <link rel="stylesheet" href="css/terrain.css?v=9">
   <script src="js/storage.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -78,6 +78,9 @@
     </section>
   </main>
 
-  <script type="module" src="js/terrain.js?v=8"></script>
+
+  <input id="terrainCameraInput" class="hidden-file-input" type="file" accept="image/*" capture="environment">
+  <input id="terrainGalleryInput" class="hidden-file-input" type="file" accept="image/*" multiple>
+  <script type="module" src="js/terrain.js?v=9"></script>
 </body>
 </html>
