@@ -732,8 +732,8 @@ textarea {
         gap: 12px;
     }
 
-    .page.active > .card,
-    .page.active > section,
+    .page.active>.card,
+    .page.active>section,
     .vat-declaration-card {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
@@ -762,52 +762,72 @@ textarea {
 }
 
 /* Affichage intégré au portail : la navigation des onglets est assurée par le menu latéral. */
-body.bast-embedded .tabs { display: none !important; }
-body.bast-embedded .app { max-width: none; min-height: 100vh; }
-body.bast-embedded .topbar { position: relative; top: auto; }
+body.bast-embedded .tabs {
+    display: none !important;
+}
 
-body.bast-embedded { min-height: 100vh; overflow-x: hidden; }
-body.bast-embedded .app { width: 100%; max-width: none; margin: 0; padding: 14px 18px 28px; }
+body.bast-embedded .app {
+    max-width: none;
+    min-height: 100vh;
+}
+
+body.bast-embedded .topbar {
+    position: relative;
+    top: auto;
+}
+
+body.bast-embedded {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+body.bast-embedded .app {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 14px 18px 28px;
+}
 
 /* Défilement lorsqu'un module est affiché dans le portail. */
 html:has(body.bast-embedded),
 body.bast-embedded {
-  height: auto !important;
-  min-height: 100% !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  overscroll-behavior-y: contain;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
 }
+
 body.bast-embedded .app {
-  height: auto !important;
-  min-height: 100% !important;
-  overflow: visible !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
 }
 
 /* Correctif définitif du défilement dans les iframes du portail. */
 html:has(body.bast-embedded) {
-  width: 100% !important;
-  height: 100% !important;
-  min-height: 100% !important;
-  overflow-x: hidden !important;
-  overflow-y: scroll !important;
-  scrollbar-gutter: stable;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: scroll !important;
+    scrollbar-gutter: stable;
 }
 
 body.bast-embedded {
-  width: 100% !important;
-  height: auto !important;
-  min-height: 100% !important;
-  overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
 }
 
 body.bast-embedded .app,
 body.bast-embedded #pages,
 body.bast-embedded .page.active {
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 /* Icônes de suppression compactes */
@@ -821,4 +841,24 @@ body.bast-embedded .page.active {
     stroke-linecap: round;
     stroke-linejoin: round;
     pointer-events: none;
+}
+
+/* ===== Journal des achats plus compact ===== */
+
+.table-purchases th,
+.table-purchases td {
+    padding: 4px 3px;
+}
+
+.table-purchases input,
+.table-purchases select {
+    padding: 6px 8px;
+}
+
+.table-purchases .invoice-preview-btn {
+    padding: 6px 10px;
+}
+
+.table-purchases .delete-icon-btn {
+    margin: 0;
 }
