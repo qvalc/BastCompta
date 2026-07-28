@@ -16,8 +16,8 @@ let editingProjectId = '';
 let data = loadData();
 let crmDriveClientsCache = [];
 let crmDropdownClientsCache = [];
+let terrainDraftsCache = [];
 const crmPhotoObjectUrls = new Map();
-let terrainDraftsCache = null;
 
 const statusLabels = {
   planned: 'À suivre',
@@ -949,8 +949,11 @@ function tabButton(key, label) {
   return `<button class="tab ${activeTab === key ? 'active' : ''}" onclick="setTab('${key}')">${label}</button>`;
 }
 
-function setTab(tab) {
+async function setTab(tab) {
   activeTab = tab;
+  if (tab === 'drafts' && googleAccessToken) {
+    await loadTerrainDraftsFromDrive();
+  }
   renderMain();
 }
 
@@ -1196,18 +1199,26 @@ function renderQuotesTab(project) {
 
 
 
-function loadTerrainDrafts() {
-  if (Array.isArray(terrainDraftsCache)) return terrainDraftsCache;
+function readTerrainDraftsLocal() {
   try {
     const raw = localStorage.getItem(TERRAIN_DRAFTS_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    terrainDraftsCache = Array.isArray(parsed) ? parsed : [];
-    return terrainDraftsCache;
+    return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    console.warn('Lecture des brouillons Terrain impossible.', error);
-    terrainDraftsCache = [];
-    return terrainDraftsCache;
+    console.warn('Lecture locale des brouillons Terrain impossible.', error);
+    return [];
   }
+}
+
+terrainDraftsCache = readTerrainDraftsLocal();
+
+function loadTerrainDrafts() {
+  return Array.isArray(terrainDraftsCache) ? terrainDraftsCache : [];
+}
+
+function saveTerrainDrafts(drafts) {
+  terrainDraftsCache = Array.isArray(drafts) ? drafts : [];
+  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(terrainDraftsCache, null, 2));
 }
 
 async function loadTerrainDraftsFromDrive() {
@@ -1216,21 +1227,26 @@ async function loadTerrainDraftsFromDrive() {
     const list = await driveFilesList({
       spaces: 'appDataFolder',
       q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
-      fields: 'files(id,name,modifiedTime)',
       orderBy: 'modifiedTime desc',
-      pageSize: 10
-    }, false);
-    const files = list?.result?.files || list?.files || [];
-    if (!files.length) return false;
-    const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${files[0].id}?alt=media`, {}, false);
+      pageSize: 1,
+      fields: 'files(id,name,modifiedTime)'
+    });
+    if (!list) return false;
+    const file = (list.result.files || [])[0];
+    if (!file) {
+      terrainDraftsCache = readTerrainDraftsLocal();
+      return false;
+    }
+    const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    });
     if (!response || !response.ok) return false;
     const parsed = await response.json();
     if (!Array.isArray(parsed)) return false;
-    terrainDraftsCache = parsed;
-    localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(parsed));
+    saveTerrainDrafts(parsed);
     return true;
   } catch (error) {
-    console.warn('Chargement des brouillons Terrain depuis Drive impossible.', error);
+    console.error('Chargement des brouillons Terrain depuis Drive impossible.', error);
     return false;
   }
 }
@@ -1241,30 +1257,30 @@ async function saveTerrainDraftsToDrive(drafts) {
     const list = await driveFilesList({
       spaces: 'appDataFolder',
       q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
-      fields: 'files(id,name,modifiedTime)',
-      pageSize: 10
-    }, false);
-    const files = list?.result?.files || list?.files || [];
-    const metadata = { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME, parents: files.length ? undefined : ['appDataFolder'] };
-    if (metadata.parents === undefined) delete metadata.parents;
+      fields: 'files(id,name)'
+    });
+    if (!list) return false;
+    const files = list.result.files || [];
+    const existing = files[0];
+    const metadata = existing
+      ? { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME }
+      : { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME, parents: ['appDataFolder'] };
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', new Blob([JSON.stringify(drafts, null, 2)], { type: 'application/json' }));
-    const url = files.length
-      ? `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name,modifiedTime`
-      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime';
-    const response = await googleDriveFetch(url, { method: files.length ? 'PATCH' : 'POST', body: form }, false);
-    return !!response?.ok;
+    form.append('file', new Blob([JSON.stringify(Array.isArray(drafts) ? drafts : [], null, 2)], { type: 'application/json' }));
+    const url = existing
+      ? `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart&fields=id,name`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
+    const response = await googleDriveFetch(url, {
+      method: existing ? 'PATCH' : 'POST',
+      headers: { Authorization: `Bearer ${googleAccessToken}` },
+      body: form
+    });
+    return !!response && response.ok;
   } catch (error) {
-    console.warn('Sauvegarde des brouillons Terrain sur Drive impossible.', error);
+    console.error('Sauvegarde des brouillons Terrain sur Drive impossible.', error);
     return false;
   }
-}
-
-function saveTerrainDrafts(drafts) {
-  terrainDraftsCache = Array.isArray(drafts) ? drafts : [];
-  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(terrainDraftsCache, null, 2));
-  saveTerrainDraftsToDrive(terrainDraftsCache);
 }
 
 function terrainDraftMatchesProject(project, draft) {
@@ -1387,6 +1403,7 @@ async function convertTerrainDraftToQuote(draftId) {
   const index = drafts.findIndex(item => String(item.id) === String(draftId));
   drafts[index] = draft;
   saveTerrainDrafts(drafts);
+  await saveTerrainDraftsToDrive(drafts);
 
   const entry = buildCrmDocEntry('quote', quote, 'Brouillon Terrain');
   if (entry) {
@@ -3674,10 +3691,6 @@ function initGoogleMessages() {
   window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY) {
       data = loadData();
-      render();
-    }
-    if (event.key === TERRAIN_DRAFTS_STORAGE_KEY) {
-      terrainDraftsCache = null;
       render();
     }
   });
