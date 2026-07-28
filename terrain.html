@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173f35">
+  <meta name="description" content="BastCompta Terrain — création rapide de devis sur smartphone.">
+  <title>BastCompta Terrain</title>
+  <link rel="icon" href="logo.png">
+  <link rel="stylesheet" href="css/terrain.css?v=1">
+  <script src="js/storage.js"></script>
+</head>
+<body>
+  <main class="terrain-shell">
+    <section id="terrainLoading" class="screen screen-centered" aria-live="polite">
+      <img src="logo.png" alt="BastCompta" class="brand-logo">
+      <div class="loader" aria-hidden="true"></div>
+      <p>Connexion à BastCompta…</p>
+    </section>
+
+    <section id="terrainAuth" class="screen screen-centered hidden">
+      <div class="auth-panel">
+        <div class="brand-block">
+          <img src="logo.png" alt="BastCompta" class="brand-logo">
+          <span class="terrain-badge">Terrain</span>
+          <h1>Connexion</h1>
+          <p>Utilise le même compte que dans BastCompta.</p>
+        </div>
+
+        <form id="terrainLoginForm" class="stack" novalidate>
+          <label for="terrainEmail">Adresse mail</label>
+          <input id="terrainEmail" type="email" autocomplete="email" inputmode="email" placeholder="exemple@domaine.be" required>
+
+          <label for="terrainPassword">Mot de passe</label>
+          <input id="terrainPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" required>
+
+          <button id="terrainLoginBtn" class="primary-button" type="submit">Se connecter</button>
+          <button id="terrainForgotBtn" class="text-button" type="button">Mot de passe oublié</button>
+        </form>
+
+        <p id="terrainAuthMessage" class="message" role="status" aria-live="polite"></p>
+        <a class="back-link" href="index.html">Ouvrir BastCompta complet</a>
+      </div>
+    </section>
+
+    <section id="terrainHome" class="screen hidden">
+      <header class="mobile-header">
+        <div>
+          <span class="eyebrow">BastCompta Terrain</span>
+          <h1 id="terrainWelcome">Bonjour</h1>
+        </div>
+        <button id="terrainAccountBtn" class="icon-button" type="button" aria-label="Compte utilisateur">👤</button>
+      </header>
+
+      <div class="sync-line">
+        <span class="status-dot"></span>
+        <span>Connecté au service BastCompta</span>
+      </div>
+
+      <section class="primary-action-card">
+        <p>Prêt à travailler chez le client ?</p>
+        <button id="newQuoteBtn" class="new-quote-button" type="button">
+          <span aria-hidden="true">＋</span>
+          Nouveau devis
+        </button>
+      </section>
+
+      <section class="quick-grid" aria-label="Accès rapides">
+        <button class="quick-action" type="button" data-coming="clients">
+          <span aria-hidden="true">👥</span>
+          <strong>Clients</strong>
+          <small>Recherche et suivi</small>
+        </button>
+        <button class="quick-action" type="button" data-coming="quotes">
+          <span aria-hidden="true">📄</span>
+          <strong>Devis</strong>
+          <small>Brouillons récents</small>
+        </button>
+        <button class="quick-action" type="button" data-coming="prices">
+          <span aria-hidden="true">🏷️</span>
+          <strong>Tarifs</strong>
+          <small>Consulter rapidement</small>
+        </button>
+        <a class="quick-action" href="index.html">
+          <span aria-hidden="true">🖥️</span>
+          <strong>Version complète</strong>
+          <small>Ouvrir BastCompta</small>
+        </a>
+      </section>
+
+      <p id="terrainHomeMessage" class="home-message" aria-live="polite"></p>
+
+      <div id="terrainAccountMenu" class="account-sheet hidden" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <button id="closeAccountBtn" class="sheet-backdrop" type="button" aria-label="Fermer"></button>
+        <div class="sheet-panel">
+          <div class="sheet-handle"></div>
+          <h2 id="accountTitle">Mon compte</h2>
+          <p id="terrainUserEmail"></p>
+          <a class="sheet-link" href="index.html">Ouvrir BastCompta complet</a>
+          <button id="terrainLogoutBtn" class="danger-button" type="button">Se déconnecter</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="js/terrain.js?v=1"></script>
+</body>
+</html>
