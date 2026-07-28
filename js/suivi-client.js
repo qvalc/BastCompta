@@ -1101,7 +1101,7 @@ function renderMoneyTable(items, type) {
               ${items.map(item => `
                 <tr>
                   <td>${formatDate(item.date)}</td>
-                  <td>${escapeHtml(item.ref || '—')}</td>
+                  <td>${escapeHtml(item.displayRef || item.ref || '—')}</td>
                   <td>${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
                   <td class="num">${formatMoney(projectMoneyValue(item))}${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<br><small>Fournitures vendues: ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + ' · Revient: ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</small>' : ''}</td>
                   <td class="no-print">
@@ -2045,18 +2045,23 @@ function clientMatchesProject(project, doc) {
 
 function buildCrmDocEntry(docKey, doc, source, fileMeta = {}) {
   const number = String(doc?.documentNumber || '').trim();
-  if (!number) return null;
+  const terrainDraftId = String(doc?.terrainDraftId || '').trim();
+  const isTerrainDraft = docKey === 'quote' && !number && terrainDraftId && doc?.transferredFromTerrain === true;
+  if (!number && !isTerrainDraft) return null;
   const labels = { quote: 'Devis', invoice: 'Facture', reminder: 'Rappel' };
   const lists = { quote: 'linkedQuotes', invoice: 'linkedInvoices', reminder: 'linkedReminders' };
   const totals = documentTotals(doc);
+  const technicalRef = number || `terrain-${terrainDraftId}`;
+  const visibleRef = number || 'Brouillon Terrain';
   return {
     key: docKey,
     list: lists[docKey],
-    ref: number,
-    uniqueKey: `${docKey}:${number}:${fileMeta.id || source}`,
+    ref: technicalRef,
+    displayRef: visibleRef,
+    uniqueKey: `${docKey}:${technicalRef}:${fileMeta.id || source}`,
     label: labels[docKey],
     date: doc.date || '',
-    description: `${labels[docKey]} ${number}`,
+    description: number ? `${labels[docKey]} ${number}` : `Brouillon Terrain${doc.siteName ? ` · ${doc.siteName}` : ''}`,
     amount: totals.clientHtva,
     clientHtva: totals.clientHtva,
     totalClientHtva: totals.clientHtva,
@@ -2251,6 +2256,7 @@ async function toggleCrmDocumentLink(type, ref, checked, targetProjectId = selec
       documentUid: stableKey,
       date: doc.date,
       ref: doc.ref,
+      displayRef: doc.displayRef || doc.ref,
       description: doc.description,
       amount: doc.clientHtva || doc.totalClientHtva || doc.htva,
       clientHtva: doc.clientHtva || doc.totalClientHtva || doc.htva,

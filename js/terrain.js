@@ -442,8 +442,7 @@ async function uploadQuotePhoto(draft, file, note = '') {
   if (!hasPremiumAccess()) throw new Error('Les photos de devis sont réservées au Premium.');
   if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
   const compressed = await compressPhoto(file);
-  const extension = compressed.type === 'image/png' ? 'png' : 'jpg';
-  const fileName = `devis-${String(draft.id || 'terrain').replace(/[^a-z0-9_-]/gi,'-')}-${Date.now()}.${extension}`;
+  const fileName = `devis-${String(draft.id || 'terrain').replace(/[^a-z0-9_-]/gi,'-')}-${Date.now()}.jpg`;
   const metadata = {
     name: fileName,
     parents: ['appDataFolder'],
@@ -453,22 +452,22 @@ async function uploadQuotePhoto(draft, file, note = '') {
       clientId: String(draft.clientId || '')
     }
   };
-  const boundary = `bast_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const body = new Blob([
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
-    `--${boundary}\r\nContent-Type: ${compressed.type || 'image/jpeg'}\r\n\r\n`,
-    compressed,
-    `\r\n--${boundary}--`
-  ]);
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime', {
-    method: 'POST', headers: { Authorization: `Bearer ${state.drive.token}`, 'Content-Type': `multipart/related; boundary=${boundary}` }, body
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', compressed.blob, fileName);
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,createdTime', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${state.drive.token}` },
+    body: form
   });
   if (!response.ok) throw new Error('Envoi de la photo impossible.');
   const driveFile = await response.json();
   const photo = {
     id: uid('photo'), driveFileId: driveFile.id, fileName: driveFile.name || fileName,
     takenAt: new Date().toISOString(), note: String(note || '').trim(), scope: 'quote',
-    draftId: draft.id || '', clientId: draft.clientId || ''
+    draftId: draft.id || '', clientId: draft.clientId || '',
+    width: compressed.width, height: compressed.height,
+    size: Number(driveFile.size || compressed.blob.size), mimeType: 'image/jpeg'
   };
   if (!Array.isArray(draft.photos)) draft.photos = [];
   draft.photos.unshift(photo);
@@ -1164,9 +1163,14 @@ async function transferQuoteToMain() {
   if (!d.clientName) return showToast('Choisis d’abord un client.');
   if (!d.lines.some(line => String(line.description || '').trim())) return showToast('Ajoute au moins une prestation.');
   const oldQuote = state.data.quote || {};
+  const terrainDraftId = String(d.id || uid('draft'));
   state.data.quote = {
     ...oldQuote,
     documentNumber: '',
+    status: 'draft',
+    terrainDraftId,
+    transferredFromTerrain: true,
+    terrainTransferredAt: new Date().toISOString(),
     clientNumber: d.clientNumber || '', clientVat: d.clientVat || '', clientId: d.clientId || '',
     clientName: d.clientName || '', clientEmail: d.clientEmail || '', address: d.address || '', date: d.date || '',
     validity: d.validity || '', siteName: d.siteName || '', chantierId: '',
