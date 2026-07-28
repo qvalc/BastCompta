@@ -809,3 +809,16 @@ body.bast-embedded .page.active {
   max-height: none !important;
   overflow: visible !important;
 }
+
+/* Icônes de suppression compactes */
+.delete-icon-btn .trash-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    margin: auto;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}

@@ -1015,7 +1015,7 @@ function renderPurchasePdfList() {
                 <td>
                   <div class="inline-actions">
                     <button type="button" onclick='openPurchasePdf(${JSON.stringify(file.id)})'>Consulter</button>
-                    <button type="button" class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick='deletePurchasePdf(${JSON.stringify(file.id)})'>×</button>
+                    <button type="button" class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick='deletePurchasePdf(${JSON.stringify(file.id)})'><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
                   </div>
                 </td>
               </tr>
@@ -2888,7 +2888,7 @@ function renderSales() {
     <td>${money(salesRowNet(row))}</td>
     <td>${money(salesRowVat(row))}</td>
     <td>${invoiceButton}</td>
-    <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('sales', ${i})">×</button></td>
+    <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('sales', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
   </tr>
 `}).join(''),
     footer: `
@@ -2998,7 +2998,7 @@ function renderPurchases() {
       `
       }
 </td>
-                  <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('purchases', ${i})">×</button></td>
+                  <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('purchases', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
                 </tr>
               `}).join('')}
             </tbody>
@@ -3071,7 +3071,7 @@ function renderInvestments() {
   <td>${money(row.amortTotal)}</td>
   <td>${money(row.netValue)}</td>
 
-  <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('investments', ${i})">×</button></td>
+  <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('investments', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
 </tr>
 </tr>
     `).join('') || `<tr><td colspan="8">Aucun investissement encodé.</td></tr>`,
@@ -3148,7 +3148,7 @@ function renderAssets() {
           title="Supprimer"
           aria-label="Supprimer"
           onclick="deleteRow('assets', ${i})"
-        >×</button>
+        ><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
       </td>
     </tr>
   `;
@@ -3177,7 +3177,7 @@ function renderStock() {
             <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.stock[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
             <td><input type="number" step="0.01" value="${num(row.unitPrice, 4)}" onchange="data.stock[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
-            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('stock', ${i})">×</button></td>
+            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('stock', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
         `).join(''),
     footer: `<div class="kv"><span>Valeur totale du stock</span><span>${money(t.stockValue)}</span></div>`
@@ -3201,7 +3201,7 @@ function renderLosses() {
             <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.losses[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
             <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.losses[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
-            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('losses', ${i})">×</button></td>
+            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('losses', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
         `).join(''),
     footer: `
@@ -3230,7 +3230,7 @@ function renderKm() {
             <td><input type="number" step="0.01" value="${num(row.km)}" onchange="data.km[${i}].km=parseFloat(this.value)||0; saveData(false)"></td>
             <td><input type="number" step="0.01" value="${num(row.trips)}" onchange="data.km[${i}].trips=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${num(toNumber(row.km) * toNumber(row.trips), 2)} km</td>
-            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('km', ${i})">×</button></td>
+            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('km', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
         `).join(''),
     footer: `<div class="kv"><span>Total kilomètres</span><span>${num(t.kmTotal, 2)} km</span></div>`
@@ -3600,7 +3600,7 @@ function renderVat() {
                       </div>
 
                       <div class="inline-actions" style="margin-top:16px;">
-                        <button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${disableAttr} onclick="deleteVatDeclaration(${i})">×</button>
+                        <button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${disableAttr} onclick="deleteVatDeclaration(${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
                       </div>
                     </div>
                   ` : ''}

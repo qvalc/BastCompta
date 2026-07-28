@@ -19,3 +19,16 @@
   .compact-totals .quote-actions{grid-template-columns:1fr 1fr;}
   .compact-totals .quote-actions button{padding:9px 10px;}
 }
+
+/* Icônes de suppression compactes */
+.trash-icon {
+    width: 15px;
+    height: 15px;
+    display: block;
+    margin: auto;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}

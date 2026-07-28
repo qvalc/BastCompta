@@ -1117,7 +1117,7 @@ function renderMoneyTable(items, type) {
                           </div>
                         </details>
                       ` : ''}
-                      <button class="small doc-delete-btn" title="Supprimer" aria-label="Supprimer" onclick="${isCrmDoc ? `deleteCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')` : `deleteMoneyItem('${type}', '${escapeAttr(item.id)}')`}">×</button>
+                      <button class="small doc-delete-btn" title="Supprimer" aria-label="Supprimer" onclick="${isCrmDoc ? `deleteCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')` : `deleteMoneyItem('${type}', '${escapeAttr(item.id)}')`}"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
                     </div>
                   </td>
                 </tr>

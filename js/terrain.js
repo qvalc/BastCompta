@@ -589,7 +589,7 @@ function renderPrices() {
 
 function renderDraftCard(draft) {
   const totals = draftTotals(draft);
-  return `<article class="list-card"><div class="list-main" data-action="open-draft" data-id="${escapeHtml(draft.id)}"><strong>${escapeHtml(draft.clientName || 'Client à choisir')}</strong><small>${escapeHtml(draft.siteName || 'Sans chantier')} · ${new Date(draft.updatedAt || draft.createdAt).toLocaleDateString('fr-BE')}</small></div><div class="list-actions"><span class="draft-status">Brouillon</span><strong class="price">${money(totals.tvac)}</strong><button class="mini-btn danger" type="button" data-action="delete-draft" data-id="${escapeHtml(draft.id)}">×</button></div></article>`;
+  return `<article class="list-card"><div class="list-main" data-action="open-draft" data-id="${escapeHtml(draft.id)}"><strong>${escapeHtml(draft.clientName || 'Client à choisir')}</strong><small>${escapeHtml(draft.siteName || 'Sans chantier')} · ${new Date(draft.updatedAt || draft.createdAt).toLocaleDateString('fr-BE')}</small></div><div class="list-actions"><span class="draft-status">Brouillon</span><strong class="price">${money(totals.tvac)}</strong><button class="mini-btn danger" type="button" data-action="delete-draft" data-id="${escapeHtml(draft.id)}" title="Supprimer" aria-label="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div></article>`;
 }
 
 function renderDrafts() {
@@ -611,7 +611,7 @@ function renderQuoteClient() {
 function lineMarkup(row, index) {
   const net = (Number(row.qty)||0) * (Number(row.unitPrice)||0) * (1 - (Number(row.discount)||0)/100);
   return `<article class="line-item" data-line-index="${index}">
-    <div class="line-title-row"><input data-line-field="description" value="${escapeHtml(row.description || '')}" placeholder="Description"><button type="button" data-action="remove-line" data-index="${index}">×</button></div>
+    <div class="line-title-row"><input data-line-field="description" value="${escapeHtml(row.description || '')}" placeholder="Description"><button type="button" data-action="remove-line" data-index="${index}" title="Supprimer" aria-label="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div>
     <div class="line-fields">
       <label>Qté<input type="number" inputmode="decimal" step="0.01" data-line-field="qty" value="${escapeHtml(row.qty ?? 1)}"></label>
       <label>Unité<input data-line-field="unit" value="${escapeHtml(row.unit || 'p')}"></label>
