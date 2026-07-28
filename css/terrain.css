@@ -32,3 +32,30 @@
     stroke-linejoin: round;
     pointer-events: none;
 }
+
+/* ===== Terrain : tarifs regroupés par catégories ===== */
+.terrain-tarif-groups{display:grid;gap:12px}
+.terrain-tarif-category{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.035)}
+.terrain-tarif-category>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:15px 16px;background:linear-gradient(135deg,var(--green),var(--green2));color:#fff;cursor:pointer;font-weight:800}
+.terrain-tarif-category>summary::-webkit-details-marker{display:none}
+.terrain-tarif-category>summary::before{content:'›';font-size:1.45rem;line-height:1;transition:transform .18s ease}
+.terrain-tarif-category[open]>summary::before{transform:rotate(90deg)}
+.terrain-tarif-category-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.terrain-tarif-count{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:999px;background:rgba(255,255,255,.18);font-size:.78rem}
+.terrain-tarif-category-content{display:grid;gap:14px;padding:12px}
+.terrain-tarif-subcategory{display:grid;gap:8px}
+.terrain-tarif-subcategory-title{display:flex;align-items:center;gap:8px;padding:4px 4px 2px;color:var(--green);font-weight:800}
+.terrain-tarif-subcategory-title::before{content:'';width:4px;height:18px;border-radius:999px;background:var(--green2)}
+.terrain-tarif-subcategory-title span{flex:1}
+.terrain-tarif-subcategory-title small{display:grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:var(--mint);font-size:.72rem}
+.terrain-tarif-items{display:grid;gap:8px}
+.tarif-card{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff}
+.tarif-card-main{flex:1;min-width:0}
+.tarif-card-main strong{display:block;line-height:1.25}
+.tarif-card-main small{display:block;margin-top:4px;color:var(--muted);line-height:1.3}
+.tarif-card-actions{display:flex;align-items:center;gap:6px}
+.tarif-card-actions .price{display:grid;text-align:right;color:var(--green);font-weight:850}
+.tarif-card-actions .price span{font-size:.7rem;color:var(--muted);font-weight:650}
+.tarif-favorite-btn,.tarif-add-btn{width:38px;height:38px;padding:0;display:grid;place-items:center}
+.tarif-add-btn{background:var(--green);color:#fff}
+@media(max-width:480px){.terrain-tarif-category-content{padding:9px}.tarif-card{align-items:flex-start;padding:10px}.tarif-card-actions{flex-wrap:wrap;justify-content:flex-end;max-width:112px}.tarif-card-actions .price{width:100%}}

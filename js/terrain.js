@@ -427,8 +427,106 @@ function tarifUnit(item) {
 function filteredTarifs() {
   const q = normalizeText(state.query);
   return [...state.data.tarifs.items]
-    .filter(item => !q || normalizeText([item.poste, item.categorie, item.tags, item.remarque].join(' ')).includes(q))
-    .sort((a, b) => String(a.categorie || '').localeCompare(String(b.categorie || ''), 'fr') || String(a.poste || '').localeCompare(String(b.poste || ''), 'fr'));
+    .filter(item => !q || normalizeText([
+      item.poste,
+      item.categorie,
+      item.sousCategorie,
+      item.souscategorie,
+      item.tags,
+      item.remarque
+    ].join(' ')).includes(q))
+    .sort((a, b) =>
+      String(a.categorie || '').localeCompare(String(b.categorie || ''), 'fr', { sensitivity: 'base' }) ||
+      String(a.sousCategorie || a.souscategorie || '').localeCompare(String(b.sousCategorie || b.souscategorie || ''), 'fr', { sensitivity: 'base' }) ||
+      String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' })
+    );
+}
+
+function tarifCategoryOrder(name) {
+  const categories = Array.isArray(state.data.tarifs.categories) ? state.data.tarifs.categories : [];
+  const index = categories.findIndex(category => normalizeText(category) === normalizeText(name));
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+}
+
+function tarifSubcategoryOrder(category, name) {
+  const subcategories = Array.isArray(state.data.tarifs.subcategories) ? state.data.tarifs.subcategories : [];
+  const rows = subcategories.filter(row => normalizeText(row.parent || row.categorie || '') === normalizeText(category));
+  const index = rows.findIndex(row => normalizeText(row.name || row.nom || '') === normalizeText(name));
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+}
+
+function groupTarifs(items) {
+  const categoryMap = new Map();
+
+  items.forEach(item => {
+    const category = String(item.categorie || '').trim() || 'Sans catégorie';
+    const subcategory = String(item.sousCategorie || item.souscategorie || '').trim() || '';
+    if (!categoryMap.has(category)) categoryMap.set(category, new Map());
+    const subMap = categoryMap.get(category);
+    if (!subMap.has(subcategory)) subMap.set(subcategory, []);
+    subMap.get(subcategory).push(item);
+  });
+
+  return [...categoryMap.entries()]
+    .sort(([a], [b]) => {
+      if (a === 'Sans catégorie') return 1;
+      if (b === 'Sans catégorie') return -1;
+      const order = tarifCategoryOrder(a) - tarifCategoryOrder(b);
+      return order || a.localeCompare(b, 'fr', { sensitivity: 'base' });
+    })
+    .map(([category, subMap]) => ({
+      category,
+      groups: [...subMap.entries()]
+        .sort(([a], [b]) => {
+          if (!a) return 1;
+          if (!b) return -1;
+          const order = tarifSubcategoryOrder(category, a) - tarifSubcategoryOrder(category, b);
+          return order || a.localeCompare(b, 'fr', { sensitivity: 'base' });
+        })
+        .map(([subcategory, rows]) => ({
+          subcategory,
+          items: rows.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }))
+        }))
+    }));
+}
+
+function renderTarifItem(item) {
+  const favorite = state.favorites.includes(item.id);
+  return `<article class="tarif-card">
+    <div class="tarif-card-main">
+      <strong>${escapeHtml(item.poste || 'Prestation')}</strong>
+      ${item.remarque || item.tags ? `<small>${escapeHtml(item.remarque || item.tags || '')}</small>` : ''}
+    </div>
+    <div class="tarif-card-actions">
+      <div class="price nowrap">${money(tarifPrice(item))}<span>/${escapeHtml(tarifUnit(item))}</span></div>
+      <button class="mini-btn tarif-favorite-btn" type="button" data-action="toggle-favorite" data-id="${escapeHtml(item.id)}" title="${favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-label="${favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${favorite ? '★' : '☆'}</button>
+      ${state.activeDraft ? `<button class="mini-btn tarif-add-btn" type="button" data-action="add-tarif" data-id="${escapeHtml(item.id)}" title="Ajouter au devis" aria-label="Ajouter au devis">＋</button>` : ''}
+    </div>
+  </article>`;
+}
+
+function renderTarifGroups(items) {
+  const groups = groupTarifs(items);
+  const searching = !!String(state.query || '').trim();
+
+  return groups.map(group => {
+    const total = group.groups.reduce((sum, sub) => sum + sub.items.length, 0);
+    return `<details class="terrain-tarif-category" ${searching ? 'open' : ''}>
+      <summary>
+        <span class="terrain-tarif-category-name">${escapeHtml(group.category)}</span>
+        <span class="terrain-tarif-count">${total}</span>
+      </summary>
+      <div class="terrain-tarif-category-content">
+        ${group.groups.map(sub => {
+          const showSubcategory = !!sub.subcategory;
+          return `<section class="terrain-tarif-subcategory">
+            ${showSubcategory ? `<div class="terrain-tarif-subcategory-title"><span>${escapeHtml(sub.subcategory)}</span><small>${sub.items.length}</small></div>` : ''}
+            <div class="terrain-tarif-items">${sub.items.map(renderTarifItem).join('')}</div>
+          </section>`;
+        }).join('')}
+      </div>
+    </details>`;
+  }).join('');
 }
 
 function draftTotals(draft) {
@@ -579,11 +677,8 @@ function renderPrices() {
   const items = filteredTarifs();
   viewRoot.innerHTML = `
     <div class="section-head"><h2>${state.data.tarifs.items.length} prestation${state.data.tarifs.items.length === 1 ? '' : 's'}</h2><button type="button" data-action="open-full-prices">Gérer</button></div>
-    <div class="search-row"><input id="priceSearch" class="search-input" type="search" placeholder="Taille, déplacement, évacuation…" value="${escapeHtml(state.query)}"></div>
-    <div class="list">${items.length ? items.map(item => {
-      const favorite = state.favorites.includes(item.id);
-      return `<article class="list-card"><div class="list-main"><span class="category-chip">${escapeHtml(item.categorie || 'Sans catégorie')}</span><strong>${escapeHtml(item.poste || 'Prestation')}</strong><small>${escapeHtml(item.remarque || item.tags || '')}</small></div><div class="list-actions"><div class="price nowrap">${money(tarifPrice(item))}/${escapeHtml(tarifUnit(item))}</div><button class="mini-btn" type="button" data-action="toggle-favorite" data-id="${escapeHtml(item.id)}">${favorite ? '★' : '☆'}</button>${state.activeDraft ? `<button class="mini-btn" type="button" data-action="add-tarif" data-id="${escapeHtml(item.id)}">＋</button>` : ''}</div></article>`;
-    }).join('') : '<div class="empty">Aucun tarif trouvé. Ajoute d’abord tes prestations dans la version complète.</div>'}</div>`;
+    <div class="search-row"><input id="priceSearch" class="search-input" type="search" placeholder="Rechercher un poste, une catégorie…" value="${escapeHtml(state.query)}"></div>
+    <div class="terrain-tarif-groups">${items.length ? renderTarifGroups(items) : '<div class="empty">Aucun tarif trouvé. Ajoute d’abord tes prestations dans la version complète.</div>'}</div>`;
   bindSearch('#priceSearch');
 }
 

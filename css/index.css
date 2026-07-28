@@ -3568,3 +3568,9 @@ html {
     vertical-align: middle;
 }
 
+
+/* Entrée autonome Terrain dans la navigation principale. */
+.sidebar-nav-scroll > .sidebar-standalone {
+  width: 100%;
+  justify-content: flex-start;
+}

@@ -78,6 +78,7 @@ const backupOverlay = document.getElementById('backupOverlay');
 const backupOverlayTitle = document.getElementById('backupOverlayTitle');
 const backupOverlayText = document.getElementById('backupOverlayText');
 const devisFrame = document.getElementById('devisFrame');
+const terrainFrame = document.getElementById('terrainFrame');
 const comptaFrame = document.getElementById('comptaFrame');
 const chantierFrame = document.getElementById('chantierFrame');
 const impotsFrame = document.getElementById('impotsFrame');
@@ -91,7 +92,7 @@ let activateTrialBtn = null;
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
-const FREE_MAIN_TABS = ['devis', 'tarifs'];
+const FREE_MAIN_TABS = ['devis', 'tarifs', 'terrain'];
 const PAID_MAIN_TABS = ['compta', 'chantier', 'impots'];
 let currentSubscriptionState = { allowed: false, status: 'unknown', data: null };
 
@@ -285,6 +286,7 @@ function switchMainTab(tabName) {
   });
 
   document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
+  document.getElementById('panel-terrain')?.classList.toggle('active', tabName === 'terrain');
   document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
   document.getElementById('panel-chantier').classList.toggle('active', tabName === 'chantier');
   document.getElementById('panel-impots').classList.toggle('active', tabName === 'impots');
@@ -405,6 +407,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 
   [
     { tab: 'devis', frame: devisFrame },
+    { tab: 'terrain', frame: terrainFrame },
     { tab: 'compta', frame: comptaFrame },
     { tab: 'chantier', frame: chantierFrame },
     { tab: 'impots', frame: impotsFrame },
@@ -427,7 +430,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 }
 
 function unloadProtectedFrames() {
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     if (!frame) return;
     frame.setAttribute('src', 'about:blank');
   });
@@ -2236,7 +2239,7 @@ function broadcastDriveConnected() {
     expiresAt: googleTokenExpiresAt
   };
 
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
@@ -2246,13 +2249,13 @@ function broadcastDriveDisconnected() {
     type: 'BASTCOMPTA_GOOGLE_LOGOUT'
   };
 
-  [devisFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
 
 function bindIframeMessaging() {
-  [devisFrame, comptaFrame, chantierFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, tarifsFrame].forEach(frame => {
     frame?.addEventListener('load', () => {
       if (isTokenFresh()) broadcastDriveConnected();
       else broadcastDriveDisconnected();
@@ -2767,7 +2770,7 @@ function configureModuleIframe(frame) {
   frame.setAttribute('scrolling', 'yes');
 }
 
-[devisFrame, comptaFrame, chantierFrame, impotsFrame].forEach((frame) => {
+[devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame].forEach((frame) => {
   configureModuleIframe(frame);
   frame?.addEventListener('load', () => configureModuleIframe(frame));
 });
@@ -2972,10 +2975,11 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
     devis: 'Devis & Factures',
     compta: 'Comptabilité',
     chantier: 'Suivi client',
+    terrain: 'Terrain',
     impots: 'Impôts IPP'
   };
   const defaults = { devis: 'quote', compta: 'sales', impots: 'summary' };
-  const frames = { devis: devisFrame, compta: comptaFrame, chantier: chantierFrame, impots: impotsFrame };
+  const frames = { devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, impots: impotsFrame };
 
   function closeMobileSidebar() {
     shell?.classList.remove('sidebar-open');
