@@ -6,6 +6,7 @@ const DRIVE_SYNC_FILE_NAME = 'bastcompta-chantiers-sync.json';
 const DEVIS_FACTURE_STORAGE_KEY = 'devis-facture-style-vrai-document';
 const CRM_DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
 const CRM_DELETED_CLIENTS_STORAGE_KEY = 'bastcompta-crm-deleted-clients-v1';
+const TERRAIN_DRAFTS_STORAGE_KEY = 'bastcompta-terrain-drafts-v1';
 
 let googleAccessToken = null;
 let selectedProjectId = '';
@@ -926,6 +927,7 @@ function renderMain() {
         <div class="tabs">
           ${tabButton('summary', 'Résumé')}
           ${tabButton('quotes', 'Devis')}
+          ${tabButton('drafts', 'Brouillons')}
           ${tabButton('finance', 'Factures / Coûts')}
           ${tabButton('documents', 'Documents')}
           ${tabButton('photos', 'Photos')}
@@ -957,6 +959,9 @@ function renderTabPages(project) {
         </section>
         <section class="tab-page ${activeTab === 'quotes' ? 'active' : ''}">
           ${renderQuotesTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'drafts' ? 'active' : ''}">
+          ${renderDraftsTab(project)}
         </section>
         <section class="tab-page ${activeTab === 'finance' ? 'active' : ''}">
           ${renderFinanceTab(project)}
@@ -1185,6 +1190,206 @@ function renderQuotesTab(project) {
           ${renderMoneyTable(project.linkedQuotes || [], 'quote')}
         </div>
       `;
+}
+
+
+
+function loadTerrainDrafts() {
+  try {
+    const raw = localStorage.getItem(TERRAIN_DRAFTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn('Lecture des brouillons Terrain impossible.', error);
+    return [];
+  }
+}
+
+function saveTerrainDrafts(drafts) {
+  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(Array.isArray(drafts) ? drafts : [], null, 2));
+}
+
+function terrainDraftMatchesProject(project, draft) {
+  if (!project || !draft) return false;
+  const same = (a, b) => normalizeLinkKey(a) && normalizeLinkKey(a) === normalizeLinkKey(b);
+  return same(project.clientId, draft.clientId)
+    || same(project.clientRef, draft.clientNumber)
+    || same(project.clientEmail || project.email, draft.clientEmail)
+    || same(project.clientName || project.title, draft.clientName);
+}
+
+function getProjectTerrainDrafts(project) {
+  return loadTerrainDrafts()
+    .filter(draft => terrainDraftMatchesProject(project, draft))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+}
+
+function terrainDraftTotal(draft) {
+  return (Array.isArray(draft?.lines) ? draft.lines : []).reduce((total, line) => {
+    const qty = Number(line.qty) || 0;
+    const price = Number(line.unitPrice) || 0;
+    const discount = Math.max(0, Math.min(100, Number(line.discount) || 0));
+    return total + qty * price * (1 - discount / 100);
+  }, 0);
+}
+
+function renderDraftsTab(project) {
+  const drafts = getProjectTerrainDrafts(project);
+  return `
+    <div class="form-card">
+      <div class="section-head">
+        <div>
+          <h3 class="section-title">Brouillons Terrain</h3>
+          <div class="hint">${drafts.length} brouillon${drafts.length === 1 ? '' : 's'} lié${drafts.length === 1 ? '' : 's'} à ce client.</div>
+        </div>
+      </div>
+      ${drafts.length ? `<div class="crm-draft-list">${drafts.map(draft => {
+        const transformed = !!String(draft.convertedQuoteNumber || '').trim();
+        const lineCount = Array.isArray(draft.lines) ? draft.lines.filter(line => String(line.description || '').trim()).length : 0;
+        return `<article class="crm-draft-card">
+          <div class="crm-draft-main">
+            <div class="crm-draft-title-row">
+              <strong>${escapeHtml(draft.siteName || 'Brouillon Terrain')}</strong>
+              <span class="crm-draft-status ${transformed ? 'is-converted' : ''}">${transformed ? `Transformé en ${escapeHtml(draft.convertedQuoteNumber)}` : 'Brouillon'}</span>
+            </div>
+            <div class="hint">${escapeHtml(formatDate((draft.updatedAt || draft.createdAt || '').slice(0, 10)))} · ${lineCount} ligne${lineCount === 1 ? '' : 's'} · ${formatMoney(terrainDraftTotal(draft))} HTVA</div>
+            ${draft.notes ? `<p class="crm-draft-notes">${escapeHtml(draft.notes)}</p>` : ''}
+          </div>
+          <div class="inline-actions">
+            ${transformed
+              ? `<button class="small" type="button" onclick="openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis</button>`
+              : `<button class="small primary" type="button" onclick="convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+          </div>
+        </article>`;
+      }).join('')}</div>` : '<div class="hint">Aucun brouillon Terrain pour ce client.</div>'}
+    </div>`;
+}
+
+function collectKnownQuoteNumbers() {
+  const values = [];
+  const current = loadDevisFactureData();
+  if (current?.quote?.documentNumber) values.push(current.quote.documentNumber);
+  (data.projects || []).forEach(project => (project.linkedQuotes || []).forEach(item => values.push(item.ref, item.displayRef)));
+  loadTerrainDrafts().forEach(draft => values.push(draft.convertedQuoteNumber));
+  return values.filter(Boolean);
+}
+
+function nextTerrainQuoteNumber() {
+  const year = String(new Date().getFullYear());
+  let highest = 0;
+  collectKnownQuoteNumbers().forEach(value => {
+    const match = String(value || '').trim().toUpperCase().match(/^D-(\d{4})-(\d+)$/);
+    if (match && match[1] === year) highest = Math.max(highest, Number(match[2]) || 0);
+  });
+  return `D-${year}-${String(highest + 1).padStart(3, '0')}`;
+}
+
+function buildQuoteFromTerrainDraft(draft, number) {
+  return {
+    documentNumber: number,
+    status: 'draft',
+    terrainDraftId: String(draft.id || ''),
+    transferredFromTerrain: true,
+    terrainTransferredAt: draft.transferredAt || new Date().toISOString(),
+    clientNumber: draft.clientNumber || '',
+    clientVat: draft.clientVat || '',
+    clientId: draft.clientId || '',
+    clientName: draft.clientName || '',
+    clientEmail: draft.clientEmail || '',
+    address: draft.address || '',
+    date: draft.date || todayISO(),
+    validity: draft.validity || '',
+    siteName: draft.siteName || '',
+    chantierId: '',
+    lines: Array.isArray(draft.lines) ? JSON.parse(JSON.stringify(draft.lines)) : [],
+    suppliesEnabled: false,
+    suppliesLines: [],
+    notes: draft.notes || '',
+    photos: Array.isArray(draft.photos) ? JSON.parse(JSON.stringify(draft.photos)) : []
+  };
+}
+
+async function convertTerrainDraftToQuote(draftId) {
+  const project = getProject();
+  const drafts = loadTerrainDrafts();
+  const draft = drafts.find(item => String(item.id) === String(draftId));
+  if (!project || !draft || !terrainDraftMatchesProject(project, draft)) return notify('Brouillon Terrain introuvable.');
+  if (draft.convertedQuoteNumber) return openConvertedTerrainQuote(draftId);
+  if (!Array.isArray(draft.lines) || !draft.lines.some(line => String(line.description || '').trim())) return notify('Ce brouillon ne contient aucune prestation.');
+
+  const number = nextTerrainQuoteNumber();
+  const fullData = readFullCrmDataFromLocalStorage();
+  const quote = buildQuoteFromTerrainDraft(draft, number);
+  fullData.quote = quote;
+  writeFullCrmDataToLocalStorage(fullData);
+
+  draft.status = 'converted';
+  draft.convertedQuoteNumber = number;
+  draft.convertedAt = new Date().toISOString();
+  const index = drafts.findIndex(item => String(item.id) === String(draftId));
+  drafts[index] = draft;
+  saveTerrainDrafts(drafts);
+
+  const entry = buildCrmDocEntry('quote', quote, 'Brouillon Terrain');
+  if (entry) {
+    if (!Array.isArray(project.linkedQuotes)) project.linkedQuotes = [];
+    const payload = {
+      id: `quote-${number}`,
+      documentUid: `quote:${normalizeLinkKey(number)}`,
+      date: entry.date,
+      ref: number,
+      displayRef: number,
+      description: `Devis ${number}`,
+      amount: entry.clientHtva || entry.htva || 0,
+      clientHtva: entry.clientHtva || entry.htva || 0,
+      totalClientHtva: entry.clientHtva || entry.htva || 0,
+      workHtva: entry.workHtva || entry.htva || 0,
+      htva: entry.htva || 0,
+      vat: entry.vat || 0,
+      tvac: entry.tvac || 0,
+      suppliesCost: entry.suppliesCost || 0,
+      suppliesCostHtva: entry.suppliesCostHtva || 0,
+      suppliesHtva: entry.suppliesHtva || 0,
+      suppliesSaleHtva: entry.suppliesSaleHtva || 0,
+      source: 'Brouillon Terrain',
+      docKey: 'quote',
+      suiviClientId: project.id,
+      chantierId: project.id,
+      clientId: quote.clientId,
+      clientName: quote.clientName,
+      clientRef: quote.clientNumber,
+      siteName: quote.siteName || project.title,
+      rawDocument: quote
+    };
+    project.linkedQuotes = (project.linkedQuotes || []).filter(item => normalizeLinkKey(item.ref) !== normalizeLinkKey(number));
+    project.linkedQuotes.unshift(payload);
+    project.linkedQuotes = dedupeMoneyList(project.linkedQuotes);
+    addTimeline(project, `Brouillon Terrain transformé en devis ${number}.`);
+    saveLocalOnly();
+  }
+
+  renderMain();
+  notify(`Devis ${number} créé et chargé dans Devis & Facture.`);
+  openQuoteInFullModule(number);
+}
+
+function openConvertedTerrainQuote(draftId) {
+  const draft = loadTerrainDrafts().find(item => String(item.id) === String(draftId));
+  const number = String(draft?.convertedQuoteNumber || '').trim();
+  if (!number) return notify('Aucun devis créé pour ce brouillon.');
+  const project = getProject();
+  const item = (project?.linkedQuotes || []).find(quote => normalizeLinkKey(quote.ref) === normalizeLinkKey(number));
+  if (item?.rawDocument) {
+    const fullData = readFullCrmDataFromLocalStorage();
+    fullData.quote = item.rawDocument;
+    writeFullCrmDataToLocalStorage(fullData);
+  }
+  openQuoteInFullModule(number);
+}
+
+function openQuoteInFullModule(number) {
+  const targetOrigin = window.location.origin && window.location.origin !== 'null' ? window.location.origin : '*';
+  window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_DEVIS_DOCUMENT', docKey: 'quote', ref: number || '' }, targetOrigin);
 }
 
 function renderFinanceTab(project) {
