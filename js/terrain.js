@@ -618,7 +618,7 @@ function lineMarkup(row, index) {
       <label>Prix HT<input type="number" inputmode="decimal" step="0.01" data-line-field="unitPrice" value="${escapeHtml(row.unitPrice ?? 0)}"></label>
       <label>TVA<select data-line-field="vatRate">${[0,6,12,21].map(rate => `<option value="${rate}" ${Number(row.vatRate)===rate?'selected':''}>${rate}%</option>`).join('')}</select></label>
     </div>
-    <div class="line-total">${money(net)}</div>
+    <div class="line-total" data-line-total>${money(net)}</div>
   </article>`;
 }
 
@@ -635,7 +635,13 @@ function renderQuoteLines() {
     ${favoriteItems.length ? `<div class="section-head"><h2>Favoris</h2><button type="button" data-action="browse-prices">Tous les tarifs</button></div><div class="favorite-strip">${favoriteItems.map(item => `<button type="button" data-action="add-tarif" data-id="${escapeHtml(item.id)}">＋ ${escapeHtml(item.poste)}</button>`).join('')}</div>` : `<button class="add-line-btn" type="button" data-action="browse-prices">🏷 Choisir dans les tarifs</button>`}
     <div id="quoteLines" class="quote-lines">${draft.lines.length ? draft.lines.map(lineMarkup).join('') : '<div class="empty">Aucune prestation ajoutée.</div>'}</div>
     <button class="add-line-btn" type="button" data-action="add-custom-line">＋ Ligne libre</button>
-    <div class="totals"><div class="totals-row"><span>HTVA</span><strong>${money(totals.htva)}</strong></div><div class="totals-row"><span>TVA</span><strong>${money(totals.vat)}</strong></div><div class="totals-row grand"><span>Total TVAC</span><span>${money(totals.tvac)}</span></div><div class="quote-actions"><button class="outline" type="button" data-action="save-draft">Enregistrer</button><button class="light" type="button" data-action="quote-next">Continuer</button></div></div>`;
+    <div class="totals compact-totals">
+      <div class="compact-total-copy">
+        <small><span>HTVA <strong id="quoteTotalHtva">${money(totals.htva)}</strong></span><span>TVA <strong id="quoteTotalVat">${money(totals.vat)}</strong></span></small>
+        <div><span>Total TVAC</span><strong id="quoteTotalTvac">${money(totals.tvac)}</strong></div>
+      </div>
+      <div class="quote-actions"><button class="outline" type="button" data-action="save-draft">Enregistrer</button><button class="light" type="button" data-action="quote-next">Continuer</button></div>
+    </div>`;
   bindQuoteFields();
 }
 
@@ -695,17 +701,38 @@ function bindSearch(selector) {
   });
 }
 
+function refreshQuoteTotals() {
+  const totals = draftTotals(state.activeDraft);
+  const htva = $('#quoteTotalHtva');
+  const vat = $('#quoteTotalVat');
+  const tvac = $('#quoteTotalTvac');
+  if (htva) htva.textContent = money(totals.htva);
+  if (vat) vat.textContent = money(totals.vat);
+  if (tvac) tvac.textContent = money(totals.tvac);
+}
+
+function refreshLineTotal(card, row) {
+  const net = (Number(row.qty) || 0) * (Number(row.unitPrice) || 0) * (1 - (Number(row.discount) || 0) / 100);
+  const total = card.querySelector('[data-line-total]');
+  if (total) total.textContent = money(net);
+}
+
 function bindQuoteFields() {
   const siteName = $('#siteName');
   siteName?.addEventListener('input', () => { state.activeDraft.siteName = siteName.value; });
   document.querySelectorAll('[data-line-index]').forEach(card => {
     const index = Number(card.dataset.lineIndex);
     card.querySelectorAll('[data-line-field]').forEach(input => {
-      input.addEventListener('input', () => {
+      const update = () => {
         const field = input.dataset.lineField;
         state.activeDraft.lines[index][field] = ['qty','unitPrice','vatRate','discount'].includes(field) ? Number(input.value) : input.value;
-        renderQuoteLines();
-      });
+        if (field !== 'description' && field !== 'unit') {
+          refreshLineTotal(card, state.activeDraft.lines[index]);
+          refreshQuoteTotals();
+        }
+      };
+      input.addEventListener('input', update);
+      if (input.tagName === 'SELECT') input.addEventListener('change', update);
     });
   });
 }
