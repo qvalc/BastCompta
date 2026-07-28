@@ -7,6 +7,7 @@ const DEVIS_FACTURE_STORAGE_KEY = 'devis-facture-style-vrai-document';
 const CRM_DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
 const CRM_DELETED_CLIENTS_STORAGE_KEY = 'bastcompta-crm-deleted-clients-v1';
 const TERRAIN_DRAFTS_STORAGE_KEY = 'bastcompta-terrain-drafts-v1';
+const TERRAIN_DRAFTS_DRIVE_FILE_NAME = 'bastcompta-terrain-drafts.json';
 
 let googleAccessToken = null;
 let selectedProjectId = '';
@@ -16,6 +17,7 @@ let data = loadData();
 let crmDriveClientsCache = [];
 let crmDropdownClientsCache = [];
 const crmPhotoObjectUrls = new Map();
+let terrainDraftsCache = null;
 
 const statusLabels = {
   planned: 'À suivre',
@@ -1195,18 +1197,74 @@ function renderQuotesTab(project) {
 
 
 function loadTerrainDrafts() {
+  if (Array.isArray(terrainDraftsCache)) return terrainDraftsCache;
   try {
     const raw = localStorage.getItem(TERRAIN_DRAFTS_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    terrainDraftsCache = Array.isArray(parsed) ? parsed : [];
+    return terrainDraftsCache;
   } catch (error) {
     console.warn('Lecture des brouillons Terrain impossible.', error);
-    return [];
+    terrainDraftsCache = [];
+    return terrainDraftsCache;
+  }
+}
+
+async function loadTerrainDraftsFromDrive() {
+  if (!googleAccessToken) return false;
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
+      fields: 'files(id,name,modifiedTime)',
+      orderBy: 'modifiedTime desc',
+      pageSize: 10
+    }, false);
+    const files = list?.result?.files || list?.files || [];
+    if (!files.length) return false;
+    const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${files[0].id}?alt=media`, {}, false);
+    if (!response || !response.ok) return false;
+    const parsed = await response.json();
+    if (!Array.isArray(parsed)) return false;
+    terrainDraftsCache = parsed;
+    localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(parsed));
+    return true;
+  } catch (error) {
+    console.warn('Chargement des brouillons Terrain depuis Drive impossible.', error);
+    return false;
+  }
+}
+
+async function saveTerrainDraftsToDrive(drafts) {
+  if (!googleAccessToken) return false;
+  try {
+    const list = await driveFilesList({
+      spaces: 'appDataFolder',
+      q: `name='${TERRAIN_DRAFTS_DRIVE_FILE_NAME}' and trashed=false`,
+      fields: 'files(id,name,modifiedTime)',
+      pageSize: 10
+    }, false);
+    const files = list?.result?.files || list?.files || [];
+    const metadata = { name: TERRAIN_DRAFTS_DRIVE_FILE_NAME, parents: files.length ? undefined : ['appDataFolder'] };
+    if (metadata.parents === undefined) delete metadata.parents;
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([JSON.stringify(drafts, null, 2)], { type: 'application/json' }));
+    const url = files.length
+      ? `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name,modifiedTime`
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime';
+    const response = await googleDriveFetch(url, { method: files.length ? 'PATCH' : 'POST', body: form }, false);
+    return !!response?.ok;
+  } catch (error) {
+    console.warn('Sauvegarde des brouillons Terrain sur Drive impossible.', error);
+    return false;
   }
 }
 
 function saveTerrainDrafts(drafts) {
-  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(Array.isArray(drafts) ? drafts : [], null, 2));
+  terrainDraftsCache = Array.isArray(drafts) ? drafts : [];
+  localStorage.setItem(TERRAIN_DRAFTS_STORAGE_KEY, JSON.stringify(terrainDraftsCache, null, 2));
+  saveTerrainDraftsToDrive(terrainDraftsCache);
 }
 
 function terrainDraftMatchesProject(project, draft) {
@@ -3582,6 +3640,7 @@ function initGoogleMessages() {
         try {
           gapi.client.setToken({ access_token: googleAccessToken });
           await loadSyncDataFromDriveIfAvailable();
+          await loadTerrainDraftsFromDrive();
           await refreshCrmClientDropdown(false);
           selectedProjectId = '';
           render();
@@ -3617,6 +3676,10 @@ function initGoogleMessages() {
       data = loadData();
       render();
     }
+    if (event.key === TERRAIN_DRAFTS_STORAGE_KEY) {
+      terrainDraftsCache = null;
+      render();
+    }
   });
 
   safePostToParent({ type: 'BASTCOMPTA_DRIVE_STATUS_REQUEST' });
@@ -3633,6 +3696,7 @@ function initGapi() {
       if (googleAccessToken) {
         gapi.client.setToken({ access_token: googleAccessToken });
         await loadSyncDataFromDriveIfAvailable();
+        await loadTerrainDraftsFromDrive();
         await refreshCrmClientDropdown(false);
         render();
       }
