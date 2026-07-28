@@ -2590,24 +2590,38 @@ function totals() {
     };
   });
 
-  const assetsComputed = data.assets.map((row) => {
-    const amount = toNumber(row.amount);
-    const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
-    const amort = computeAmortization(amount, row.date, durationMonths, currentYear);
+  const assetsComputed = data.assets
+    .map((row, sourceIndex) => {
+      const amount = toNumber(row.amount);
+      const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
+      const amort = computeAmortization(
+        amount,
+        row.date,
+        durationMonths,
+        currentYear
+      );
 
-    return {
-      date: row.date || '',
-      supplier: row.supplier || '',
-      invoiceNumber: row.invoiceNumber || '',
-      description: row.description || '',
-      label: row.label || '',
-      amount,
-      durationMonths,
-      amortYear: amort.amortYear,
-      amortTotal: amort.amortTotal,
-      netValue: amort.netValue
-    };
-  });
+      return {
+        sourceIndex,
+        date: row.date || '',
+        supplier: row.supplier || '',
+        invoiceNumber: row.invoiceNumber || '',
+        description: row.description || '',
+        label: row.label || '',
+        amount,
+        durationMonths,
+        amortYear: amort.amortYear,
+        amortTotal: amort.amortTotal,
+        netValue: amort.netValue
+      };
+    })
+    .sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+
+      return b.date.localeCompare(a.date);
+    });
 
   const assetsGross = assetsComputed.reduce((sum, row) => sum + row.amount, 0);
 
@@ -3061,19 +3075,67 @@ function renderAssets() {
     addLabel: 'Ajouter une immobilisation',
     onAdd: `addRow('assets', { date: '', supplier: '', invoiceNumber: '', description: '', label: '', amount: 0, durationMonths: 60 })`,
     headers: ['Date', 'Libellé', 'Fournisseur', 'Montant HTVA', 'Durée (mois)', 'Amorti année', 'Amorti total', 'Valeur nette', ''],
-    rows: t.assetsComputed.map((row, i) => `
-      <tr>
-        <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.assets[${i}].date=this.value; saveData(false)"></td>
-        <td><input value="${escapeAttr(row.label)}" onchange="data.assets[${i}].label=this.value; saveData(false)"></td>
-        <td><input value="${escapeAttr(data.assets[i].supplier || '')}" onchange="data.assets[${i}].supplier=this.value; saveData(false)"></td>
-        <td><input type="number" step="0.01" value="${num(row.amount)}" onchange="data.assets[${i}].amount=parseFloat(this.value)||0; saveData(false)"></td>
-        <td><input type="number" min="1" step="1" value="${parseInt(row.durationMonths || 60, 10)}" onchange="data.assets[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"></td>
-        <td>${money(row.amortYear)}</td>
-        <td>${money(row.amortTotal)}</td>
-        <td>${money(row.netValue)}</td>
-        <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('assets', ${i})">×</button></td>
-      </tr>
-    `).join('') || `<tr><td colspan="9">Aucune immobilisation encodée.</td></tr>`,
+    rows: t.assetsComputed.map((row) => {
+      const i = row.sourceIndex;
+
+      return `
+    <tr>
+      <td>
+        <input
+          type="date"
+          value="${escapeAttr(row.date)}"
+          onchange="data.assets[${i}].date=this.value; saveData(false)"
+        >
+      </td>
+
+      <td>
+        <input
+          value="${escapeAttr(row.label)}"
+          onchange="data.assets[${i}].label=this.value; saveData(false)"
+        >
+      </td>
+
+      <td>
+        <input
+          value="${escapeAttr(row.supplier)}"
+          onchange="data.assets[${i}].supplier=this.value; saveData(false)"
+        >
+      </td>
+
+      <td>
+        <input
+          type="number"
+          step="0.01"
+          value="${num(row.amount)}"
+          onchange="data.assets[${i}].amount=parseFloat(this.value)||0; saveData(false)"
+        >
+      </td>
+
+      <td>
+        <input
+          type="number"
+          min="1"
+          step="1"
+          value="${parseInt(row.durationMonths || 60, 10)}"
+          onchange="data.assets[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"
+        >
+      </td>
+
+      <td>${money(row.amortYear)}</td>
+      <td>${money(row.amortTotal)}</td>
+      <td>${money(row.netValue)}</td>
+
+      <td>
+        <button
+          class="delete-icon-btn"
+          title="Supprimer"
+          aria-label="Supprimer"
+          onclick="deleteRow('assets', ${i})"
+        >×</button>
+      </td>
+    </tr>
+  `;
+    }).join('') || `<tr><td colspan="9">Aucune immobilisation encodée.</td></tr>`,
     footer: `
       <div class="kv"><span>Total immobilisations</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.amount, 0))}</span></div>
 <div class="kv"><span>Amortissement annuel</span><span>${money(t.assetsComputed.reduce((sum, row) => sum + row.amortYear, 0))}</span></div>
@@ -3251,8 +3313,8 @@ function renderResult() {
                 </div>
                 <div style="padding:10px 12px; text-align:right;">
                   ${hasExcessSocialRefund
-                    ? `+ ${money(excessSocialRefund)}`
-                    : `${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}`}
+      ? `+ ${money(excessSocialRefund)}`
+      : `${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}`}
                 </div>
               </div>
               <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
