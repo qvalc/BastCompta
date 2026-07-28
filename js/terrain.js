@@ -32,7 +32,11 @@ const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
 const app = initializeApp(firebaseConfig, 'bastcompta-terrain');
 const auth = getAuth(app);
 const db = getFirestore(app);
-await setPersistence(auth, browserLocalPersistence);
+try {
+  await setPersistence(auth, browserLocalPersistence);
+} catch (error) {
+  console.warn('Persistance de connexion indisponible', error);
+}
 
 const $ = selector => document.querySelector(selector);
 const loadingScreen = $('#terrainLoading');
@@ -57,9 +61,10 @@ let state = {
   subscription: { status: 'free', allowed: false, data: null },
   chantiers: { projects: [] },
   drive: { token: '', expiresAt: 0, client: null, syncing: false },
-  photoUrls: new Map(),
   photoBusy: false
 };
+
+const photoObjectUrls = new Map();
 
 function clone(value) {
   return typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value));
@@ -292,7 +297,6 @@ async function saveJsonToDrive(fileName, payload, showErrors = true) {
   }
 }
 
-
 function safeFilePart(value = '') {
   return String(value || 'client').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'client';
 }
@@ -348,13 +352,13 @@ async function uploadClientPhoto(client, file, note = '') {
 
 async function fetchPhotoObjectUrl(photo) {
   if (!photo?.driveFileId || !isDriveConnected()) return '';
-  if (state.photoUrls.has(photo.driveFileId)) return state.photoUrls.get(photo.driveFileId);
+  if (photoObjectUrls.has(photo.driveFileId)) return photoObjectUrls.get(photo.driveFileId);
   const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}?alt=media`, {
     headers: { Authorization: 'Bearer ' + state.drive.token }
   });
   if (!response.ok) return '';
   const url = URL.createObjectURL(await response.blob());
-  state.photoUrls.set(photo.driveFileId, url);
+  photoObjectUrls.set(photo.driveFileId, url);
   return url;
 }
 
@@ -378,9 +382,9 @@ async function deleteClientPhoto(client, photoId) {
       method: 'DELETE', headers: { Authorization: 'Bearer ' + state.drive.token }
     });
     if (!response.ok && response.status !== 404) throw new Error('Suppression Drive impossible.');
-    const url = state.photoUrls.get(photo.driveFileId);
+    const url = photoObjectUrls.get(photo.driveFileId);
     if (url) URL.revokeObjectURL(url);
-    state.photoUrls.delete(photo.driveFileId);
+    photoObjectUrls.delete(photo.driveFileId);
   }
   client.photos = (client.photos || []).filter(item => item.id !== photoId);
   await saveMainData(true);
@@ -835,7 +839,7 @@ function renderClientDetail() {
     </article>
     <div class="section-head"><h2>Devis terrain (${drafts.length})</h2></div>
     <div class="list">${drafts.length ? drafts.map(renderDraftCard).join('') : '<div class="empty">Aucun devis terrain pour ce client.</div>'}</div>`;
-  if (isDriveConnected()) setTimeout(hydrateClientPhotos, 0);
+  if (isDriveConnected()) setTimeout(() => hydrateClientPhotos().catch(console.warn), 0);
 }
 
 function renderPrices() {
@@ -1108,7 +1112,6 @@ viewRoot.addEventListener('click', event => {
   }
   else if (action === 'open-full-prices') window.location.href = 'devis-facture.html';
 });
-
 
 viewRoot.addEventListener('change', event => {
   if (event.target?.id === 'clientCameraInput' || event.target?.id === 'clientGalleryInput') {
