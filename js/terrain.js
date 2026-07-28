@@ -56,7 +56,9 @@ let state = {
   currentUser: null,
   subscription: { status: 'free', allowed: false, data: null },
   chantiers: { projects: [] },
-  drive: { token: '', expiresAt: 0, client: null, syncing: false }
+  drive: { token: '', expiresAt: 0, client: null, syncing: false },
+  photoUrls: new Map(),
+  photoBusy: false
 };
 
 function clone(value) {
@@ -288,6 +290,160 @@ async function saveJsonToDrive(fileName, payload, showErrors = true) {
     if (showErrors) showToast('Sauvegarde Drive impossible.');
     return false;
   }
+}
+
+
+function safeFilePart(value = '') {
+  return String(value || 'client').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'client';
+}
+
+async function compressPhoto(file, maxDimension = 1920, quality = 0.82) {
+  if (!file?.type?.startsWith('image/')) throw new Error('Le fichier sélectionné n’est pas une image.');
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d', { alpha: false });
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close?.();
+  const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Compression impossible.')), 'image/jpeg', quality));
+  return { blob, width, height };
+}
+
+async function uploadClientPhoto(client, file, note = '') {
+  if (!hasPremiumAccess()) throw new Error('Les photos client sont réservées au Premium.');
+  if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
+  const compressed = await compressPhoto(file);
+  const takenAt = new Date().toISOString();
+  const fileName = `${safeFilePart(clientDisplay(client))}_${takenAt.replace(/[:.]/g, '-')}.jpg`;
+  const metadata = {
+    name: fileName,
+    parents: ['appDataFolder'],
+    appProperties: { bastType: 'client-photo', clientId: String(client.id || '') }
+  };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', compressed.blob, fileName);
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,createdTime', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + state.drive.token },
+    body: form
+  });
+  if (response.status === 401) { state.drive.token = ''; throw new Error('Session Google Drive expirée.'); }
+  if (!response.ok) throw new Error('Envoi de la photo impossible.');
+  const driveFile = await response.json();
+  const photo = {
+    id: uid('photo'), driveFileId: driveFile.id, fileName: driveFile.name || fileName,
+    takenAt, note: String(note || '').trim(), width: compressed.width, height: compressed.height,
+    size: Number(driveFile.size || compressed.blob.size), mimeType: 'image/jpeg'
+  };
+  if (!Array.isArray(client.photos)) client.photos = [];
+  client.photos.unshift(photo);
+  await saveMainData(true);
+  return photo;
+}
+
+async function fetchPhotoObjectUrl(photo) {
+  if (!photo?.driveFileId || !isDriveConnected()) return '';
+  if (state.photoUrls.has(photo.driveFileId)) return state.photoUrls.get(photo.driveFileId);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + state.drive.token }
+  });
+  if (!response.ok) return '';
+  const url = URL.createObjectURL(await response.blob());
+  state.photoUrls.set(photo.driveFileId, url);
+  return url;
+}
+
+async function hydrateClientPhotos() {
+  const images = [...document.querySelectorAll('img[data-drive-photo]')];
+  await Promise.all(images.map(async image => {
+    const photo = { driveFileId: image.dataset.drivePhoto };
+    const url = await fetchPhotoObjectUrl(photo);
+    if (url && image.isConnected) {
+      image.src = url;
+      image.closest('.client-photo-card')?.classList.add('is-loaded');
+    }
+  }));
+}
+
+async function deleteClientPhoto(client, photoId) {
+  const photo = (client.photos || []).find(item => item.id === photoId);
+  if (!photo) return;
+  if (photo.driveFileId && isDriveConnected()) {
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.driveFileId)}`, {
+      method: 'DELETE', headers: { Authorization: 'Bearer ' + state.drive.token }
+    });
+    if (!response.ok && response.status !== 404) throw new Error('Suppression Drive impossible.');
+    const url = state.photoUrls.get(photo.driveFileId);
+    if (url) URL.revokeObjectURL(url);
+    state.photoUrls.delete(photo.driveFileId);
+  }
+  client.photos = (client.photos || []).filter(item => item.id !== photoId);
+  await saveMainData(true);
+}
+
+function formatPhotoDate(value) {
+  const date = new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('fr-BE', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+
+function renderClientPhotos(client) {
+  const photos = Array.isArray(client.photos) ? client.photos : [];
+  const driveReady = isDriveConnected();
+  return `<section class="client-photos-section">
+    <div class="section-head photo-section-head"><h2>Photos (${photos.length})</h2></div>
+    ${driveReady ? `<div class="photo-actions">
+      <button class="primary-button" type="button" data-action="take-client-photo">📷 Prendre une photo</button>
+      <button class="secondary-button" type="button" data-action="choose-client-photo">🖼️ Galerie</button>
+      <input id="clientCameraInput" class="hidden" type="file" accept="image/*" capture="environment">
+      <input id="clientGalleryInput" class="hidden" type="file" accept="image/*" multiple>
+    </div>` : `<div class="premium-lock"><strong>Google Drive requis</strong><span>Connecte Google Drive dans le menu du compte pour prendre et conserver les photos de ce client.</span><button class="mini-btn" type="button" data-action="connect-drive-for-photos">Connecter Drive</button></div>`}
+    <div id="clientPhotoProgress" class="photo-progress hidden" aria-live="polite">Préparation et envoi de la photo…</div>
+    <div class="client-photo-grid">${photos.length ? photos.map(photo => `<article class="client-photo-card">
+      <button class="client-photo-open" type="button" data-action="open-client-photo" data-id="${escapeHtml(photo.id)}" aria-label="Ouvrir la photo">
+        <span class="photo-placeholder">📷</span><img data-drive-photo="${escapeHtml(photo.driveFileId || '')}" alt="Photo de ${escapeHtml(clientDisplay(client))}" loading="lazy">
+      </button>
+      <div class="client-photo-info"><small>${escapeHtml(formatPhotoDate(photo.takenAt))}</small>${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}</div>
+      <button class="client-photo-delete" type="button" data-action="delete-client-photo" data-id="${escapeHtml(photo.id)}" aria-label="Supprimer la photo" title="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+    </article>`).join('') : '<div class="empty photo-empty">Aucune photo pour ce client.</div>'}</div>
+  </section>`;
+}
+
+async function handleClientPhotoFiles(files) {
+  const client = state.data.clients.find(item => item.id === state.selectedClientId);
+  if (!client || state.photoBusy || !files?.length) return;
+  if (!isDriveConnected()) return showToast('Connecte Google Drive avant d’ajouter une photo.');
+  const note = files.length === 1 ? (prompt('Ajouter une note à cette photo (facultatif) :', '') || '') : '';
+  state.photoBusy = true;
+  const progress = document.getElementById('clientPhotoProgress');
+  progress?.classList.remove('hidden');
+  try {
+    for (const file of files) await uploadClientPhoto(client, file, note);
+    showToast(files.length > 1 ? `${files.length} photos ajoutées au client.` : 'Photo ajoutée au client.');
+    renderClientDetail();
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || 'Envoi de la photo impossible.');
+  } finally {
+    state.photoBusy = false;
+  }
+}
+
+async function openClientPhoto(client, photoId) {
+  const photo = (client.photos || []).find(item => item.id === photoId);
+  if (!photo) return;
+  const url = await fetchPhotoObjectUrl(photo);
+  if (!url) return showToast('Impossible de charger cette photo.');
+  const overlay = document.createElement('div');
+  overlay.className = 'photo-viewer';
+  overlay.innerHTML = `<button class="photo-viewer-close" type="button" aria-label="Fermer">✕</button><img src="${escapeHtml(url)}" alt="Photo de ${escapeHtml(clientDisplay(client))}">${photo.note ? `<p>${escapeHtml(photo.note)}</p>` : ''}`;
+  overlay.querySelector('.photo-viewer-close').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', event => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 async function saveCrmToDrive(showErrors = true) {
@@ -674,11 +830,12 @@ function renderClientDetail() {
       ${client.email ? `<a href="mailto:${escapeHtml(client.email)}">✉️ ${escapeHtml(client.email)}</a>` : ''}
       ${client.address ? `<div>📍 ${escapeHtml(client.address)}</div>` : ''}
       ${client.vat ? `<div>TVA : ${escapeHtml(client.vat)}</div>` : ''}
-      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
+      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}${renderClientPhotos(client)}` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
       <div class="form-actions"><button class="secondary-button" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">Modifier</button><button class="primary-button" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Nouveau devis</button></div>
     </article>
     <div class="section-head"><h2>Devis terrain (${drafts.length})</h2></div>
     <div class="list">${drafts.length ? drafts.map(renderDraftCard).join('') : '<div class="empty">Aucun devis terrain pour ce client.</div>'}</div>`;
+  if (isDriveConnected()) setTimeout(hydrateClientPhotos, 0);
 }
 
 function renderPrices() {
@@ -938,7 +1095,27 @@ viewRoot.addEventListener('click', event => {
   else if (action === 'transfer-quote') transferQuoteToMain();
   else if (action === 'open-draft') { const draft = state.drafts.find(d => d.id === id); if (draft) { state.activeDraft = clone(draft); setView('quote-lines'); } }
   else if (action === 'delete-draft') { if (confirm('Supprimer ce brouillon ?')) { state.drafts = state.drafts.filter(d => d.id !== id); saveDrafts(); render(); } }
+  else if (action === 'take-client-photo') document.getElementById('clientCameraInput')?.click();
+  else if (action === 'choose-client-photo') document.getElementById('clientGalleryInput')?.click();
+  else if (action === 'connect-drive-for-photos') { if (await connectAndSyncDrive(true)) renderClientDetail(); }
+  else if (action === 'open-client-photo') { const client = state.data.clients.find(item => item.id === state.selectedClientId); if (client) await openClientPhoto(client, id); }
+  else if (action === 'delete-client-photo') {
+    const client = state.data.clients.find(item => item.id === state.selectedClientId);
+    if (client && confirm('Supprimer définitivement cette photo ?')) {
+      try { await deleteClientPhoto(client, id); showToast('Photo supprimée.'); renderClientDetail(); }
+      catch (error) { console.error(error); showToast(error.message || 'Suppression impossible.'); }
+    }
+  }
   else if (action === 'open-full-prices') window.location.href = 'devis-facture.html';
+});
+
+
+viewRoot.addEventListener('change', event => {
+  if (event.target?.id === 'clientCameraInput' || event.target?.id === 'clientGalleryInput') {
+    const files = [...(event.target.files || [])];
+    event.target.value = '';
+    handleClientPhotoFiles(files);
+  }
 });
 
 bottomNav.addEventListener('click', event => {

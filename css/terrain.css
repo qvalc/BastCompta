@@ -65,3 +65,26 @@
 .tarif-favorite-btn,.tarif-add-btn{width:38px;height:38px;padding:0;display:grid;place-items:center}
 .tarif-add-btn{background:var(--green);color:#fff}
 @media(max-width:480px){.terrain-tarif-category-content{padding:9px}.tarif-card{align-items:flex-start;padding:10px}.tarif-card-actions{flex-wrap:wrap;justify-content:flex-end;max-width:112px}.tarif-card-actions .price{width:100%}}
+
+/* ===== Terrain : photos liées au client ===== */
+.client-photos-section{display:grid;gap:10px;margin-top:2px;padding-top:4px;border-top:1px solid var(--line)}
+.photo-section-head{margin:0}
+.photo-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.photo-actions button{margin:0}
+.photo-progress{padding:10px 12px;border-radius:12px;background:var(--mint);color:var(--green);font-weight:750;text-align:center}
+.client-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.photo-empty{grid-column:1/-1;padding:22px 14px}
+.client-photo-card{position:relative;min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:15px;background:var(--card)}
+.client-photo-open{position:relative;display:block;width:100%;aspect-ratio:4/3;padding:0;border:0;background:#e8ecea;overflow:hidden}
+.client-photo-open img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .18s ease}
+.client-photo-card.is-loaded .client-photo-open img{opacity:1}
+.photo-placeholder{position:absolute;inset:0;display:grid;place-items:center;font-size:1.8rem;color:var(--muted)}
+.client-photo-info{display:grid;gap:3px;padding:8px 38px 9px 9px;min-height:48px}
+.client-photo-info small{color:var(--muted)}
+.client-photo-info span{font-size:.82rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.client-photo-delete{position:absolute;right:7px;bottom:7px;width:29px;height:29px;padding:0;border:0;border-radius:9px;background:#f8e7e7;color:var(--danger)}
+.photo-viewer{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:48px 14px 20px;background:rgba(0,0,0,.9)}
+.photo-viewer img{display:block;max-width:100%;max-height:calc(100vh - 110px);object-fit:contain;border-radius:8px}
+.photo-viewer p{position:absolute;left:16px;right:16px;bottom:14px;margin:0;padding:9px 12px;border-radius:10px;background:rgba(0,0,0,.65);color:#fff;text-align:center}
+.photo-viewer-close{position:absolute;right:12px;top:12px;width:40px;height:40px;border:0;border-radius:50%;background:#fff;color:#17201d;font-size:1.1rem;font-weight:800}
+@media(min-width:600px){.client-photo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
