@@ -32,11 +32,9 @@ const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
 const app = initializeApp(firebaseConfig, 'bastcompta-terrain');
 const auth = getAuth(app);
 const db = getFirestore(app);
-try {
-  await setPersistence(auth, browserLocalPersistence);
-} catch (error) {
+setPersistence(auth, browserLocalPersistence).catch(error => {
   console.warn('Persistance de connexion indisponible', error);
-}
+});
 
 const $ = selector => document.querySelector(selector);
 const loadingScreen = $('#terrainLoading');
@@ -1067,7 +1065,7 @@ async function transferQuoteToMain() {
   setTimeout(() => { window.location.href = 'index.html?terrain=1'; }, 650);
 }
 
-viewRoot.addEventListener('click', event => {
+viewRoot.addEventListener('click', async event => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
@@ -1188,19 +1186,29 @@ document.addEventListener('visibilitychange', async () => { if (!document.hidden
 
 onAuthStateChanged(auth, async user => {
   state.currentUser = user;
-  if (user) {
-    await checkSubscription(user);
-    await loadAllData();
-    $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Premium' : 'Gratuit'}`;
-    setAuthMessage('');
-    showOnly(appScreen);
-    state.view = 'home'; state.history = []; state.activeDraft = null;
-    render();
-    updateAccountPermissionsUi();
-    updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — Drive et suivi client verrouillés', hasPremiumAccess() ? 'ok' : 'warning');
-    if (hasPremiumAccess() && localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
-  } else {
-    passwordInput.value = '';
+  try {
+    if (user) {
+      await checkSubscription(user);
+      await loadAllData();
+      $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Premium' : 'Gratuit'}`;
+      setAuthMessage('');
+      showOnly(appScreen);
+      state.view = 'home'; state.history = []; state.activeDraft = null;
+      render();
+      updateAccountPermissionsUi();
+      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — Drive et suivi client verrouillés', hasPremiumAccess() ? 'ok' : 'warning');
+      if (hasPremiumAccess() && localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
+    } else {
+      passwordInput.value = '';
+      showOnly(authScreen);
+    }
+  } catch (error) {
+    console.error('Initialisation Terrain impossible', error);
     showOnly(authScreen);
+    setAuthMessage('Impossible de charger Mode terrain. Recharge la page ou reconnecte-toi.', 'error');
   }
+}, error => {
+  console.error('Connexion Firebase Terrain impossible', error);
+  showOnly(authScreen);
+  setAuthMessage('Connexion à BastCompta impossible. Vérifie ta connexion internet.', 'error');
 });
