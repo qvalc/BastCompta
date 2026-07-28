@@ -519,10 +519,18 @@ function renderTarifGroups(items) {
       <div class="terrain-tarif-category-content">
         ${group.groups.map(sub => {
           const showSubcategory = !!sub.subcategory;
-          return `<section class="terrain-tarif-subcategory">
-            ${showSubcategory ? `<div class="terrain-tarif-subcategory-title"><span>${escapeHtml(sub.subcategory)}</span><small>${sub.items.length}</small></div>` : ''}
+          if (!showSubcategory) {
+            return `<section class="terrain-tarif-subcategory terrain-tarif-subcategory-plain">
+              <div class="terrain-tarif-items">${sub.items.map(renderTarifItem).join('')}</div>
+            </section>`;
+          }
+          return `<details class="terrain-tarif-subcategory" ${searching ? 'open' : ''}>
+            <summary class="terrain-tarif-subcategory-title">
+              <span>${escapeHtml(sub.subcategory)}</span>
+              <small>${sub.items.length}</small>
+            </summary>
             <div class="terrain-tarif-items">${sub.items.map(renderTarifItem).join('')}</div>
-          </section>`;
+          </details>`;
         }).join('')}
       </div>
     </details>`;
