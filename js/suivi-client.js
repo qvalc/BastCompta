@@ -14,6 +14,7 @@ let editingProjectId = '';
 let data = loadData();
 let crmDriveClientsCache = [];
 let crmDropdownClientsCache = [];
+const crmPhotoObjectUrls = new Map();
 
 const statusLabels = {
   planned: 'À suivre',
@@ -248,6 +249,7 @@ function normalizeCrmClient(client = {}) {
     contact: client.contact || '',
     notes: client.notes || client.description || '',
     favorite: !!client.favorite,
+    photos: Array.isArray(client.photos) ? client.photos : [],
     createdAt: client.createdAt || new Date().toISOString(),
     updatedAt: client.updatedAt || '',
     source: client.source || 'CRM'
@@ -386,6 +388,7 @@ function hydrateProjectWithCrm(project) {
     address: crm.address || project.address,
     description: crm.notes || project.description,
     favorite: !!crm.favorite,
+    photos: Array.isArray(crm.photos) ? crm.photos : (Array.isArray(project.photos) ? project.photos : []),
     crmSource: crm.source || 'CRM'
   };
 }
@@ -885,13 +888,15 @@ function selectProject(id) {
 
 function renderMain() {
   const container = document.getElementById('mainContent');
-  const project = hydrateProjectWithCrm(getProject());
+  const storedProject = getProject();
 
-  if (!project) {
+  if (!storedProject) {
     container.innerHTML = '';
     return;
   }
 
+  ensureLocalTerrainDraftLinked(storedProject);
+  const project = hydrateProjectWithCrm(storedProject);
   const t = projectTotals(project);
 
   container.innerHTML = `
@@ -923,6 +928,7 @@ function renderMain() {
           ${tabButton('quotes', 'Devis')}
           ${tabButton('finance', 'Factures / Coûts')}
           ${tabButton('documents', 'Documents')}
+          ${tabButton('photos', 'Photos')}
           ${tabButton('tasks', 'Tâches')}
           ${tabButton('notes', 'Remarques')}
           ${tabButton('history', 'Historique')}
@@ -932,6 +938,7 @@ function renderMain() {
           ${renderTabPages(project)}
         </div>
       `;
+  if (activeTab === 'photos') setTimeout(() => hydrateCrmPhotoImages().catch(console.warn), 0);
 }
 
 function tabButton(key, label) {
@@ -956,6 +963,9 @@ function renderTabPages(project) {
         </section>
         <section class="tab-page ${activeTab === 'documents' ? 'active' : ''}">
           ${renderDocumentsTab(project)}
+        </section>
+        <section class="tab-page ${activeTab === 'photos' ? 'active' : ''}">
+          ${renderPhotosTab(project)}
         </section>
         <section class="tab-page ${activeTab === 'tasks' ? 'active' : ''}">
           ${renderTasksTab(project)}
@@ -1022,6 +1032,145 @@ function renderSummaryTab(project) {
           </div>
         </div>
       `;
+}
+
+
+function ensureLocalTerrainDraftLinked(project) {
+  const localData = loadDevisFactureData();
+  const doc = localData?.quote;
+  if (!doc || !doc.transferredFromTerrain || doc.documentNumber) return;
+  const entry = buildCrmDocEntry('quote', doc, 'Mode terrain');
+  if (!entry || !clientMatchesProject(project, entry)) return;
+  if (!Array.isArray(project.linkedQuotes)) project.linkedQuotes = [];
+  const stableKey = crmDocStableKey('quote', entry.ref);
+  const payload = {
+    id: `quote-${entry.ref}`,
+    documentUid: stableKey,
+    date: entry.date,
+    ref: entry.ref,
+    displayRef: entry.displayRef,
+    description: entry.description,
+    amount: entry.clientHtva || entry.htva || 0,
+    clientHtva: entry.clientHtva || entry.htva || 0,
+    totalClientHtva: entry.clientHtva || entry.htva || 0,
+    workHtva: entry.workHtva || entry.htva || 0,
+    htva: entry.htva || 0,
+    vat: entry.vat || 0,
+    tvac: entry.tvac || 0,
+    suppliesCost: entry.suppliesCost || 0,
+    suppliesCostHtva: entry.suppliesCostHtva || 0,
+    suppliesHtva: entry.suppliesHtva || 0,
+    suppliesSaleHtva: entry.suppliesSaleHtva || 0,
+    source: entry.source,
+    docKey: 'quote',
+    suiviClientId: project.id,
+    chantierId: project.id,
+    clientId: entry.clientId,
+    clientName: entry.clientName,
+    clientRef: entry.clientRef,
+    siteName: entry.siteName || project.title,
+    rawDocument: entry.rawDocument || doc
+  };
+  const existing = project.linkedQuotes.find(item => item.documentUid === stableKey || (item.docKey === 'quote' && normalizeLinkKey(item.ref) === normalizeLinkKey(entry.ref)));
+  if (existing) Object.assign(existing, payload);
+  else project.linkedQuotes.unshift(payload);
+  project.linkedQuotes = dedupeMoneyList(project.linkedQuotes);
+  project.updatedAt = new Date().toISOString();
+  saveLocalOnly();
+}
+
+function crmPhotoDate(value) {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime()) ? 'Date inconnue' : date.toLocaleString('fr-BE');
+}
+
+function collectProjectPhotos(project) {
+  const clientPhotos = Array.isArray(project.photos) ? project.photos.map(photo => ({ ...photo, origin: 'client', originLabel: 'Photo client' })) : [];
+  const quotePhotos = [];
+  (project.linkedQuotes || []).forEach(quote => {
+    const photos = Array.isArray(quote?.rawDocument?.photos) ? quote.rawDocument.photos : [];
+    photos.forEach(photo => quotePhotos.push({
+      ...photo,
+      origin: 'quote',
+      originLabel: quote.displayRef || quote.ref || 'Brouillon Terrain',
+      quoteRef: quote.displayRef || quote.ref || 'Brouillon Terrain'
+    }));
+  });
+  const seen = new Set();
+  return [...clientPhotos, ...quotePhotos]
+    .filter(photo => {
+      const key = String(photo.driveFileId || photo.id || '');
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a,b) => String(b.takenAt || '').localeCompare(String(a.takenAt || '')));
+}
+
+function renderPhotosTab(project) {
+  const photos = collectProjectPhotos(project);
+  const clientCount = photos.filter(photo => photo.origin === 'client').length;
+  const quoteCount = photos.filter(photo => photo.origin === 'quote').length;
+  return `
+    <div class="form-card">
+      <div class="section-head">
+        <div>
+          <h3 class="section-title">Photos du client</h3>
+          <div class="hint">${clientCount} photo(s) client · ${quoteCount} photo(s) liée(s) aux devis</div>
+        </div>
+      </div>
+      ${!googleAccessToken ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      <div class="crm-photo-grid">
+        ${photos.length ? photos.map(photo => `
+          <article class="crm-photo-card">
+            <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
+              <span class="crm-photo-placeholder">📷</span>
+              <img data-crm-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="${escapeAttr(photo.originLabel || 'Photo client')}" loading="lazy">
+            </button>
+            <div class="crm-photo-meta">
+              <strong>${escapeHtml(photo.originLabel || 'Photo client')}</strong>
+              <small>${escapeHtml(crmPhotoDate(photo.takenAt))}</small>
+              ${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}
+            </div>
+          </article>`).join('') : '<div class="hint">Aucune photo enregistrée pour ce client.</div>'}
+      </div>
+    </div>`;
+}
+
+async function fetchCrmPhotoUrl(fileId) {
+  if (!fileId || !googleAccessToken) return '';
+  if (crmPhotoObjectUrls.has(fileId)) return crmPhotoObjectUrls.get(fileId);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${googleAccessToken}` }
+  });
+  if (!response.ok) return '';
+  const url = URL.createObjectURL(await response.blob());
+  crmPhotoObjectUrls.set(fileId, url);
+  return url;
+}
+
+async function hydrateCrmPhotoImages() {
+  const images = Array.from(document.querySelectorAll('img[data-crm-drive-photo]'));
+  await Promise.all(images.map(async image => {
+    const url = await fetchCrmPhotoUrl(image.dataset.crmDrivePhoto);
+    if (url && image.isConnected) {
+      image.src = url;
+      image.closest('.crm-photo-card')?.classList.add('is-loaded');
+    }
+  }));
+}
+
+async function openCrmPhoto(fileId) {
+  if (!googleAccessToken) return notify('Connecte Google Drive pour ouvrir cette photo.');
+  const url = await fetchCrmPhotoUrl(fileId);
+  if (!url) return notify('La photo ne peut pas être chargée.');
+  openGenericModal(`
+    <div class="modal-head">
+      <h2>Photo</h2>
+      <button class="small ghost" onclick="closeGenericModal()">✕</button>
+    </div>
+    <img class="crm-photo-full" src="${escapeAttr(url)}" alt="Photo du client">
+  `);
 }
 
 function renderQuotesTab(project) {
