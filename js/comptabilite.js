@@ -2919,17 +2919,17 @@ function renderPurchases() {
         <div style="overflow:auto;">
           <table class="table-purchases" style="table-layout:fixed; width:100%;">
             <colgroup>
-  <col style="width: 130px;">
-  <col style="width: 160px;">
-  <col style="width: 135px;">
-  <col style="width: 95px;">
-  <col style="width: 85px;">
-  <col style="width: 100px;">
-  <col style="width: 90px;">
-  <col style="width: 90px;">
-  <col style="width: 90px;">
-  <col style="width: 105px;">
-  <col style="width: 38px;">
+  <col style="width: 115px;">   <!-- Date -->
+  <col style="width: 170px;">   <!-- Fournisseur -->
+  <col style="width: 135px;">   <!-- N° facture -->
+  <col style="width: 85px;">    <!-- Type -->
+  <col style="width: 70px;">    <!-- TVA -->
+  <col style="width: 90px;">    <!-- HTVA -->
+  <col style="width: 75px;">    <!-- Déductible -->
+  <col style="width: 80px;">    <!-- TVA récup -->
+  <col style="width: 85px;">    <!-- TVAC -->
+  <col style="width: 82px;">    <!-- Aperçu -->
+  <col style="width: 36px;">    <!-- Corbeille -->
 </colgroup>
             <thead>
               <tr>
