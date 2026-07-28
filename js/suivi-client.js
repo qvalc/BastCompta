@@ -1330,6 +1330,7 @@ function renderDraftsTab(project) {
             ${draft.notes ? `<p class="crm-draft-notes">${escapeHtml(draft.notes)}</p>` : ''}
           </div>
           <div class="inline-actions">
+            <button class="small" type="button" onclick="openTerrainDraft('${escapeAttr(draft.id)}')">Ouvrir</button>
             ${transformed
               ? `<button class="small" type="button" onclick="openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis</button>`
               : `<button class="small primary" type="button" onclick="convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
@@ -1337,6 +1338,82 @@ function renderDraftsTab(project) {
         </article>`;
       }).join('')}</div>` : '<div class="hint">Aucun brouillon Terrain pour ce client.</div>'}
     </div>`;
+}
+
+
+function terrainDraftLineTotal(line) {
+  const qty = Number(line?.qty) || 0;
+  const price = Number(line?.unitPrice) || 0;
+  const discount = Math.max(0, Math.min(100, Number(line?.discount) || 0));
+  return qty * price * (1 - discount / 100);
+}
+
+function openTerrainDraft(draftId) {
+  const project = getProject();
+  const draft = loadTerrainDrafts().find(item => String(item.id) === String(draftId));
+  if (!project || !draft || !terrainDraftMatchesProject(project, draft)) return notify('Brouillon Terrain introuvable.');
+
+  const lines = (Array.isArray(draft.lines) ? draft.lines : []).filter(line => String(line.description || '').trim());
+  const photos = Array.isArray(draft.photos) ? draft.photos : [];
+  const transformed = !!String(draft.convertedQuoteNumber || '').trim();
+  const createdDate = formatDate(String(draft.updatedAt || draft.createdAt || draft.date || '').slice(0, 10));
+
+  openGenericModal(`
+    <div class="modal-head">
+      <div>
+        <h2>${escapeHtml(draft.siteName || 'Brouillon Terrain')}</h2>
+        <div class="hint">${escapeHtml(draft.clientName || project.clientName || project.title || '')} · ${escapeHtml(createdDate)}</div>
+      </div>
+      <button class="small ghost" type="button" onclick="closeGenericModal()">✕</button>
+    </div>
+
+    <div class="crm-draft-summary">
+      <div><span>État</span><strong>${transformed ? `Transformé en ${escapeHtml(draft.convertedQuoteNumber)}` : 'Brouillon'}</strong></div>
+      <div><span>Chantier</span><strong>${escapeHtml(draft.siteName || 'Sans chantier')}</strong></div>
+      <div><span>Total HTVA</span><strong>${formatMoney(terrainDraftTotal(draft))}</strong></div>
+      <div><span>Photos</span><strong>${photos.length}</strong></div>
+    </div>
+
+    <section class="crm-draft-detail-section">
+      <h3>Prestations</h3>
+      ${lines.length ? `<div class="crm-draft-detail-table">
+        <div class="crm-draft-detail-row is-head"><span>Description</span><span>Qté</span><span>Prix unitaire</span><span>Total</span></div>
+        ${lines.map(line => `<div class="crm-draft-detail-row">
+          <span>${escapeHtml(line.description || '')}${line.unit ? `<small>${escapeHtml(line.unit)}</small>` : ''}</span>
+          <span>${escapeHtml(String(line.qty ?? ''))}</span>
+          <span>${formatMoney(Number(line.unitPrice) || 0)}</span>
+          <strong>${formatMoney(terrainDraftLineTotal(line))}</strong>
+        </div>`).join('')}
+      </div>` : '<div class="hint">Aucune prestation dans ce brouillon.</div>'}
+    </section>
+
+    ${draft.notes ? `<section class="crm-draft-detail-section"><h3>Notes</h3><div class="crm-draft-detail-notes">${escapeHtml(draft.notes).replace(/\n/g, '<br>')}</div></section>` : ''}
+
+    <section class="crm-draft-detail-section">
+      <h3>Photos (${photos.length})</h3>
+      ${!googleAccessToken && photos.length ? '<div class="hint">Connecte Google Drive pour afficher les photos.</div>' : ''}
+      ${photos.length ? `<div class="crm-photo-grid">${photos.map(photo => `
+        <article class="crm-photo-card">
+          <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
+            <span class="crm-photo-placeholder">📷</span>
+            <img data-crm-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="Photo du brouillon" loading="lazy">
+          </button>
+          <div class="crm-photo-meta">
+            <small>${escapeHtml(crmPhotoDate(photo.takenAt))}</small>
+            ${photo.note ? `<span>${escapeHtml(photo.note)}</span>` : ''}
+          </div>
+        </article>`).join('')}</div>` : '<div class="hint">Aucune photo liée à ce brouillon.</div>'}
+    </section>
+
+    <div class="modal-actions">
+      <button class="small" type="button" onclick="closeGenericModal()">Fermer</button>
+      ${transformed
+        ? `<button class="primary" type="button" onclick="closeGenericModal(); openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis ${escapeHtml(draft.convertedQuoteNumber)}</button>`
+        : `<button class="primary" type="button" onclick="closeGenericModal(); convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+    </div>
+  `);
+
+  if (photos.length) setTimeout(() => hydrateCrmPhotoImages().catch(console.warn), 0);
 }
 
 function collectKnownQuoteNumbers() {

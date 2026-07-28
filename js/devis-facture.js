@@ -4023,8 +4023,6 @@ function renderDocumentPage(docKey) {
 
             ${renderLinesTable(docKey, 'lines')}
 
-            ${renderDocumentPhotos(docKey, doc)}
-
             <div class="toggle-row no-print">
               <input class="check-inline" type="checkbox" id="${docKey}-supplies-toggle" ${doc.suppliesEnabled ? 'checked' : ''} onchange="toggleSupplies('${docKey}', this.checked)">
               <label for="${docKey}-supplies-toggle">Afficher le cadre Fournitures</label>
