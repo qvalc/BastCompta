@@ -2919,7 +2919,7 @@ function renderPurchases() {
         <div style="overflow:auto;">
           <table class="table-purchases" style="table-layout:fixed; width:100%;">
             <colgroup>
-  <col style="width: 115px;">
+  <col style="width: 130px;">
   <col style="width: 160px;">
   <col style="width: 135px;">
   <col style="width: 95px;">
@@ -2928,8 +2928,8 @@ function renderPurchases() {
   <col style="width: 90px;">
   <col style="width: 90px;">
   <col style="width: 90px;">
-  <col style="width: 150px;">
-  <col style="width: 55px;">
+  <col style="width: 105px;">
+  <col style="width: 38px;">
 </colgroup>
             <thead>
               <tr>
@@ -2976,11 +2976,28 @@ function renderPurchases() {
                   <td>${money(effectiveDeductible ? purchaseVatDisplay(i) : 0)}</td>
                   <td>${money(rowHtvaToTvac(row.htva, row.rate))}</td>
                   <td>
-                    <div class="inline-actions">
-                      <button type="button" ${locked ? 'disabled' : ''} onclick="pickPurchasePdf(${i})">Ajouter</button>
-                      ${linkedPdf ? `<button type="button" onclick='openPurchasePdf(${JSON.stringify(linkedPdf.id)})'>Voir</button>` : '<span class="hint">—</span>'}
-                    </div>
-                  </td>
+  ${linkedPdf
+        ? `
+        <button
+          type="button"
+          class="invoice-preview-btn"
+          onclick='openPurchasePdf(${JSON.stringify(linkedPdf.id)})'
+        >
+          Aperçu
+        </button>
+      `
+        : `
+        <button
+          type="button"
+          class="invoice-preview-btn"
+          ${locked ? 'disabled' : ''}
+          onclick="pickPurchasePdf(${i})"
+        >
+          Ajouter
+        </button>
+      `
+      }
+</td>
                   <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${locked ? 'disabled' : ''} onclick="deleteAccountingRow('purchases', ${i})">×</button></td>
                 </tr>
               `}).join('')}
