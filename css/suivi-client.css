@@ -1212,16 +1212,15 @@ body.bast-embedded .page.active {
 }
 .crm-draft-menu-popover {
     display: none;
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 40;
-    min-width: 170px;
+    position: fixed;
+    z-index: 10000;
+    min-width: 180px;
+    max-width: calc(100vw - 20px);
     padding: 6px;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: #fff;
-    box-shadow: var(--shadow);
+    box-shadow: 0 14px 35px rgba(15, 23, 42, .22);
 }
 .crm-draft-menu-popover.is-open { display: grid; gap: 3px; }
 .crm-draft-menu-popover button {

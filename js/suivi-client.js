@@ -1424,16 +1424,53 @@ function renderDraftsTab(project) {
 
 
 function closeTerrainDraftMenus() {
-  document.querySelectorAll('.crm-draft-menu-popover.is-open').forEach(menu => menu.classList.remove('is-open'));
+  document.querySelectorAll('.crm-draft-menu-popover.is-open').forEach(menu => {
+    menu.classList.remove('is-open', 'opens-up');
+    menu.style.left = '';
+    menu.style.top = '';
+    menu.style.right = '';
+    menu.style.bottom = '';
+  });
+}
+
+function positionTerrainDraftMenu(menu, trigger) {
+  const margin = 10;
+  const gap = 6;
+  const triggerRect = trigger.getBoundingClientRect();
+
+  // Le menu est en position fixe afin de ne jamais être coupé par la fiche client.
+  menu.style.visibility = 'hidden';
+  menu.classList.add('is-open');
+  const menuRect = menu.getBoundingClientRect();
+
+  let left = triggerRect.right - menuRect.width;
+  left = Math.max(margin, Math.min(left, window.innerWidth - menuRect.width - margin));
+
+  const availableBelow = window.innerHeight - triggerRect.bottom - margin;
+  const availableAbove = triggerRect.top - margin;
+  const openAbove = availableBelow < menuRect.height + gap && availableAbove > availableBelow;
+  let top = openAbove
+    ? triggerRect.top - menuRect.height - gap
+    : triggerRect.bottom + gap;
+  top = Math.max(margin, Math.min(top, window.innerHeight - menuRect.height - margin));
+
+  menu.classList.toggle('opens-up', openAbove);
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.visibility = '';
 }
 
 function toggleTerrainDraftMenu(event, draftId) {
+  event.preventDefault();
   event.stopPropagation();
+  const trigger = event.currentTarget;
   const menu = document.getElementById(`terrainDraftMenu-${draftId}`);
-  if (!menu) return;
+  if (!menu || !trigger) return;
   const shouldOpen = !menu.classList.contains('is-open');
   closeTerrainDraftMenus();
-  if (shouldOpen) menu.classList.add('is-open');
+  if (shouldOpen) positionTerrainDraftMenu(menu, trigger);
 }
 
 async function deleteTerrainDraft(draftId) {
