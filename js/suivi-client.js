@@ -18,6 +18,7 @@ let crmDriveClientsCache = [];
 let crmDropdownClientsCache = [];
 let terrainDraftsCache = [];
 const crmPhotoObjectUrls = new Map();
+let suiviClientLoadingCount = 0;
 
 const statusLabels = {
   planned: 'À suivre',
@@ -1133,6 +1134,7 @@ function renderPhotosTab(project) {
       <div class="crm-photo-grid">
         ${photos.length ? photos.map(photo => `
           <article class="crm-photo-card">
+            <button type="button" class="crm-photo-delete" onclick="event.stopPropagation(); deleteCrmPhoto('${escapeAttr(photo.driveFileId || photo.id || '')}')" aria-label="Supprimer la photo" title="Supprimer la photo">🗑️</button>
             <button type="button" class="crm-photo-open" onclick="openCrmPhoto('${escapeAttr(photo.driveFileId || '')}')" aria-label="Ouvrir la photo">
               <span class="crm-photo-placeholder">📷</span>
               <img data-crm-drive-photo="${escapeAttr(photo.driveFileId || '')}" alt="${escapeAttr(photo.originLabel || 'Photo client')}" loading="lazy">
@@ -1181,6 +1183,82 @@ async function openCrmPhoto(fileId) {
     </div>
     <img class="crm-photo-full" src="${escapeAttr(url)}" alt="Photo du client">
   `);
+}
+
+
+function photoMatchesId(photo, photoId) {
+  return String(photo?.driveFileId || photo?.id || '') === String(photoId || '');
+}
+
+function removePhotoFromList(photos, photoId) {
+  return (Array.isArray(photos) ? photos : []).filter(photo => !photoMatchesId(photo, photoId));
+}
+
+async function deleteCrmPhoto(photoId) {
+  const id = String(photoId || '').trim();
+  if (!id) return notify('Cette photo ne peut pas être supprimée.');
+  if (!confirm('Supprimer définitivement cette photo ?')) return;
+
+  beginSuiviClientLoading('Suppression de la photo…');
+  try {
+    const fullCrmData = readFullCrmDataFromLocalStorage();
+    fullCrmData.clients = (fullCrmData.clients || []).map(client => ({
+      ...client,
+      photos: removePhotoFromList(client.photos, id)
+    }));
+    writeFullCrmDataToLocalStorage(fullCrmData);
+
+    crmDriveClientsCache = (crmDriveClientsCache || []).map(client => ({
+      ...client,
+      photos: removePhotoFromList(client.photos, id)
+    }));
+
+    data.projects = (data.projects || []).map(project => ({
+      ...project,
+      photos: removePhotoFromList(project.photos, id),
+      linkedQuotes: (project.linkedQuotes || []).map(quote => ({
+        ...quote,
+        rawDocument: quote.rawDocument ? {
+          ...quote.rawDocument,
+          photos: removePhotoFromList(quote.rawDocument.photos, id)
+        } : quote.rawDocument
+      }))
+    }));
+    saveLocalOnly();
+
+    const drafts = loadTerrainDrafts().map(draft => ({
+      ...draft,
+      photos: removePhotoFromList(draft.photos, id)
+    }));
+    saveTerrainDrafts(drafts);
+
+    let driveDeleted = false;
+    if (googleAccessToken) {
+      const response = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${googleAccessToken}` }
+      }, false);
+      driveDeleted = !!response && (response.ok || response.status === 404);
+      await Promise.all([
+        saveCrmDataToDrive(fullCrmData, false),
+        saveTerrainDraftsToDrive(drafts),
+        saveSyncToDrive(false)
+      ]);
+    }
+
+    const objectUrl = crmPhotoObjectUrls.get(id);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    crmPhotoObjectUrls.delete(id);
+    renderMain();
+    notify(googleAccessToken && driveDeleted
+      ? 'Photo supprimée du PC et de Google Drive.'
+      : 'Photo supprimée du suivi client sur ce PC.');
+  } catch (error) {
+    console.error('Suppression de la photo impossible.', error);
+    notify('La suppression de la photo a échoué.');
+  } finally {
+    endSuiviClientLoading();
+  }
 }
 
 function renderQuotesTab(project) {
@@ -1329,17 +1407,57 @@ function renderDraftsTab(project) {
             <div class="hint">${escapeHtml(formatDate((draft.updatedAt || draft.createdAt || '').slice(0, 10)))} · ${lineCount} ligne${lineCount === 1 ? '' : 's'} · ${formatMoney(terrainDraftTotal(draft))} HTVA</div>
             ${draft.notes ? `<p class="crm-draft-notes">${escapeHtml(draft.notes)}</p>` : ''}
           </div>
-          <div class="inline-actions">
-            <button class="small" type="button" onclick="openTerrainDraft('${escapeAttr(draft.id)}')">Ouvrir</button>
-            ${transformed
-              ? `<button class="small" type="button" onclick="openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis</button>`
-              : `<button class="small primary" type="button" onclick="convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+          <div class="crm-draft-menu">
+            <button class="crm-draft-menu-trigger" type="button" onclick="toggleTerrainDraftMenu(event, '${escapeAttr(draft.id)}')" aria-label="Actions du brouillon" title="Actions">•••</button>
+            <div class="crm-draft-menu-popover" id="terrainDraftMenu-${escapeAttr(draft.id)}">
+              <button type="button" onclick="closeTerrainDraftMenus(); openTerrainDraft('${escapeAttr(draft.id)}')">Ouvrir</button>
+              ${transformed
+                ? `<button type="button" onclick="closeTerrainDraftMenus(); openConvertedTerrainQuote('${escapeAttr(draft.id)}')">Ouvrir le devis</button>`
+                : `<button type="button" onclick="closeTerrainDraftMenus(); convertTerrainDraftToQuote('${escapeAttr(draft.id)}')">Passer en devis</button>`}
+              <button class="is-danger" type="button" onclick="closeTerrainDraftMenus(); deleteTerrainDraft('${escapeAttr(draft.id)}')">Supprimer</button>
+            </div>
           </div>
         </article>`;
       }).join('')}</div>` : '<div class="hint">Aucun brouillon Terrain pour ce client.</div>'}
     </div>`;
 }
 
+
+function closeTerrainDraftMenus() {
+  document.querySelectorAll('.crm-draft-menu-popover.is-open').forEach(menu => menu.classList.remove('is-open'));
+}
+
+function toggleTerrainDraftMenu(event, draftId) {
+  event.stopPropagation();
+  const menu = document.getElementById(`terrainDraftMenu-${draftId}`);
+  if (!menu) return;
+  const shouldOpen = !menu.classList.contains('is-open');
+  closeTerrainDraftMenus();
+  if (shouldOpen) menu.classList.add('is-open');
+}
+
+async function deleteTerrainDraft(draftId) {
+  const drafts = loadTerrainDrafts();
+  const draft = drafts.find(item => String(item.id) === String(draftId));
+  if (!draft) return notify('Brouillon Terrain introuvable.');
+  if (!confirm(`Supprimer le brouillon « ${draft.siteName || 'Brouillon Terrain'} » ?${draft.convertedQuoteNumber ? ' Le devis déjà créé sera conservé.' : ''}`)) return;
+
+  beginSuiviClientLoading('Suppression du brouillon…');
+  try {
+    const remaining = drafts.filter(item => String(item.id) !== String(draftId));
+    saveTerrainDrafts(remaining);
+    if (googleAccessToken) await saveTerrainDraftsToDrive(remaining);
+    renderMain();
+    notify(draft.convertedQuoteNumber
+      ? 'Brouillon supprimé. Le devis créé a été conservé.'
+      : 'Brouillon supprimé.');
+  } catch (error) {
+    console.error('Suppression du brouillon impossible.', error);
+    notify('La suppression du brouillon a échoué.');
+  } finally {
+    endSuiviClientLoading();
+  }
+}
 
 function terrainDraftLineTotal(line) {
   const qty = Number(line?.qty) || 0;
@@ -3466,8 +3584,28 @@ function closeGenericModal() {
   document.getElementById('genericModal').innerHTML = '';
 }
 
+function beginSuiviClientLoading(message = 'Chargement du suivi client…') {
+  suiviClientLoadingCount += 1;
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  clearTimeout(notify._timer);
+  toast.innerHTML = `<span class="crm-loading-spinner" aria-hidden="true"></span><span>${escapeHtml(message)}</span>`;
+  toast.classList.add('show', 'is-loading');
+}
+
+function endSuiviClientLoading(message = '') {
+  suiviClientLoadingCount = Math.max(0, suiviClientLoadingCount - 1);
+  if (suiviClientLoadingCount > 0) return;
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.classList.remove('is-loading');
+  if (message) notify(message);
+  else toast.classList.remove('show');
+}
+
 function notify(message) {
   const toast = document.getElementById('toast');
+  toast.classList.remove('is-loading');
   toast.textContent = message;
   toast.classList.add('show');
   clearTimeout(notify._timer);
@@ -3731,6 +3869,7 @@ function initGoogleMessages() {
       googleAccessToken = message.accessToken || null;
 
       if (googleAccessToken && window.gapi?.client) {
+        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
         try {
           gapi.client.setToken({ access_token: googleAccessToken });
           await loadSyncDataFromDriveIfAvailable();
@@ -3738,8 +3877,10 @@ function initGoogleMessages() {
           await refreshCrmClientDropdown(false);
           selectedProjectId = '';
           render();
+          endSuiviClientLoading('Suivi client chargé.');
         } catch (error) {
           console.error(error);
+          endSuiviClientLoading('Suivi client chargé localement.');
         }
       }
     }
@@ -3784,11 +3925,13 @@ function initGapi() {
       });
 
       if (googleAccessToken) {
+        beginSuiviClientLoading('Chargement du suivi client et de Google Drive…');
         gapi.client.setToken({ access_token: googleAccessToken });
         await loadSyncDataFromDriveIfAvailable();
         await loadTerrainDraftsFromDrive();
         await refreshCrmClientDropdown(false);
         render();
+        endSuiviClientLoading('Suivi client chargé.');
       }
     } catch (error) {
       console.error('Initialisation Google Drive impossible.', error);
@@ -3798,6 +3941,7 @@ function initGapi() {
 
 document.addEventListener('click', event => {
   if (!event.target.closest('#fileDropdown')) closeFileMenu();
+  if (!event.target.closest('.crm-draft-menu')) closeTerrainDraftMenus();
 });
 
 async function saveFromPortalGlobal(options = {}) {
