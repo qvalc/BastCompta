@@ -93,8 +93,18 @@ const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
 const FREE_MAIN_TABS = ['devis', 'tarifs', 'terrain'];
-const PAID_MAIN_TABS = ['compta', 'chantier', 'impots'];
-let currentSubscriptionState = { allowed: false, status: 'unknown', data: null };
+const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', chantier: 'client' };
+const SUBSCRIPTION_PACKS = {
+  accounting: { label: 'Pack Comptabilité', shortLabel: 'Comptabilité', code: 'COMPTA' },
+  client: { label: 'Pack Suivi client', shortLabel: 'Suivi client', code: 'CLIENT' },
+  premium: { label: 'Premium complet', shortLabel: 'Premium', code: 'PREMIUM' }
+};
+const SUBSCRIPTION_PRICES = {
+  accounting: { monthly: 2.99, quarterly: 7.99, yearly: 29.99 },
+  client: { monthly: 2.49, quarterly: 6.49, yearly: 24.99 },
+  premium: { monthly: 4.99, quarterly: 12.99, yearly: 49.99 }
+};
+let currentSubscriptionState = { allowed: false, status: 'unknown', access: { accounting: false, client: false, premium: false }, data: null };
 
 
 function escapeHtml(value) {
@@ -186,8 +196,65 @@ function getUserPseudo(user = auth.currentUser, data = null) {
     : String(raw);
 }
 
+function parseDate(value) {
+  const date = new Date(value || 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isSubscriptionEntryActive(entry, now = new Date()) {
+  if (entry === true) return true;
+  if (!entry || typeof entry !== 'object') return false;
+  if (entry.active === false || ['inactive', 'expired', 'cancelled'].includes(entry.status)) return false;
+  const endValue = entry.endsAt || entry.subscriptionEndsAt;
+  if (!endValue) return entry.active === true || entry.status === 'active';
+  const end = parseDate(endValue);
+  return !!end && now <= end;
+}
+
+function getAccessMap(data = {}, status = data.subscriptionStatus || 'free') {
+  const access = { accounting: false, client: false, premium: false };
+  const now = new Date();
+
+  if (status === 'owner' && data.subscriptionActive === true) {
+    return { accounting: true, client: true, premium: true };
+  }
+
+  if (status === 'trial' && data.subscriptionActive === true) {
+    const trialEnd = parseDate(data.trialEndsAt);
+    if (trialEnd && now <= trialEnd) return { accounting: true, client: true, premium: true };
+  }
+
+  // Compatibilité avec les abonnements complets déjà présents dans Firebase.
+  if (status === 'active' && data.subscriptionActive === true) {
+    const legacyEnd = parseDate(data.subscriptionEndsAt);
+    if (legacyEnd && now <= legacyEnd) return { accounting: true, client: true, premium: true };
+  }
+
+  const subscriptions = data.subscriptions || {};
+  access.premium = isSubscriptionEntryActive(subscriptions.premium, now);
+  access.accounting = access.premium || isSubscriptionEntryActive(subscriptions.accounting, now);
+  access.client = access.premium || isSubscriptionEntryActive(subscriptions.client, now);
+
+  // Champs simples acceptés pour faciliter l'administration Firebase.
+  const modules = Array.isArray(data.subscriptionModules) ? data.subscriptionModules : [];
+  if (modules.includes('premium')) access.premium = access.accounting = access.client = true;
+  if (modules.includes('accounting')) access.accounting = true;
+  if (modules.includes('client')) access.client = true;
+  if (data.entitlements?.premium === true) access.premium = access.accounting = access.client = true;
+  if (data.entitlements?.accounting === true) access.accounting = true;
+  if (data.entitlements?.client === true) access.client = true;
+
+  return access;
+}
+
 function hasFullAccess(subscription = currentSubscriptionState) {
-  return ['owner', 'active', 'trial'].includes(subscription?.status);
+  return subscription?.access?.premium === true || ['owner', 'trial'].includes(subscription?.status);
+}
+
+function hasModuleAccess(tabName, subscription = currentSubscriptionState) {
+  if (isFreeTab(tabName)) return true;
+  const requiredPack = MODULE_PACK_BY_TAB[tabName];
+  return requiredPack ? subscription?.access?.[requiredPack] === true : false;
 }
 
 function isFreeTab(tabName) {
@@ -197,46 +264,20 @@ function isFreeTab(tabName) {
 function statusLabel(subscription = currentSubscriptionState) {
   const data = subscription?.data || {};
 
-  if (subscription?.status === 'owner' || data.subscriptionStatus === 'owner') {
-    return 'Propriétaire';
+  if (subscription?.status === 'owner' || data.subscriptionStatus === 'owner') return 'Propriétaire';
+  if (subscription?.status === 'trial') {
+    const end = parseDate(data.trialEndsAt);
+    const daysLeft = end ? Math.max(0, Math.ceil((end - new Date()) / 86400000)) : null;
+    return daysLeft === null ? 'Essai gratuit 30 jours' : `Essai gratuit · ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
   }
 
-  if (subscription?.status === 'active' || data.subscriptionStatus === 'active') {
-
-    const end = new Date(data.subscriptionEndsAt || 0);
-
-    if (!Number.isNaN(end.getTime())) {
-
-      const daysLeft = Math.max(
-        0,
-        Math.ceil(
-          (end - new Date()) / (1000 * 60 * 60 * 24)
-        )
-      );
-
-      const planLabel =
-        data.plan === 'yearly'
-          ? 'Abonnement annuel'
-          : data.plan === 'quarterly'
-            ? 'Abonnement trimestriel'
-            : 'Abonnement mensuel';
-
-      return `${planLabel} actif · ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
-    }
-
-    return 'Abonnement actif';
+  const active = [];
+  if (subscription?.access?.premium) active.push('Premium complet');
+  else {
+    if (subscription?.access?.accounting) active.push('Pack Comptabilité');
+    if (subscription?.access?.client) active.push('Pack Suivi client');
   }
-
-  if (subscription?.status === 'trial' || data.subscriptionStatus === 'trial') {
-    const end = new Date(data.trialEndsAt || 0);
-    if (!Number.isNaN(end.getTime())) {
-      const daysLeft = Math.max(0, Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24)));
-      return `Essai gratuit 30 jours · ${daysLeft} jour${daysLeft > 1 ? 's' : ''} restant${daysLeft > 1 ? 's' : ''}`;
-    }
-    return 'Essai gratuit 30 jours';
-  }
-
-  return 'Gratuit';
+  return active.length ? active.join(' + ') : 'Gratuit';
 }
 
 function updateCurrentUserDisplay(user = auth.currentUser, subscription = currentSubscriptionState) {
@@ -268,20 +309,21 @@ function switchAuthTab(tabName) {
 }
 
 function switchMainTab(tabName) {
-  if (!isFreeTab(tabName) && !hasFullAccess()) {
+  if (!hasModuleAccess(tabName)) {
     showLockedPaidFeatureMessage();
     tabName = 'devis';
   }
 
   mainTabs.forEach(btn => {
     const isActive = btn.dataset.mainTab === tabName;
-    const isLocked = !isFreeTab(btn.dataset.mainTab) && !hasFullAccess();
+    const isLocked = !hasModuleAccess(btn.dataset.mainTab);
 
     btn.classList.toggle('active', isActive);
     btn.classList.toggle('locked', isLocked);
     btn.disabled = false;
+    const requiredPack = MODULE_PACK_BY_TAB[btn.dataset.mainTab];
     btn.title = isLocked
-      ? 'Module disponible pendant l’essai gratuit 30 jours ou avec abonnement'
+      ? `${SUBSCRIPTION_PACKS[requiredPack]?.label || 'Abonnement'} requis`
       : '';
   });
 
@@ -389,6 +431,7 @@ function updateDriveButtons() {
 function grantPortalModuleAccess() {
   try {
     sessionStorage.setItem('bastcompta_portal_access', 'granted');
+    sessionStorage.setItem('bastcompta_subscription_access', JSON.stringify(currentSubscriptionState?.access || {}));
   } catch (error) {
     console.warn('SessionStorage indisponible pour BastCompta.', error);
   }
@@ -397,14 +440,14 @@ function grantPortalModuleAccess() {
 function revokePortalModuleAccess() {
   try {
     sessionStorage.removeItem('bastcompta_portal_access');
+    sessionStorage.removeItem('bastcompta_subscription_access');
   } catch (error) {
     console.warn('SessionStorage indisponible pour BastCompta.', error);
   }
 }
 
 function loadProtectedFrames(subscription = currentSubscriptionState) {
-  const canLoadPaidModules = hasFullAccess(subscription);
-
+  try { sessionStorage.setItem('bastcompta_subscription_access', JSON.stringify(subscription?.access || {})); } catch (error) {}
   [
     { tab: 'devis', frame: devisFrame },
     { tab: 'terrain', frame: terrainFrame },
@@ -416,7 +459,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
     if (!frame) return;
 
     const targetSrc = frame.dataset.src || '';
-    const canLoad = isFreeTab(tab) || canLoadPaidModules;
+    const canLoad = hasModuleAccess(tab, subscription);
 
     if (!canLoad) {
       frame.setAttribute('src', 'about:blank');
@@ -2278,7 +2321,14 @@ window.addEventListener('message', event => {
     disconnectGoogleDrive(true);
   }
   if (event.data?.type === 'BASTCOMPTA_SEND_INVOICE_TO_ACCOUNTING') {
-    sendInvoiceToAccounting();
+    if (!currentSubscriptionState?.access?.accounting) {
+      showSubscriptionModal(currentSubscriptionState);
+    } else {
+      sendInvoiceToAccounting();
+    }
+  }
+  if (event.data?.type === 'BASTCOMPTA_OPEN_SUBSCRIPTION') {
+    showSubscriptionModal(currentSubscriptionState);
   }
 
   if (event.data?.type === 'BASTCOMPTA_TARIF_ADDED_TO_DOCUMENT') {
@@ -2364,6 +2414,10 @@ async function createUserDocument(user) {
     // le bouton "Activer l’essai gratuit 30 jours".
     subscriptionStatus: isOwner ? 'owner' : 'free',
     subscriptionActive: isOwner,
+    subscriptionSchemaVersion: 2,
+    subscriptions: {},
+    subscriptionModules: [],
+    entitlements: {},
 
     trialUsed: false,
     trialStartedAt: null,
@@ -2386,79 +2440,35 @@ async function createUserDocument(user) {
 }
 
 async function checkSubscription(user) {
-  if (!user?.uid) {
-    return { allowed: false, reason: 'not_connected' };
-  }
+  if (!user?.uid) return { allowed: false, reason: 'not_connected', status: 'free', access: { accounting: false, client: false, premium: false } };
 
   const userRef = doc(db, 'users', user.uid);
   const snap = await getDoc(userRef);
-
-  if (!snap.exists()) {
-    return { allowed: false, reason: 'no_user_document' };
-  }
+  if (!snap.exists()) return { allowed: false, reason: 'no_user_document', status: 'free', access: { accounting: false, client: false, premium: false } };
 
   const data = snap.data() || {};
+  const now = new Date();
+  let status = data.subscriptionStatus || 'free';
 
-  if (data.subscriptionStatus === 'owner' && data.subscriptionActive === true) {
-    return { allowed: true, status: 'owner', data };
-  }
-
-  if (data.subscriptionStatus === 'active' && data.subscriptionActive === true) {
-
-    const now = new Date();
-
-    const subscriptionEndsAt = new Date(
-      data.subscriptionEndsAt || 0
-    );
-
-    if (
-      Number.isNaN(subscriptionEndsAt.getTime()) ||
-      now > subscriptionEndsAt
-    ) {
-
-      await updateDoc(userRef, {
-        subscriptionStatus: 'expired',
-        subscriptionActive: false,
-        updatedAt: now.toISOString()
-      }).catch(error =>
-        console.warn(
-          'Impossible de mettre à jour le statut abonnement expiré.',
-          error
-        )
-      );
-
-      return {
-        allowed: false,
-        reason: 'subscription_expired',
-        data
-      };
+  if (status === 'trial' && data.subscriptionActive === true) {
+    const trialEnd = parseDate(data.trialEndsAt);
+    if (!trialEnd || now > trialEnd) {
+      status = 'expired';
+      await updateDoc(userRef, { subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString() }).catch(() => {});
     }
-
-    return {
-      allowed: true,
-      status: 'active',
-      data
-    };
   }
 
-  if (data.subscriptionStatus === 'trial' && data.subscriptionActive === true) {
-    const now = new Date();
-    const trialEndsAt = new Date(data.trialEndsAt || 0);
-
-    if (Number.isNaN(trialEndsAt.getTime()) || now > trialEndsAt) {
-      await updateDoc(userRef, {
-        subscriptionStatus: 'expired',
-        subscriptionActive: false,
-        updatedAt: now.toISOString()
-      }).catch(error => console.warn('Impossible de mettre à jour le statut expiré.', error));
-
-      return { allowed: false, reason: 'trial_expired', data };
+  if (status === 'active' && data.subscriptionActive === true) {
+    const legacyEnd = parseDate(data.subscriptionEndsAt);
+    if (!legacyEnd || now > legacyEnd) {
+      status = 'expired';
+      await updateDoc(userRef, { subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString() }).catch(() => {});
     }
-
-    return { allowed: true, status: 'trial', data };
   }
 
-  return { allowed: false, reason: data.subscriptionStatus || 'inactive', data };
+  const access = getAccessMap(data, status);
+  const allowed = access.accounting || access.client || access.premium;
+  return { allowed, status, access, reason: allowed ? 'active' : status, data };
 }
 
 
@@ -2511,95 +2521,104 @@ async function activateTrial() {
   }
 }
 
+function euro(value) {
+  return `${Number(value).toFixed(2).replace('.', ',')} €`;
+}
+
+function periodLabel(period) {
+  return period === 'yearly' ? 'Annuel' : period === 'quarterly' ? 'Trimestriel' : 'Mensuel';
+}
+
 function subscriptionMessageFromResult(result) {
-  const email = result?.data?.email || auth.currentUser?.email || '';
+  if (result?.reason === 'trial_expired') return 'Votre essai est terminé. Les fonctions gratuites restent disponibles et vous pouvez choisir un pack ci-dessous.';
+  if (result?.reason === 'subscription_expired' || result?.reason === 'expired') return 'Votre abonnement est expiré. Choisissez la formule à renouveler ci-dessous.';
+  return 'Choisissez uniquement le pack dont vous avez besoin, ou Premium pour tout débloquer.';
+}
 
-  if (result?.reason === 'trial_expired') {
-    return `Votre période d’essai gratuite de 30 jours est terminée.
+async function selectSubscriptionOffer(pack, period) {
+  const user = auth.currentUser;
+  if (!user?.uid || !SUBSCRIPTION_PRICES[pack]?.[period]) return;
+  const price = SUBSCRIPTION_PRICES[pack][period];
+  const code = `${SUBSCRIPTION_PACKS[pack].code}-${period === 'yearly' ? 'AN' : period === 'quarterly' ? 'TRI' : 'MOIS'}`;
+  const email = currentSubscriptionState?.data?.email || user.email || '';
+  const communication = `bastcompta ${email} ${code}`.trim();
 
-Le module Devis & Facture reste gratuit. Pour continuer à utiliser les autres modules BastCompta, merci d’effectuer un virement bancaire :
-
-Compte : BE62 0013 1811 9761
-Communication : bastcompta ${email}
-
-Formules disponibles :
-- Mensuel : 4,99 €
-- Trimestriel : 12,99 €
-- Annuel : 49,99 €
-
-Votre accès sera réactivé après validation du paiement.`;
+  try {
+    await updateDoc(doc(db, 'users', user.uid), {
+      subscriptionRequest: {
+        pack,
+        period,
+        price,
+        currency: 'EUR',
+        status: 'pending_payment',
+        communication,
+        requestedAt: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString()
+    });
+    subscriptionCommunication.textContent = communication;
+    document.querySelectorAll('[data-subscription-choice]').forEach(btn => btn.classList.toggle('selected', btn.dataset.subscriptionChoice === `${pack}:${period}`));
+    const notice = document.getElementById('subscriptionChoiceNotice');
+    if (notice) notice.textContent = `${SUBSCRIPTION_PACKS[pack].label} · ${periodLabel(period)} · ${euro(price)} sélectionné. Effectuez le virement avec la communication indiquée.`;
+  } catch (error) {
+    console.error('Enregistrement du choix impossible.', error);
+    alert('Impossible d’enregistrer votre choix dans Firebase. Vérifiez votre connexion puis réessayez.');
   }
+}
 
-  if (
-    result?.reason === 'subscription_expired' ||
-    result?.reason === 'inactive' ||
-    result?.reason === 'expired'
-  ) {
-    return `Votre abonnement BastCompta est expiré.
-
-Merci d’effectuer un virement bancaire :
-
-Compte : BE62 0013 1811 9761
-Communication : bastcompta ${email}
-
-Formules disponibles :
-- Mensuel : 4,99 €
-- Trimestriel : 12,99 €
-- Annuel : 49,99 €
-
-Votre accès sera réactivé après validation du paiement.`;
-  }
-
-  return 'Accès BastCompta non autorisé pour ce compte.';
+function renderPlanCard(pack, title, description, features) {
+  const prices = SUBSCRIPTION_PRICES[pack];
+  return `
+    <article class="subscription-pack-card ${pack === 'premium' ? 'featured' : ''}">
+      ${pack === 'premium' ? '<span class="subscription-best-badge">Meilleur rapport qualité/prix</span>' : ''}
+      <h4>${escapeHtml(title)}</h4>
+      <p>${escapeHtml(description)}</p>
+      <ul>${features.map(item => `<li>✓ ${escapeHtml(item)}</li>`).join('')}</ul>
+      <div class="subscription-period-buttons">
+        <button type="button" data-subscription-choice="${pack}:monthly" data-pack="${pack}" data-period="monthly"><strong>${euro(prices.monthly)}</strong><small>/ mois</small></button>
+        <button type="button" data-subscription-choice="${pack}:quarterly" data-pack="${pack}" data-period="quarterly"><strong>${euro(prices.quarterly)}</strong><small>/ trimestre</small></button>
+        <button type="button" data-subscription-choice="${pack}:yearly" data-pack="${pack}" data-period="yearly"><strong>${euro(prices.yearly)}</strong><small>/ an</small></button>
+      </div>
+    </article>`;
 }
 
 function showSubscriptionModal(result = currentSubscriptionState) {
   const user = auth.currentUser;
   const data = result?.data || currentSubscriptionState?.data || {};
   const email = data.email || user?.email || '';
-
   if (!subscriptionModal) return;
 
   ensureSubscriptionModalStyles();
-
   const label = statusLabel(result);
-  const canActivateTrial =
-    result?.status !== 'owner' &&
-    result?.status !== 'active' &&
-    result?.status !== 'trial' &&
-    data.trialUsed !== true;
+  const canActivateTrial = result?.status !== 'owner' && result?.status !== 'trial' && data.trialUsed !== true && !result?.allowed;
+  const accessText = result?.access?.premium
+    ? 'Tous les modules sont accessibles.'
+    : [result?.access?.accounting ? 'Comptabilité + IPP' : '', result?.access?.client ? 'Suivi client' : ''].filter(Boolean).join(' · ') || 'Devis, factures, tarifs, Mode Terrain et Google Drive restent gratuits.';
 
-  const trialUsedText = data.trialUsed === true
-    ? 'Essai gratuit déjà utilisé sur ce compte.'
-    : 'Aucun essai actif.';
-
-  subscriptionModalTitle.textContent = getUserPseudo(user, data);
-
+  subscriptionModalTitle.textContent = `Abonnements de ${getUserPseudo(user, data)}`;
   subscriptionModalText.innerHTML = `
-    <div class="subscription-status-box">
-      <strong>Statut : ${escapeHtml(label)}</strong>
-      <span>${hasFullAccess(result) ? 'Accès complet actif.' : 'Accès gratuit limité à Devis & Facture.'}</span>
+    <div class="subscription-status-box"><strong>Statut : ${escapeHtml(label)}</strong><span>${escapeHtml(accessText)}</span></div>
+    <p class="subscription-info-text"><strong>Le socle BastCompta reste gratuit.</strong><br>Ajoutez seulement le pack nécessaire. Le Pack Comptabilité comprend aussi l’IPP et Peppol. Premium débloque tout.</p>
+    <div class="subscription-pack-grid">
+      ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
+      ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients et les chantiers.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers', 'Suivi commercial'])}
+      ${renderPlanCard('premium', 'Premium complet', 'Tous les modules dans une seule formule.', ['Pack Comptabilité', 'Pack Suivi client', 'Toutes les futures fonctions Premium'])}
     </div>
-
-    <p class="subscription-info-text">
-      <strong>Le module Devis & Facture est gratuit.</strong><br>
-      Les modules Comptabilité, Suivi client et Impôts IPP sont inclus pendant l’essai gratuit de 30 jours, puis nécessitent un abonnement.
-    </p>
-
+    <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>
     <div class="trial-activation-box">
       <h3>Essai gratuit de 30 jours</h3>
-      <p>Activez l’essai uniquement quand vous souhaitez tester les modules Comptabilité, Suivi client et Impôts IPP.</p>
-      <button id="activateTrialBtn" type="button" ${canActivateTrial ? '' : 'disabled'}>
-        ${canActivateTrial ? 'Activer l’essai gratuit 30 jours' : escapeHtml(trialUsedText)}
-      </button>
-    </div>
-  `;
+      <p>L’essai débloque tous les packs pendant 30 jours.</p>
+      <button id="activateTrialBtn" type="button" ${canActivateTrial ? '' : 'disabled'}>${canActivateTrial ? 'Activer l’essai gratuit' : (data.trialUsed ? 'Essai déjà utilisé' : 'Essai indisponible')}</button>
+    </div>`;
 
   activateTrialBtn = document.getElementById('activateTrialBtn');
   activateTrialBtn?.addEventListener('click', activateTrial);
+  subscriptionModalText.querySelectorAll('[data-pack][data-period]').forEach(button => {
+    button.addEventListener('click', () => selectSubscriptionOffer(button.dataset.pack, button.dataset.period));
+  });
 
-  subscriptionCommunication.textContent = email ? `bastcompta ${email}` : 'bastcompta';
-
+  const requested = data.subscriptionRequest;
+  subscriptionCommunication.textContent = requested?.communication || (email ? `bastcompta ${email}` : 'bastcompta');
   subscriptionModal.classList.add('open');
   subscriptionModal.setAttribute('aria-hidden', 'false');
 }
@@ -2784,8 +2803,9 @@ async function showTrialInfo(user) {
 
     const data = snap.data();
     currentSubscriptionState = {
-      allowed: hasFullAccess({ status: data.subscriptionStatus, data }),
+      allowed: Object.values(getAccessMap(data, data.subscriptionStatus || 'free')).some(Boolean),
       status: data.subscriptionStatus || 'free',
+      access: getAccessMap(data, data.subscriptionStatus || 'free'),
       data
     };
 
@@ -3020,6 +3040,12 @@ helpSearchInput?.addEventListener('input', filterHelpArticles);
       const isModuleHeader = button.classList.contains('sidebar-module');
       const pageKey = button.dataset.pageKey || (isModuleHeader ? defaults[tabName] : '');
       const clientAction = button.dataset.clientAction || '';
+
+      if (tabName === 'devis' && pageKey === 'peppol' && !currentSubscriptionState?.access?.accounting) {
+        showSubscriptionModal(currentSubscriptionState);
+        event.stopImmediatePropagation();
+        return;
+      }
 
       if (isModuleHeader && button.closest('.sidebar-group')?.classList.contains('open') && button.classList.contains('active')) {
         const group = button.closest('.sidebar-group');

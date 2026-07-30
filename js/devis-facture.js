@@ -3177,6 +3177,10 @@ window.addEventListener('message', async (event) => {
   if (message.type === 'BASTCOMPTA_SET_ACTIVE_PAGE') {
     const pageKey = message.pageKey || message.docKey || '';
     if (pageDefs.some(page => page.key === pageKey)) {
+      if (!canAccessDevisPage(pageKey)) {
+        window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION', pack: 'accounting' }, window.location.origin);
+        return;
+      }
       data = loadData();
       activePage = pageKey;
       render();
@@ -3720,11 +3724,35 @@ function renderPeppol() {
   `;
 }
 
+
+function hasAccountingPackAccess() {
+  try {
+    const access = JSON.parse(sessionStorage.getItem('bastcompta_subscription_access') || '{}');
+    return access.accounting === true || access.premium === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function canAccessDevisPage(pageKey) {
+  return pageKey !== 'peppol' || hasAccountingPackAccess();
+}
+
+function openDevisPage(pageKey) {
+  if (!canAccessDevisPage(pageKey)) {
+    window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION', pack: 'accounting' }, window.location.origin);
+    return;
+  }
+  activePage = pageKey;
+  render();
+}
+
 function renderTabs() {
   const tabs = document.getElementById('tabs');
-  tabs.innerHTML = pageDefs.map(page => `
-        <button class="tab ${activePage === page.key ? 'active' : ''}" onclick="activePage='${page.key}'; render()">${page.label}</button>
-      `).join('');
+  tabs.innerHTML = pageDefs.map(page => {
+    const locked = !canAccessDevisPage(page.key);
+    return `<button class="tab ${activePage === page.key ? 'active' : ''} ${locked ? 'locked' : ''}" onclick="openDevisPage('${page.key}')" title="${locked ? 'Pack Comptabilité requis' : ''}">${page.label}${locked ? ' 🔒' : ''}</button>`;
+  }).join('');
 }
 
 async function assignNextDocumentNumber(docKey) {
@@ -5465,7 +5493,7 @@ function applyOpenDocumentParamsFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const pageKey = params.get('open') || params.get('docKey') || '';
 
-  if (pageKey && pageDefs.some(page => page.key === pageKey)) {
+  if (pageKey && pageDefs.some(page => page.key === pageKey) && canAccessDevisPage(pageKey)) {
     activePage = pageKey;
   }
 

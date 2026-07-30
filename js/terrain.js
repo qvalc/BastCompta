@@ -126,54 +126,59 @@ async function saveDrafts(syncDrive = true) {
   if (syncDrive && isDriveConnected()) await saveJsonToDrive(DRAFTS_DRIVE_FILE, state.drafts, false);
 }
 
+function isActiveSubscriptionEntry(entry, now = new Date()) {
+  if (entry === true) return true;
+  if (!entry || typeof entry !== 'object') return false;
+  if (entry.active === false || ['inactive', 'expired', 'cancelled'].includes(entry.status)) return false;
+  const endValue = entry.endsAt || entry.subscriptionEndsAt;
+  if (!endValue) return entry.active === true || entry.status === 'active';
+  const end = new Date(endValue);
+  return !Number.isNaN(end.getTime()) && now <= end;
+}
+
+function getTerrainAccess(data = {}, status = data.subscriptionStatus || 'free') {
+  const now = new Date();
+  if (status === 'owner' && data.subscriptionActive === true) return { client: true, premium: true };
+  if (status === 'trial' && data.subscriptionActive === true) {
+    const end = new Date(data.trialEndsAt || 0);
+    if (!Number.isNaN(end.getTime()) && now <= end) return { client: true, premium: true };
+  }
+  if (status === 'active' && data.subscriptionActive === true) {
+    const end = new Date(data.subscriptionEndsAt || 0);
+    if (!Number.isNaN(end.getTime()) && now <= end) return { client: true, premium: true };
+  }
+  const subscriptions = data.subscriptions || {};
+  const modules = Array.isArray(data.subscriptionModules) ? data.subscriptionModules : [];
+  const premium = isActiveSubscriptionEntry(subscriptions.premium, now) || modules.includes('premium') || data.entitlements?.premium === true;
+  const client = premium || isActiveSubscriptionEntry(subscriptions.client, now) || modules.includes('client') || data.entitlements?.client === true;
+  return { client, premium };
+}
+
 function hasPremiumAccess() {
-  return state.subscription?.allowed === true && ['owner', 'active', 'trial'].includes(state.subscription?.status);
+  return state.subscription?.access?.client === true;
 }
 
 function requirePremium(feature = 'Cette fonction') {
   if (hasPremiumAccess()) return true;
-  showToast(`${feature} est réservé au module Premium.`);
+  showToast(`${feature} nécessite le Pack Suivi client ou Premium.`);
   return false;
 }
 
 async function checkSubscription(user) {
   if (!user?.uid) {
-    state.subscription = { status: 'free', allowed: false, data: null };
+    state.subscription = { status: 'free', allowed: false, access: { client: false, premium: false }, data: null };
     return;
   }
   try {
     const userRef = doc(db, 'users', user.uid);
     const snap = await getDoc(userRef);
     const data = snap.exists() ? (snap.data() || {}) : {};
-    const now = new Date();
-    let status = data.subscriptionStatus || 'free';
-    let allowed = false;
-
-    if (status === 'owner' && data.subscriptionActive === true) {
-      allowed = true;
-    } else if (status === 'active' && data.subscriptionActive === true) {
-      const end = new Date(data.subscriptionEndsAt || 0);
-      allowed = !Number.isNaN(end.getTime()) && now <= end;
-      if (!allowed) {
-        status = 'expired';
-        await updateDoc(userRef, {
-          subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString()
-        }).catch(() => {});
-      }
-    } else if (status === 'trial' && data.subscriptionActive === true) {
-      const end = new Date(data.trialEndsAt || 0);
-      allowed = !Number.isNaN(end.getTime()) && now <= end;
-      if (!allowed) {
-        status = 'expired';
-        await updateDoc(userRef, {
-          subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString()
-        }).catch(() => {});
-      }
-    }
-    state.subscription = { status, allowed, data };
+    const status = data.subscriptionStatus || 'free';
+    const access = getTerrainAccess(data, status);
+    state.subscription = { status, allowed: access.client || access.premium, access, data };
   } catch (error) {
     console.warn('Statut abonnement indisponible', error);
-    state.subscription = { status: 'free', allowed: false, data: null };
+    state.subscription = { status: 'free', allowed: false, access: { client: false, premium: false }, data: null };
   }
 }
 
@@ -317,7 +322,6 @@ async function compressPhoto(file, maxDimension = 1920, quality = 0.82) {
 }
 
 async function uploadClientPhoto(client, file, note = '') {
-  if (!hasPremiumAccess()) throw new Error('Les photos client sont réservées au Premium.');
   if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
   const compressed = await compressPhoto(file);
   const takenAt = new Date().toISOString();
@@ -439,7 +443,6 @@ function renderQuotePhotos(draft) {
 }
 
 async function uploadQuotePhoto(draft, file, note = '') {
-  if (!hasPremiumAccess()) throw new Error('Les photos de devis sont réservées au Premium.');
   if (!isDriveConnected()) throw new Error('Connecte Google Drive avant d’ajouter une photo.');
   const compressed = await compressPhoto(file);
   const fileName = `devis-${String(draft.id || 'terrain').replace(/[^a-z0-9_-]/gi,'-')}-${Date.now()}.jpg`;
@@ -860,7 +863,7 @@ function renderHome() {
       <button class="primary-button" type="button" data-action="start-quote">＋ Nouveau devis</button>
     </section>
     <section class="quick-grid">
-      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Module Premium'}</small></div></button>
+      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Pack Suivi client'}</small></div></button>
       <button class="quick-card" type="button" data-action="nav-prices"><span>🏷️</span><div><strong>${prices} tarif${prices === 1 ? '' : 's'}</strong><small>Prestations disponibles</small></div></button>
       <button class="quick-card" type="button" data-action="nav-drafts"><span>📄</span><div><strong>${state.drafts.length} brouillon${state.drafts.length === 1 ? '' : 's'}</strong><small>Reprendre un devis</small></div></button>
       <a class="quick-card link-button" href="index.html"><span>🖥️</span><div><strong>Version complète</strong><small>Gestion BastCompta</small></div></a>
@@ -873,7 +876,7 @@ function renderClients() {
   if (!hasPremiumAccess()) {
     viewRoot.innerHTML = `
       <section class="form-card premium-lock-page">
-        <div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>La liste générale des clients, les fiches, notes, chantiers et l’historique font partie du module Suivi client.</span></div>
+        <div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>La liste générale des clients, les fiches, notes, chantiers et l’historique font partie du module Suivi client.</span></div>
         <p class="muted">La création d’un devis reste gratuite : la sélection ou l’ajout d’un client reste disponible uniquement pendant la création du devis.</p>
         <button class="primary-button" type="button" data-action="start-quote">Créer un devis gratuit</button>
         <a class="secondary-button link-button" href="index.html">Voir les abonnements dans BastCompta</a>
@@ -907,7 +910,7 @@ function renderClientForm() {
       <div class="field"><label for="cfAddress">Adresse</label><textarea id="cfAddress" rows="2">${escapeHtml(client.address || '')}</textarea></div>
       <div class="field-row"><div class="field"><label for="cfNumber">N° client</label><input id="cfNumber" value="${escapeHtml(client.clientNumber || '')}"></div><div class="field"><label for="cfVat">TVA</label><input id="cfVat" value="${escapeHtml(client.vat || '')}"></div></div>
       <div class="field"><label for="cfContact">Personne de contact</label><input id="cfContact" value="${escapeHtml(client.contact || '')}"></div>
-      ${hasPremiumAccess() ? `<div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Les notes et chantiers restent réservés au module Suivi client.</span></div>`}
+      ${hasPremiumAccess() ? `<div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>` : `<div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>Les notes et chantiers restent réservés au module Suivi client.</span></div>`}
       <label class="field"><span>Favori</span><select id="cfFavorite"><option value="0" ${!client.favorite ? 'selected' : ''}>Non</option><option value="1" ${client.favorite ? 'selected' : ''}>Oui</option></select></label>
       <div class="form-actions"><button class="secondary-button" type="button" data-action="cancel-client">Annuler</button><button class="primary-button" type="button" data-action="save-client">Enregistrer</button></div>
     </div>`;
@@ -935,7 +938,7 @@ function renderClientDetail() {
       ${client.email ? `<a href="mailto:${escapeHtml(client.email)}">✉️ ${escapeHtml(client.email)}</a>` : ''}
       ${client.address ? `<div>📍 ${escapeHtml(client.address)}</div>` : ''}
       ${client.vat ? `<div>TVA : ${escapeHtml(client.vat)}</div>` : ''}
-      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}${renderClientPhotos(client)}` : `<div class="premium-lock"><strong>🔒 Suivi client Premium</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
+      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}${renderClientPhotos(client)}` : `<div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
       <div class="form-actions"><button class="secondary-button" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">Modifier</button><button class="primary-button" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Nouveau devis</button></div>
     </article>
     <div class="section-head"><h2>Devis terrain (${drafts.length})</h2></div>
@@ -1366,13 +1369,13 @@ onAuthStateChanged(auth, async user => {
     if (user) {
       await checkSubscription(user);
       await loadAllData();
-      $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Premium' : 'Gratuit'}`;
+      $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Suivi client actif' : 'Gratuit'}`;
       setAuthMessage('');
       showOnly(appScreen);
       state.view = 'home'; state.history = []; state.activeDraft = null;
       render();
       updateAccountPermissionsUi();
-      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — suivi client verrouillé', 'ok');
+      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — devis et Drive disponibles', 'ok');
       if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
     } else {
       passwordInput.value = '';

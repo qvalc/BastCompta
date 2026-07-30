@@ -3574,3 +3574,70 @@ html {
   width: 100%;
   justify-content: flex-start;
 }
+
+/* ===== Abonnements par packs ===== */
+.subscription-modal-card {
+  width: min(1080px, calc(100vw - 32px));
+  max-width: 1080px;
+}
+.subscription-pack-grid {
+  clear: both;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+.subscription-pack-card {
+  position: relative;
+  padding: 16px;
+  border: 1px solid #dbe3ee;
+  border-radius: 16px;
+  background: #fff;
+}
+.subscription-pack-card.featured {
+  border: 2px solid #2563eb;
+  background: #f8fbff;
+}
+.subscription-pack-card h4 { margin: 0 0 6px; font-size: 1.08rem; }
+.subscription-pack-card p { margin: 0 0 10px; font-size: .92rem; }
+.subscription-pack-card ul { margin: 0 0 14px; padding: 0; list-style: none; font-size: .88rem; line-height: 1.55; }
+.subscription-best-badge {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: .75rem;
+  font-weight: 700;
+}
+.subscription-period-buttons { display: grid; grid-template-columns: 1fr; gap: 7px; }
+.subscription-period-buttons button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+}
+.subscription-period-buttons button:hover,
+.subscription-period-buttons button.selected { border-color: #2563eb; background: #eff6ff; }
+.subscription-period-buttons small { color: #64748b; }
+.subscription-choice-notice {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: .9rem;
+}
+.landing-pack-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+@media (max-width: 850px) {
+  .subscription-pack-grid, .landing-pack-grid { grid-template-columns: 1fr; }
+  .subscription-modal-card { width: min(680px, calc(100vw - 20px)); }
+}
