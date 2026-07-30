@@ -2595,10 +2595,8 @@ function showSubscriptionModal(result = currentSubscriptionState) {
     ? 'Tous les modules sont accessibles.'
     : [result?.access?.accounting ? 'Comptabilité + IPP' : '', result?.access?.client ? 'Suivi client' : ''].filter(Boolean).join(' · ') || 'Devis, factures, tarifs, Mode Terrain et Google Drive restent gratuits.';
 
-  subscriptionModalTitle.textContent = `Abonnements de ${getUserPseudo(user, data)}`;
   subscriptionModalText.innerHTML = `
     <div class="subscription-status-box"><strong>Statut : ${escapeHtml(label)}</strong><span>${escapeHtml(accessText)}</span></div>
-    <p class="subscription-info-text"><strong>Le socle BastCompta reste gratuit.</strong><br>Ajoutez seulement le pack nécessaire. Le Pack Comptabilité comprend aussi l’IPP et Peppol. Premium débloque tout.</p>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
       ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients et les chantiers.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers', 'Suivi commercial'])}

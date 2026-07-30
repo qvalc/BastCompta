@@ -3641,3 +3641,23 @@ html {
   .subscription-pack-grid, .landing-pack-grid { grid-template-columns: 1fr; }
   .subscription-modal-card { width: min(680px, calc(100vw - 20px)); }
 }
+
+
+/* Correctif fenêtre Abonnements : contenu défilable sur tous les écrans. */
+.subscription-modal {
+  align-items: flex-start !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+}
+
+.subscription-modal-card {
+  max-height: none !important;
+  overflow: visible !important;
+  margin: auto 0 !important;
+}
+
+@media (max-height: 850px) {
+  .subscription-modal-card {
+    margin: 0 !important;
+  }
+}
