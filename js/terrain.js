@@ -973,29 +973,31 @@ function renderDrafts() {
 
 function renderQuoteClient() {
   ensureActiveDraft();
-  const clients = [...state.data.clients].sort((a, b) => {
+  const clients = state.data.clients.slice().sort((a, b) => {
     if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
     return clientDisplay(a).localeCompare(clientDisplay(b), 'fr', { sensitivity: 'base' });
   });
   viewRoot.innerHTML = `
     <div class="confirm-box"><strong>Étape 1 sur 3</strong><br><span class="muted">Choisis le client ou crée-le directement.</span></div>
     <div class="section-head"><h2>Client du devis</h2><button type="button" data-action="new-client-from-quote">＋ Nouveau</button></div>
-    ${clients.length ? `
-      <div class="client-select-card">
-        <label for="quoteClientSelect">Sélectionner un client</label>
-        <div class="client-select-wrap">
-          <select id="quoteClientSelect" class="client-select">
-            <option value="">— Choisir dans la liste —</option>
-            ${clients.map(client => {
-              const detail = client.address || client.phone || client.email || '';
-              const label = `${client.favorite ? '★ ' : ''}${clientDisplay(client)}${detail ? ` — ${detail}` : ''}`;
-              return `<option value="${escapeHtml(client.id)}">${escapeHtml(label)}</option>`;
-            }).join('')}
-          </select>
-          <span class="client-select-arrow" aria-hidden="true">⌄</span>
-        </div>
-        <small>${clients.length} client${clients.length === 1 ? '' : 's'} disponible${clients.length === 1 ? '' : 's'}</small>
-      </div>` : '<div class="empty">Aucun client disponible. Crée d’abord un nouveau client.</div>'}`;
+    <div class="quote-client-picker" id="quoteClientPicker">
+      <button class="quote-client-picker-trigger" type="button" data-action="toggle-client-picker" aria-expanded="false">
+        <span><strong>Choisir un client</strong><small>Cliquer pour afficher la liste</small></span><span class="picker-chevron">⌄</span>
+      </button>
+      <div class="quote-client-picker-panel hidden" id="quoteClientPickerPanel">
+        <div class="picker-head"><strong><span id="quoteClientCount">${clients.length}</span> client${clients.length === 1 ? '' : 's'}</strong><button type="button" data-action="new-client-from-quote">＋ Ajouter</button></div>
+        <div class="search-row"><input id="quoteClientSearch" class="search-input" type="search" placeholder="Nom, téléphone, adresse…" autocomplete="off"></div>
+        <div class="quote-client-picker-list" id="quoteClientPickerList">${clients.length ? clients.map(client => `
+          <article class="list-card quote-client-choice" data-client-search="${escapeHtml(normalizeText([clientDisplay(client), client.phone, client.email, client.address].filter(Boolean).join(' ')))}">
+            <div class="list-main">
+              <strong>${client.favorite ? '★ ' : ''}${escapeHtml(clientDisplay(client))}</strong>
+              <small>${escapeHtml(client.phone || client.email || client.address || 'Aucune coordonnée')}</small>
+            </div>
+            <div class="list-actions"><button class="mini-btn" type="button" data-action="select-quote-client" data-id="${escapeHtml(client.id)}">Devis</button><button class="mini-btn" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}" aria-label="Modifier le client">✎</button></div>
+          </article>`).join('') : '<div class="empty">Aucun client trouvé.</div>'}</div>
+      </div>
+    </div>`;
+  bindQuoteClientPicker();
 }
 
 function lineMarkup(row, index) {
@@ -1090,6 +1092,32 @@ function bindSearch(selector) {
     replacement?.focus();
     replacement?.setSelectionRange(cursor, cursor);
     state.view = view;
+  });
+}
+
+function bindQuoteClientPicker() {
+  const input = $('#quoteClientSearch');
+  const list = $('#quoteClientPickerList');
+  const count = $('#quoteClientCount');
+  if (!input || !list) return;
+  input.addEventListener('input', () => {
+    const query = normalizeText(input.value || '');
+    let visible = 0;
+    list.querySelectorAll('.quote-client-choice').forEach(card => {
+      const matches = !query || String(card.dataset.clientSearch || '').includes(query);
+      card.classList.toggle('hidden', !matches);
+      if (matches) visible += 1;
+    });
+    if (count) count.textContent = String(visible);
+    let empty = list.querySelector('.picker-empty-filter');
+    if (!visible) {
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'empty picker-empty-filter';
+        empty.textContent = 'Aucun client trouvé.';
+        list.appendChild(empty);
+      }
+    } else empty?.remove();
   });
 }
 
@@ -1212,6 +1240,16 @@ viewRoot.addEventListener('click', async event => {
   else if (action === 'nav-drafts') setView('drafts');
   else if (action === 'new-client') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = ''; setView('client-form'); }
   else if (action === 'new-client-from-quote') { state.selectedClientId = ''; setView('client-form'); }
+  else if (action === 'toggle-client-picker') {
+    const panel = $('#quoteClientPickerPanel');
+    const trigger = target.closest('.quote-client-picker-trigger');
+    if (panel && trigger) {
+      const willOpen = panel.classList.contains('hidden');
+      panel.classList.toggle('hidden', !willOpen);
+      trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) setTimeout(() => $('#quoteClientSearch')?.focus(), 0);
+    }
+  }
   else if (action === 'edit-client') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = id; setView('client-form'); }
   else if (action === 'client-detail') { if (!requirePremium('Le suivi client')) return; state.selectedClientId = id; setView('client-detail'); }
   else if (action === 'cancel-client') goBack();
@@ -1259,11 +1297,6 @@ viewRoot.addEventListener('click', async event => {
 });
 
 document.addEventListener('change', event => {
-  if (event.target?.id === 'quoteClientSelect') {
-    const clientId = String(event.target.value || '');
-    if (clientId) selectClientForQuote(clientId);
-    return;
-  }
   if (event.target?.id === 'terrainCameraInput' || event.target?.id === 'terrainGalleryInput') {
     const files = [...(event.target.files || [])];
     event.target.value = '';

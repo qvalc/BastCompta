@@ -86,4 +86,25 @@
 .hidden-file-input{position:fixed;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 .quote-photos-section{margin-top:14px}.photo-help{margin:-4px 0 0;font-size:.82rem}
 
-.client-select-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 3px 12px rgba(0,0,0,.035);display:grid;gap:9px}.client-select-card label{font-weight:800;font-size:.92rem}.client-select-card small{color:var(--muted)}.client-select-wrap{position:relative}.client-select{width:100%;appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px 46px 14px 14px;color:var(--text);outline:none;cursor:pointer}.client-select:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(23,63,53,.12)}.client-select-arrow{position:absolute;right:16px;top:50%;transform:translateY(-54%);pointer-events:none;color:var(--green);font-size:1.35rem;font-weight:800}.client-select option{color:var(--text)}
+/* ===== Terrain : sélecteur déroulant visuel des clients ===== */
+.quote-client-picker{position:relative;display:grid;gap:10px}
+.quote-client-picker-trigger{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 17px;border:1px solid var(--line);border-radius:16px;background:#fff;color:var(--text);text-align:left;box-shadow:0 3px 12px rgba(0,0,0,.035)}
+.quote-client-picker-trigger span:first-child{display:grid;gap:3px;min-width:0}
+.quote-client-picker-trigger strong{font-size:1rem}
+.quote-client-picker-trigger small{color:var(--muted)}
+.picker-chevron{font-size:1.3rem;transition:transform .18s ease}
+.quote-client-picker-trigger[aria-expanded="true"] .picker-chevron{transform:rotate(180deg)}
+.quote-client-picker-panel{position:relative;z-index:12;display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:18px;background:var(--bg);box-shadow:var(--shadow)}
+.picker-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px}
+.picker-head>button{border:0;background:var(--mint);color:var(--green);border-radius:12px;padding:9px 12px;font-weight:750}
+.quote-client-picker-panel .search-row{margin:0}
+.quote-client-picker-list{display:grid;gap:10px;max-height:min(52vh,520px);overflow-y:auto;padding:1px 3px 3px 1px;overscroll-behavior:contain}
+.quote-client-choice{align-items:center}
+.quote-client-choice .list-main small{display:block;margin-top:4px}
+.quote-client-choice .list-actions{flex:0 0 auto}
+@media(max-width:520px){
+  .quote-client-picker-panel{padding:10px}
+  .quote-client-choice{padding:13px}
+  .quote-client-choice .list-actions{gap:5px}
+  .quote-client-choice .mini-btn{padding:8px 9px}
+}
