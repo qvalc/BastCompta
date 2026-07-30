@@ -3695,3 +3695,13 @@ html {
     max-height: calc(100vh - 20px) !important;
   }
 }
+
+/* Aligne verticalement les tarifs des trois offres d'abonnement. */
+.subscription-pack-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.subscription-period-buttons {
+  margin-top: auto;
+}
