@@ -2816,48 +2816,57 @@ async function showTrialInfo(user) {
 }
 
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    try {
-      await user.reload().catch(() => { });
-      const freshUser = auth.currentUser || user;
-
-      if (typeof window.clarity === "function") {
-        window.clarity(
-          "identify",
-          freshUser.uid,
-          undefined,
-          undefined,
-          freshUser.email || freshUser.uid
-        );
-      }
-
-      await createUserDocument(freshUser);
-      const subscription = await checkSubscription(freshUser);
-
-      currentSubscriptionState = subscription;
-
-      if (!subscription.allowed) {
-        // L’utilisateur garde l’accès gratuit au module Devis & Facture.
-        // La fenêtre abonnement ne s’ouvre plus automatiquement :
-        // l’utilisateur l’ouvre en cliquant sur son pseudo/statut.
-        showPortal(freshUser, subscription);
-        setMessage('');
-        return;
-      }
-
-      showPortal(freshUser, subscription);
-    } catch (error) {
-      console.error('Vérification abonnement impossible :', error);
-      revokePortalModuleAccess();
-      unloadProtectedFrames();
-      portalScreen.classList.add('hidden');
-      authScreen.classList.remove('hidden');
-      setMessage('Impossible de vérifier votre abonnement. Vérifiez votre connexion puis réessayez.', 'error');
-    }
-  } else {
+  if (!user) {
     disconnectGoogleDrive(false);
     showAuth();
+    return;
   }
+
+  await user.reload().catch(() => { });
+  const freshUser = auth.currentUser || user;
+
+  if (typeof window.clarity === "function") {
+    window.clarity(
+      "identify",
+      freshUser.uid,
+      undefined,
+      undefined,
+      freshUser.email || freshUser.uid
+    );
+  }
+
+  // La connexion Firebase Auth ne doit jamais être annulée ou masquée à cause
+  // d'un problème temporaire de lecture du document d'abonnement Firestore.
+  // Dans ce cas, l'utilisateur entre dans BastCompta avec les droits gratuits.
+  const freeFallback = {
+    allowed: false,
+    status: 'free',
+    access: { accounting: false, client: false, premium: false },
+    reason: 'subscription_unavailable',
+    data: {
+      email: freshUser.email || '',
+      pseudo: getUserPseudo(freshUser),
+      subscriptionStatus: 'free',
+      subscriptionActive: false
+    }
+  };
+
+  try {
+    await createUserDocument(freshUser);
+  } catch (error) {
+    console.warn('Document utilisateur Firebase indisponible, accès gratuit appliqué.', error);
+  }
+
+  let subscription = freeFallback;
+  try {
+    subscription = await checkSubscription(freshUser);
+  } catch (error) {
+    console.warn('Abonnement Firebase indisponible, accès gratuit appliqué.', error);
+  }
+
+  currentSubscriptionState = subscription;
+  showPortal(freshUser, subscription);
+  setMessage('');
 });
 
 
