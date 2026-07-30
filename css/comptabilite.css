@@ -788,47 +788,32 @@ body.bast-embedded .app {
     padding: 14px 18px 28px;
 }
 
-/* Défilement lorsqu'un module est affiché dans le portail. */
-html:has(body.bast-embedded),
-body.bast-embedded {
-    height: auto !important;
-    min-height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior-y: contain;
-}
-
-body.bast-embedded .app {
-    height: auto !important;
-    min-height: 100% !important;
-    overflow: visible !important;
-}
-
-/* Correctif définitif du défilement dans les iframes du portail. */
+/* Défilement fiable lorsqu’un module est affiché dans le portail.
+   Un seul élément défile : la racine du document de l’iframe. */
 html:has(body.bast-embedded) {
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: scroll !important;
-    scrollbar-gutter: stable;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 body.bast-embedded {
-    width: 100% !important;
-    height: auto !important;
-    min-height: 100% !important;
-    overflow: visible !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
 }
 
 body.bast-embedded .app,
 body.bast-embedded #pages,
 body.bast-embedded .page.active {
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
 }
+
 
 /* Icônes de suppression compactes */
 .delete-icon-btn .trash-icon {
