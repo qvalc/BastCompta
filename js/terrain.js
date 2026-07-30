@@ -276,7 +276,7 @@ async function loadJsonFromDrive(fileName) {
 }
 
 async function saveJsonToDrive(fileName, payload, showErrors = true) {
-  if (!hasPremiumAccess() || !isDriveConnected()) return false;
+  if (!isDriveConnected()) return false;
   try {
     const files = await driveListByName(fileName);
     const metadata = files.length ? { name: fileName } : { name: fileName, parents: ['appDataFolder'] };
@@ -559,7 +559,6 @@ async function openClientPhoto(client, photoId) {
 }
 
 async function saveCrmToDrive(showErrors = true) {
-  if (!hasPremiumAccess()) return false;
   const payload = {
     company: state.data.company || {},
     clients: Array.isArray(state.data.clients) ? state.data.clients : [],
@@ -573,10 +572,6 @@ async function saveCrmToDrive(showErrors = true) {
 }
 
 async function syncFromDrive() {
-  if (!hasPremiumAccess()) {
-    updateSyncLine('Google Drive est réservé au Premium', 'warning');
-    return false;
-  }
   if (!isDriveConnected()) return false;
   updateSyncLine('Chargement depuis Google Drive…', 'working');
   try {
@@ -608,10 +603,6 @@ async function syncFromDrive() {
 }
 
 async function connectAndSyncDrive(interactive = true) {
-  if (!requirePremium('Google Drive')) {
-    updateSyncLine('Google Drive est réservé au Premium', 'warning');
-    return false;
-  }
   try {
     await requestDriveToken(interactive);
     await syncFromDrive();
@@ -1347,10 +1338,10 @@ function updateAccountPermissionsUi() {
   const sync = $('#syncDriveBtn');
   const premium = hasPremiumAccess();
   if (connect) {
-    connect.disabled = !premium;
-    connect.textContent = premium ? (isDriveConnected() ? 'Google Drive connecté' : 'Connecter Google Drive') : 'Google Drive — Premium';
+    connect.disabled = false;
+    connect.textContent = isDriveConnected() ? 'Google Drive connecté' : 'Connecter Google Drive';
   }
-  if (sync) sync.disabled = !premium;
+  if (sync) sync.disabled = false;
   const clientNav = bottomNav?.querySelector('[data-nav="clients"] small');
   if (clientNav) clientNav.textContent = premium ? 'Clients' : 'Clients 🔒';
 }
@@ -1361,7 +1352,7 @@ $('#closeAccountBtn').addEventListener('click', () => accountMenu.classList.add(
 $('#terrainLogoutBtn').addEventListener('click', async () => { accountMenu.classList.add('hidden'); await signOut(auth); });
 $('#reloadDataBtn').addEventListener('click', async () => { await loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
 $('#connectDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); await connectAndSyncDrive(true); });
-$('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!requirePremium('Google Drive')) return; if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
+$('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
 
 window.addEventListener('storage', event => {
   if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { loadAllData(); render(); }
@@ -1381,8 +1372,8 @@ onAuthStateChanged(auth, async user => {
       state.view = 'home'; state.history = []; state.activeDraft = null;
       render();
       updateAccountPermissionsUi();
-      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — Drive et suivi client verrouillés', hasPremiumAccess() ? 'ok' : 'warning');
-      if (hasPremiumAccess() && localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
+      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — suivi client verrouillé', 'ok');
+      if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
     } else {
       passwordInput.value = '';
       showOnly(authScreen);
