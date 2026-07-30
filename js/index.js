@@ -2691,8 +2691,21 @@ if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRest
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-await setPersistence(auth, browserLocalPersistence);
-await initGoogleDrive();
+
+// Les fonctions secondaires ne doivent jamais retarder l'installation des
+// gestionnaires des formulaires de connexion. Quand Google Drive mettait
+// plusieurs secondes à charger, le formulaire pouvait être soumis nativement :
+// la page se rechargeait et les identifiants disparaissaient sans connexion.
+setPersistence(auth, browserLocalPersistence).catch(error => {
+  console.warn('Persistance Firebase indisponible, la session courante reste utilisable.', error);
+});
+
+initGoogleDrive().catch(error => {
+  // initGoogleDrive gère déjà son affichage, ce catch évite néanmoins toute
+  // promesse rejetée non traitée si son implémentation évolue.
+  console.warn('Initialisation Google Drive différée.', error);
+});
+
 bindIframeMessaging();
 
 registerForm.addEventListener('submit', async (event) => {
