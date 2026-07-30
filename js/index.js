@@ -2662,7 +2662,7 @@ hiddenDriveModal?.addEventListener('click', event => {
   if (event.target === hiddenDriveModal) closeHiddenDriveModal();
 });
 
-connectDriveBtn.addEventListener('click', async () => {
+connectDriveBtn?.addEventListener('click', async () => {
 
   settingsMenu?.classList.remove('open');
 
@@ -2683,7 +2683,7 @@ connectDriveBtn.addEventListener('click', async () => {
   }
 
 });
-disconnectDriveBtn.addEventListener('click', () => { settingsMenu?.classList.remove('open'); disconnectGoogleDrive(true); });
+disconnectDriveBtn?.addEventListener('click', () => { settingsMenu?.classList.remove('open'); disconnectGoogleDrive(true); });
 if (fullBackupBtn) fullBackupBtn.addEventListener('click', () => { settingsMenu?.classList.remove('open'); handleFullBackupClick(); });
 if (fullRestoreBtn) fullRestoreBtn.addEventListener('click', () => { settingsMenu?.classList.remove('open'); handleFullRestoreClick(); });
 if (fullRestoreInput) fullRestoreInput.addEventListener('change', handleFullRestoreFile);
@@ -2692,23 +2692,17 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Les fonctions secondaires ne doivent jamais retarder l'installation des
-// gestionnaires des formulaires de connexion. Quand Google Drive mettait
-// plusieurs secondes à charger, le formulaire pouvait être soumis nativement :
-// la page se rechargeait et les identifiants disparaissaient sans connexion.
+// Ne jamais bloquer l'installation des gestionnaires du formulaire de connexion.
+// La persistance Firebase et Google Drive sont initialisés en arrière-plan.
 setPersistence(auth, browserLocalPersistence).catch(error => {
-  console.warn('Persistance Firebase indisponible, la session courante reste utilisable.', error);
+  console.warn('Persistance Firebase indisponible.', error);
 });
-
 initGoogleDrive().catch(error => {
-  // initGoogleDrive gère déjà son affichage, ce catch évite néanmoins toute
-  // promesse rejetée non traitée si son implémentation évolue.
-  console.warn('Initialisation Google Drive différée.', error);
+  console.warn('Initialisation Google Drive indisponible.', error);
 });
-
 bindIframeMessaging();
 
-registerForm.addEventListener('submit', async (event) => {
+registerForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const email = normalizeEmail(document.getElementById('registerEmail').value);
@@ -2740,7 +2734,7 @@ registerForm.addEventListener('submit', async (event) => {
   }
 });
 
-loginForm.addEventListener('submit', async (event) => {
+loginForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const email = normalizeEmail(document.getElementById('loginEmail').value);
@@ -2754,7 +2748,7 @@ loginForm.addEventListener('submit', async (event) => {
   }
 });
 
-forgotPasswordBtn.addEventListener('click', async () => {
+forgotPasswordBtn?.addEventListener('click', async () => {
   const email = normalizeEmail(document.getElementById('loginEmail').value);
 
   if (!email) {
@@ -2770,7 +2764,7 @@ forgotPasswordBtn.addEventListener('click', async () => {
   }
 });
 
-logoutBtn.addEventListener('click', async () => {
+logoutBtn?.addEventListener('click', async () => {
   settingsMenu?.classList.remove('open');
   try {
     disconnectGoogleDrive(true);
@@ -2780,7 +2774,7 @@ logoutBtn.addEventListener('click', async () => {
   }
 });
 
-sendVerificationBtn.addEventListener('click', async () => {
+sendVerificationBtn?.addEventListener('click', async () => {
   const user = auth.currentUser;
   if (!user) return;
 
