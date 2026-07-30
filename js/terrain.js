@@ -973,13 +973,29 @@ function renderDrafts() {
 
 function renderQuoteClient() {
   ensureActiveDraft();
-  const clients = filteredClients();
+  const clients = [...state.data.clients].sort((a, b) => {
+    if (!!a.favorite !== !!b.favorite) return a.favorite ? -1 : 1;
+    return clientDisplay(a).localeCompare(clientDisplay(b), 'fr', { sensitivity: 'base' });
+  });
   viewRoot.innerHTML = `
     <div class="confirm-box"><strong>Étape 1 sur 3</strong><br><span class="muted">Choisis le client ou crée-le directement.</span></div>
     <div class="section-head"><h2>Client du devis</h2><button type="button" data-action="new-client-from-quote">＋ Nouveau</button></div>
-    <div class="search-row"><input id="quoteClientSearch" class="search-input" type="search" placeholder="Rechercher un client…" value="${escapeHtml(state.query)}"></div>
-    <div class="list">${clients.length ? clients.map(client => `<button class="list-card" type="button" data-action="select-quote-client" data-id="${escapeHtml(client.id)}"><div class="list-main"><strong>${client.favorite ? '★ ' : ''}${escapeHtml(clientDisplay(client))}</strong><small>${escapeHtml(client.address || client.phone || client.email || '')}</small></div><span>›</span></button>`).join('') : '<div class="empty">Aucun client trouvé.</div>'}</div>`;
-  bindSearch('#quoteClientSearch');
+    ${clients.length ? `
+      <div class="client-select-card">
+        <label for="quoteClientSelect">Sélectionner un client</label>
+        <div class="client-select-wrap">
+          <select id="quoteClientSelect" class="client-select">
+            <option value="">— Choisir dans la liste —</option>
+            ${clients.map(client => {
+              const detail = client.address || client.phone || client.email || '';
+              const label = `${client.favorite ? '★ ' : ''}${clientDisplay(client)}${detail ? ` — ${detail}` : ''}`;
+              return `<option value="${escapeHtml(client.id)}">${escapeHtml(label)}</option>`;
+            }).join('')}
+          </select>
+          <span class="client-select-arrow" aria-hidden="true">⌄</span>
+        </div>
+        <small>${clients.length} client${clients.length === 1 ? '' : 's'} disponible${clients.length === 1 ? '' : 's'}</small>
+      </div>` : '<div class="empty">Aucun client disponible. Crée d’abord un nouveau client.</div>'}`;
 }
 
 function lineMarkup(row, index) {
@@ -1243,6 +1259,11 @@ viewRoot.addEventListener('click', async event => {
 });
 
 document.addEventListener('change', event => {
+  if (event.target?.id === 'quoteClientSelect') {
+    const clientId = String(event.target.value || '');
+    if (clientId) selectClientForQuote(clientId);
+    return;
+  }
   if (event.target?.id === 'terrainCameraInput' || event.target?.id === 'terrainGalleryInput') {
     const files = [...(event.target.files || [])];
     event.target.value = '';

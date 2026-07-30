@@ -85,3 +85,5 @@
 /* Photos liées aux devis Terrain */
 .hidden-file-input{position:fixed;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none}
 .quote-photos-section{margin-top:14px}.photo-help{margin:-4px 0 0;font-size:.82rem}
+
+.client-select-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 3px 12px rgba(0,0,0,.035);display:grid;gap:9px}.client-select-card label{font-weight:800;font-size:.92rem}.client-select-card small{color:var(--muted)}.client-select-wrap{position:relative}.client-select{width:100%;appearance:none;-webkit-appearance:none;border:1px solid var(--line);border-radius:14px;background:#fff;padding:14px 46px 14px 14px;color:var(--text);outline:none;cursor:pointer}.client-select:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(23,63,53,.12)}.client-select-arrow{position:absolute;right:16px;top:50%;transform:translateY(-54%);pointer-events:none;color:var(--green);font-size:1.35rem;font-weight:800}.client-select option{color:var(--text)}
