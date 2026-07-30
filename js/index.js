@@ -197,7 +197,16 @@ function getUserPseudo(user = auth.currentUser, data = null) {
 }
 
 function parseDate(value) {
-  const date = new Date(value || 0);
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+  }
+  if (typeof value === 'object' && Number.isFinite(value.seconds)) {
+    const date = new Date(value.seconds * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -211,38 +220,26 @@ function isSubscriptionEntryActive(entry, now = new Date()) {
   return !!end && now <= end;
 }
 
-function getAccessMap(data = {}, status = data.subscriptionStatus || 'free') {
+function getAccessMap(data = {}) {
   const access = { accounting: false, client: false, premium: false };
   const now = new Date();
 
-  if (status === 'owner' && data.subscriptionActive === true) {
+  // Le propriétaire dispose toujours de tous les droits.
+  if (data.subscriptionStatus === 'owner' || data.plan === 'owner') {
     return { accounting: true, client: true, premium: true };
   }
 
-  if (status === 'trial' && data.subscriptionActive === true) {
-    const trialEnd = parseDate(data.trialEndsAt);
-    if (trialEnd && now <= trialEnd) return { accounting: true, client: true, premium: true };
+  // L'essai de 30 jours équivaut à Premium tant que sa date de fin est valide.
+  const trialEnd = parseDate(data.trialEndsAt);
+  if (data.trialUsed === true && trialEnd && now <= trialEnd) {
+    return { accounting: true, client: true, premium: true };
   }
 
-  // Compatibilité avec les abonnements complets déjà présents dans Firebase.
-  if (status === 'active' && data.subscriptionActive === true) {
-    const legacyEnd = parseDate(data.subscriptionEndsAt);
-    if (legacyEnd && now <= legacyEnd) return { accounting: true, client: true, premium: true };
-  }
-
+  // Les abonnements payants sont exclusivement gérés par la map subscriptions.
   const subscriptions = data.subscriptions || {};
   access.premium = isSubscriptionEntryActive(subscriptions.premium, now);
   access.accounting = access.premium || isSubscriptionEntryActive(subscriptions.accounting, now);
   access.client = access.premium || isSubscriptionEntryActive(subscriptions.client, now);
-
-  // Champs simples acceptés pour faciliter l'administration Firebase.
-  const modules = Array.isArray(data.subscriptionModules) ? data.subscriptionModules : [];
-  if (modules.includes('premium')) access.premium = access.accounting = access.client = true;
-  if (modules.includes('accounting')) access.accounting = true;
-  if (modules.includes('client')) access.client = true;
-  if (data.entitlements?.premium === true) access.premium = access.accounting = access.client = true;
-  if (data.entitlements?.accounting === true) access.accounting = true;
-  if (data.entitlements?.client === true) access.client = true;
 
   return access;
 }
@@ -2413,11 +2410,8 @@ async function createUserDocument(user) {
     // L’essai de 30 jours ne démarre que lorsque l’utilisateur clique sur
     // le bouton "Activer l’essai gratuit 30 jours".
     subscriptionStatus: isOwner ? 'owner' : 'free',
-    subscriptionActive: isOwner,
     subscriptionSchemaVersion: 2,
     subscriptions: {},
-    subscriptionModules: [],
-    entitlements: {},
 
     trialUsed: false,
     trialStartedAt: null,
@@ -2426,7 +2420,7 @@ async function createUserDocument(user) {
     role: isOwner ? 'admin' : 'user',
     plan: isOwner ? 'owner' : 'free',
 
-    monthlyPrice: isOwner ? 0 : 4.99,
+    monthlyPrice: 0,
     currency: 'EUR',
 
     stripeCustomerId: null,
@@ -2450,23 +2444,18 @@ async function checkSubscription(user) {
   const now = new Date();
   let status = data.subscriptionStatus || 'free';
 
-  if (status === 'trial' && data.subscriptionActive === true) {
-    const trialEnd = parseDate(data.trialEndsAt);
-    if (!trialEnd || now > trialEnd) {
-      status = 'expired';
-      await updateDoc(userRef, { subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString() }).catch(() => {});
-    }
+  const trialEnd = parseDate(data.trialEndsAt);
+  if (data.trialUsed === true && trialEnd && now <= trialEnd) {
+    status = 'trial';
+  } else if (status === 'trial') {
+    status = 'expired';
+    await updateDoc(userRef, {
+      subscriptionStatus: 'expired',
+      updatedAt: now.toISOString()
+    }).catch(() => {});
   }
 
-  if (status === 'active' && data.subscriptionActive === true) {
-    const legacyEnd = parseDate(data.subscriptionEndsAt);
-    if (!legacyEnd || now > legacyEnd) {
-      status = 'expired';
-      await updateDoc(userRef, { subscriptionStatus: 'expired', subscriptionActive: false, updatedAt: now.toISOString() }).catch(() => {});
-    }
-  }
-
-  const access = getAccessMap(data, status);
+  const access = getAccessMap(data);
   const allowed = access.accounting || access.client || access.premium;
   return { allowed, status, access, reason: allowed ? 'active' : status, data };
 }
@@ -2489,7 +2478,6 @@ async function activateTrial() {
   const userRef = doc(db, 'users', user.uid);
   const update = {
     subscriptionStatus: 'trial',
-    subscriptionActive: true,
     trialUsed: true,
     trialStartedAt: now.toISOString(),
     trialEndsAt: trialEnd.toISOString(),
@@ -2808,9 +2796,9 @@ async function showTrialInfo(user) {
 
     const data = snap.data();
     currentSubscriptionState = {
-      allowed: Object.values(getAccessMap(data, data.subscriptionStatus || 'free')).some(Boolean),
+      allowed: Object.values(getAccessMap(data)).some(Boolean),
       status: data.subscriptionStatus || 'free',
-      access: getAccessMap(data, data.subscriptionStatus || 'free'),
+      access: getAccessMap(data),
       data
     };
 
@@ -2851,8 +2839,7 @@ onAuthStateChanged(auth, async (user) => {
     data: {
       email: freshUser.email || '',
       pseudo: getUserPseudo(freshUser),
-      subscriptionStatus: 'free',
-      subscriptionActive: false
+      subscriptionStatus: 'free'
     }
   };
 

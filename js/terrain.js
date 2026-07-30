@@ -126,31 +126,45 @@ async function saveDrafts(syncDrive = true) {
   if (syncDrive && isDriveConnected()) await saveJsonToDrive(DRAFTS_DRIVE_FILE, state.drafts, false);
 }
 
+function parseSubscriptionDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+  }
+  if (typeof value === 'object' && Number.isFinite(value.seconds)) {
+    const date = new Date(value.seconds * 1000);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function isActiveSubscriptionEntry(entry, now = new Date()) {
   if (entry === true) return true;
   if (!entry || typeof entry !== 'object') return false;
   if (entry.active === false || ['inactive', 'expired', 'cancelled'].includes(entry.status)) return false;
   const endValue = entry.endsAt || entry.subscriptionEndsAt;
   if (!endValue) return entry.active === true || entry.status === 'active';
-  const end = new Date(endValue);
-  return !Number.isNaN(end.getTime()) && now <= end;
+  const end = parseSubscriptionDate(endValue);
+  return !!end && now <= end;
 }
 
-function getTerrainAccess(data = {}, status = data.subscriptionStatus || 'free') {
+function getTerrainAccess(data = {}) {
   const now = new Date();
-  if (status === 'owner' && data.subscriptionActive === true) return { client: true, premium: true };
-  if (status === 'trial' && data.subscriptionActive === true) {
-    const end = new Date(data.trialEndsAt || 0);
-    if (!Number.isNaN(end.getTime()) && now <= end) return { client: true, premium: true };
+
+  if (data.subscriptionStatus === 'owner' || data.plan === 'owner') {
+    return { client: true, premium: true };
   }
-  if (status === 'active' && data.subscriptionActive === true) {
-    const end = new Date(data.subscriptionEndsAt || 0);
-    if (!Number.isNaN(end.getTime()) && now <= end) return { client: true, premium: true };
+
+  const trialEnd = parseSubscriptionDate(data.trialEndsAt);
+  if (data.trialUsed === true && trialEnd && now <= trialEnd) {
+    return { client: true, premium: true };
   }
+
   const subscriptions = data.subscriptions || {};
-  const modules = Array.isArray(data.subscriptionModules) ? data.subscriptionModules : [];
-  const premium = isActiveSubscriptionEntry(subscriptions.premium, now) || modules.includes('premium') || data.entitlements?.premium === true;
-  const client = premium || isActiveSubscriptionEntry(subscriptions.client, now) || modules.includes('client') || data.entitlements?.client === true;
+  const premium = isActiveSubscriptionEntry(subscriptions.premium, now);
+  const client = premium || isActiveSubscriptionEntry(subscriptions.client, now);
   return { client, premium };
 }
 
@@ -174,7 +188,7 @@ async function checkSubscription(user) {
     const snap = await getDoc(userRef);
     const data = snap.exists() ? (snap.data() || {}) : {};
     const status = data.subscriptionStatus || 'free';
-    const access = getTerrainAccess(data, status);
+    const access = getTerrainAccess(data);
     state.subscription = { status, allowed: access.client || access.premium, access, data };
   } catch (error) {
     console.warn('Statut abonnement indisponible', error);
