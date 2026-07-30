@@ -2447,12 +2447,31 @@ async function checkSubscription(user) {
   const trialEnd = parseDate(data.trialEndsAt);
   if (data.trialUsed === true && trialEnd && now <= trialEnd) {
     status = 'trial';
-  } else if (status === 'trial') {
-    status = 'expired';
-    await updateDoc(userRef, {
-      subscriptionStatus: 'expired',
-      updatedAt: now.toISOString()
-    }).catch(() => {});
+  } else if (
+    data.trialUsed === true &&
+    trialEnd &&
+    now > trialEnd &&
+    (status === 'trial' || data.plan === 'trial')
+  ) {
+    const subscriptions = data.subscriptions || {};
+    const hasPaidSubscription = ['accounting', 'client', 'premium']
+      .some(key => isSubscriptionEntryActive(subscriptions[key], now));
+
+    if (!hasPaidSubscription) {
+      status = 'free';
+      const freeAccountData = {
+        plan: 'free',
+        monthlyPrice: 0,
+        subscriptionActive: false,
+        subscriptionStatus: 'free',
+        updatedAt: now.toISOString()
+      };
+
+      Object.assign(data, freeAccountData);
+      await updateDoc(userRef, freeAccountData).catch(error => {
+        console.warn('Impossible de remettre automatiquement le compte en gratuit', error);
+      });
+    }
   }
 
   const access = getAccessMap(data);

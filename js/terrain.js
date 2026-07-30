@@ -187,7 +187,37 @@ async function checkSubscription(user) {
     const userRef = doc(db, 'users', user.uid);
     const snap = await getDoc(userRef);
     const data = snap.exists() ? (snap.data() || {}) : {};
-    const status = data.subscriptionStatus || 'free';
+    const now = new Date();
+    let status = data.subscriptionStatus || 'free';
+    const trialEnd = parseSubscriptionDate(data.trialEndsAt);
+
+    if (
+      data.trialUsed === true &&
+      trialEnd &&
+      now > trialEnd &&
+      (status === 'trial' || data.plan === 'trial')
+    ) {
+      const subscriptions = data.subscriptions || {};
+      const hasPaidSubscription = ['accounting', 'client', 'premium']
+        .some(key => isActiveSubscriptionEntry(subscriptions[key], now));
+
+      if (!hasPaidSubscription) {
+        status = 'free';
+        const freeAccountData = {
+          plan: 'free',
+          monthlyPrice: 0,
+          subscriptionActive: false,
+          subscriptionStatus: 'free',
+          updatedAt: now.toISOString()
+        };
+
+        Object.assign(data, freeAccountData);
+        await updateDoc(userRef, freeAccountData).catch(error => {
+          console.warn('Impossible de remettre automatiquement le compte en gratuit', error);
+        });
+      }
+    }
+
     const access = getTerrainAccess(data);
     state.subscription = { status, allowed: access.client || access.premium, access, data };
   } catch (error) {
