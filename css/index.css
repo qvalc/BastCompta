@@ -3661,3 +3661,37 @@ html {
     margin: 0 !important;
   }
 }
+
+/* ===== Correctif final fenêtre Abonnements =====
+   Conserve la mise en page sur 3 colonnes et rend uniquement la carte défilable. */
+.subscription-modal {
+  align-items: center !important;
+  overflow: hidden !important;
+  padding: 16px !important;
+}
+
+.subscription-modal-card {
+  width: min(1080px, calc(100vw - 32px)) !important;
+  max-width: 1080px !important;
+  max-height: calc(100vh - 32px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  margin: 0 !important;
+}
+
+/* L'ancien style compact transformait tout le contenu dynamique en grille 1fr/350px. */
+.subscription-modal-card > div:first-child {
+  display: block !important;
+}
+
+@media (max-width: 850px) {
+  .subscription-modal {
+    align-items: flex-start !important;
+    padding: 10px !important;
+  }
+
+  .subscription-modal-card {
+    width: 100% !important;
+    max-height: calc(100vh - 20px) !important;
+  }
+}
