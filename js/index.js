@@ -2521,7 +2521,7 @@ async function activateTrial() {
   }
 }
 
-function euro(value) {
+function subscriptionEuro(value) {
   return `${Number(value).toFixed(2).replace('.', ',')} €`;
 }
 
@@ -2559,7 +2559,7 @@ async function selectSubscriptionOffer(pack, period) {
     subscriptionCommunication.textContent = communication;
     document.querySelectorAll('[data-subscription-choice]').forEach(btn => btn.classList.toggle('selected', btn.dataset.subscriptionChoice === `${pack}:${period}`));
     const notice = document.getElementById('subscriptionChoiceNotice');
-    if (notice) notice.textContent = `${SUBSCRIPTION_PACKS[pack].label} · ${periodLabel(period)} · ${euro(price)} sélectionné. Effectuez le virement avec la communication indiquée.`;
+    if (notice) notice.textContent = `${SUBSCRIPTION_PACKS[pack].label} · ${periodLabel(period)} · ${subscriptionEuro(price)} sélectionné. Effectuez le virement avec la communication indiquée.`;
   } catch (error) {
     console.error('Enregistrement du choix impossible.', error);
     alert('Impossible d’enregistrer votre choix dans Firebase. Vérifiez votre connexion puis réessayez.');
@@ -2575,9 +2575,9 @@ function renderPlanCard(pack, title, description, features) {
       <p>${escapeHtml(description)}</p>
       <ul>${features.map(item => `<li>✓ ${escapeHtml(item)}</li>`).join('')}</ul>
       <div class="subscription-period-buttons">
-        <button type="button" data-subscription-choice="${pack}:monthly" data-pack="${pack}" data-period="monthly"><strong>${euro(prices.monthly)}</strong><small>/ mois</small></button>
-        <button type="button" data-subscription-choice="${pack}:quarterly" data-pack="${pack}" data-period="quarterly"><strong>${euro(prices.quarterly)}</strong><small>/ trimestre</small></button>
-        <button type="button" data-subscription-choice="${pack}:yearly" data-pack="${pack}" data-period="yearly"><strong>${euro(prices.yearly)}</strong><small>/ an</small></button>
+        <button type="button" data-subscription-choice="${pack}:monthly" data-pack="${pack}" data-period="monthly"><strong>${subscriptionEuro(prices.monthly)}</strong><small>/ mois</small></button>
+        <button type="button" data-subscription-choice="${pack}:quarterly" data-pack="${pack}" data-period="quarterly"><strong>${subscriptionEuro(prices.quarterly)}</strong><small>/ trimestre</small></button>
+        <button type="button" data-subscription-choice="${pack}:yearly" data-pack="${pack}" data-period="yearly"><strong>${subscriptionEuro(prices.yearly)}</strong><small>/ an</small></button>
       </div>
     </article>`;
 }
