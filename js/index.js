@@ -3249,72 +3249,42 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-
-/* Recherche et filtrage de la FAQ publique */
+/* Recherche et filtres de la FAQ publique */
 document.addEventListener('DOMContentLoaded', () => {
-  const section = document.getElementById('faq');
-  if (!section) return;
+  const search = document.getElementById('faqSearch');
+  const filters = Array.from(document.querySelectorAll('[data-faq-filter]'));
+  const categories = Array.from(document.querySelectorAll('[data-faq-category]'));
+  const count = document.getElementById('faqCount');
+  const empty = document.getElementById('faqEmpty');
+  if (!search || !categories.length) return;
 
-  const input = section.querySelector('#faqSearchInput');
-  const reset = section.querySelector('#faqResetBtn');
-  const count = section.querySelector('#faqResultCount');
-  const empty = section.querySelector('#faqNoResults');
-  const filters = [...section.querySelectorAll('[data-faq-filter]')];
-  const items = [...section.querySelectorAll('.landing-faq-item[data-faq-category]')];
-  const headings = [...section.querySelectorAll('[data-faq-category-heading]')];
-  let activeCategory = 'all';
+  let activeFilter = 'all';
+  const normalize = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
-  const normalize = value => String(value || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-  function refreshFaq() {
-    const query = normalize(input?.value);
-    let visibleCount = 0;
-    const visibleCategories = new Set();
-
-    items.forEach(item => {
-      const categoryMatch = activeCategory === 'all' || item.dataset.faqCategory === activeCategory;
-      const text = normalize(item.dataset.faqSearch || item.textContent);
-      const searchMatch = !query || text.includes(query);
-      const visible = categoryMatch && searchMatch;
-      item.hidden = !visible;
-      if (visible) {
-        visibleCount += 1;
-        visibleCategories.add(item.dataset.faqCategory);
-      } else {
-        item.open = false;
-      }
+  function updateFaq() {
+    const query = normalize(search.value);
+    let visibleTotal = 0;
+    categories.forEach((category) => {
+      const categoryMatches = activeFilter === 'all' || category.dataset.faqCategory === activeFilter;
+      let categoryVisible = 0;
+      category.querySelectorAll('[data-faq-item]').forEach((item) => {
+        const matches = categoryMatches && (!query || normalize(item.dataset.faqSearch).includes(query));
+        item.hidden = !matches;
+        if (!matches) item.open = false;
+        if (matches) { visibleTotal += 1; categoryVisible += 1; }
+      });
+      category.hidden = categoryVisible === 0;
     });
-
-    headings.forEach(heading => {
-      heading.hidden = !visibleCategories.has(heading.dataset.faqCategoryHeading);
-    });
-    if (count) count.textContent = String(visibleCount);
-    if (empty) empty.hidden = visibleCount !== 0;
+    if (count) count.textContent = `${visibleTotal} réponse${visibleTotal > 1 ? 's' : ''} affichée${visibleTotal > 1 ? 's' : ''}`;
+    if (empty) empty.hidden = visibleTotal !== 0;
   }
 
-  filters.forEach(button => button.addEventListener('click', () => {
-    activeCategory = button.dataset.faqFilter || 'all';
-    filters.forEach(other => {
-      const active = other === button;
-      other.classList.toggle('active', active);
-      other.setAttribute('aria-pressed', String(active));
-    });
-    refreshFaq();
+  search.addEventListener('input', updateFaq);
+  filters.forEach((button) => button.addEventListener('click', () => {
+    activeFilter = button.dataset.faqFilter || 'all';
+    filters.forEach((other) => other.classList.toggle('active', other === button));
+    updateFaq();
   }));
-
-  input?.addEventListener('input', refreshFaq);
-  reset?.addEventListener('click', () => {
-    if (input) input.value = '';
-    activeCategory = 'all';
-    filters.forEach(button => {
-      const active = button.dataset.faqFilter === 'all';
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-    });
-    refreshFaq();
-    input?.focus();
-  });
-
-  refreshFaq();
+  updateFaq();
 });
+
