@@ -3743,3 +3743,48 @@ html {
     .landing-faq-item p { padding: 0 17px 18px; }
 }
 
+
+
+/* Centre d’aide complet — 122 points */
+.landing-faq-category-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.landing-faq-category-heading h3 { margin: 0; }
+.landing-faq-category-heading span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.landing-faq-number { color: var(--primary); font-weight: 900; }
+.landing-faq-answer {
+  padding: 0 22px 22px;
+  display: grid;
+  gap: 14px;
+}
+.landing-faq-answer-block {
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, .72);
+}
+.landing-faq-answer-block h4 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 15px;
+}
+.landing-faq-answer-block p {
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+@media (max-width: 700px) {
+  .landing-faq-category-heading { align-items: flex-start; }
+  .landing-faq-answer { padding: 0 15px 16px; gap: 10px; }
+  .landing-faq-answer-block { padding: 12px 13px; }
+}
