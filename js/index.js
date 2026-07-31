@@ -140,6 +140,29 @@ function ensureSubscriptionModalStyles() {
       color: #1d4ed8;
       font-size: 1.05rem;
     }
+    .subscription-status-box > span {
+      display: block;
+    }
+    .subscription-expiry-details {
+      margin-top: 9px;
+      padding-top: 9px;
+      border-top: 1px solid #bfdbfe;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      color: #1e40af;
+    }
+    .subscription-expiry-details div + div {
+      margin-top: 6px;
+    }
+    .subscription-expiry-details b {
+      display: block;
+      color: #1e3a8a;
+    }
+    .subscription-expiry-details small {
+      display: block;
+      color: #475569;
+      font-size: 0.8rem;
+    }
     .subscription-info-text {
       margin: 0 0 18px;
       line-height: 1.65;
@@ -208,6 +231,88 @@ function parseDate(value) {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatSubscriptionDate(value) {
+  const date = parseDate(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat('fr-BE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(date);
+}
+
+function subscriptionRemainingText(value, now = new Date()) {
+  const end = parseDate(value);
+  if (!end) return '';
+
+  const diffMs = end.getTime() - now.getTime();
+  if (diffMs <= 0) return 'Échu';
+
+  const totalDays = Math.max(1, Math.ceil(diffMs / 86400000));
+  if (totalDays <= 45) {
+    return `${totalDays} jour${totalDays > 1 ? 's' : ''} restant${totalDays > 1 ? 's' : ''}`;
+  }
+
+  const totalMonths = Math.max(1, Math.floor(totalDays / 30.4375));
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+
+  if (years > 0 && months > 0) {
+    return `${years} an${years > 1 ? 's' : ''} et ${months} mois restants`;
+  }
+  if (years > 0) {
+    return `${years} an${years > 1 ? 's' : ''} restant${years > 1 ? 's' : ''}`;
+  }
+  return `${totalMonths} mois restant${totalMonths > 1 ? 's' : ''}`;
+}
+
+function getSubscriptionExpiryItems(result = currentSubscriptionState) {
+  const data = result?.data || {};
+  const now = new Date();
+
+  if (result?.status === 'owner' || data.subscriptionStatus === 'owner' || data.plan === 'owner') {
+    return [{ label: 'Accès propriétaire', noEnd: true }];
+  }
+
+  const trialEnd = parseDate(data.trialEndsAt);
+  if (result?.status === 'trial' && data.trialUsed === true && trialEnd && now <= trialEnd) {
+    return [{ label: 'Essai Premium', endValue: data.trialEndsAt }];
+  }
+
+  const subscriptions = data.subscriptions || {};
+  if (isSubscriptionEntryActive(subscriptions.premium, now)) {
+    return [{ label: 'Premium complet', endValue: subscriptions.premium?.endsAt || subscriptions.premium?.subscriptionEndsAt, noEnd: !(subscriptions.premium?.endsAt || subscriptions.premium?.subscriptionEndsAt) }];
+  }
+
+  const items = [];
+  if (isSubscriptionEntryActive(subscriptions.accounting, now)) {
+    const endValue = subscriptions.accounting?.endsAt || subscriptions.accounting?.subscriptionEndsAt;
+    items.push({ label: 'Pack Comptabilité', endValue, noEnd: !endValue });
+  }
+  if (isSubscriptionEntryActive(subscriptions.client, now)) {
+    const endValue = subscriptions.client?.endsAt || subscriptions.client?.subscriptionEndsAt;
+    items.push({ label: 'Pack Suivi client', endValue, noEnd: !endValue });
+  }
+  return items;
+}
+
+function renderSubscriptionExpiryDetails(result = currentSubscriptionState) {
+  const items = getSubscriptionExpiryItems(result);
+  if (!items.length) return '';
+
+  return `<div class="subscription-expiry-details">${items.map(item => {
+    if (item.noEnd) {
+      return `<div><b>${escapeHtml(item.label)}</b><small>Actif sans date de fin</small></div>`;
+    }
+
+    const formattedDate = formatSubscriptionDate(item.endValue);
+    const remaining = subscriptionRemainingText(item.endValue);
+    if (!formattedDate) return '';
+
+    return `<div><b>${escapeHtml(item.label)}</b><span>Actif jusqu’au ${escapeHtml(formattedDate)}</span>${remaining ? `<small>${escapeHtml(remaining)}</small>` : ''}</div>`;
+  }).join('')}</div>`;
 }
 
 function isSubscriptionEntryActive(entry, now = new Date()) {
@@ -2602,8 +2707,10 @@ function showSubscriptionModal(result = currentSubscriptionState) {
     ? 'Tous les modules sont accessibles.'
     : [result?.access?.accounting ? 'Comptabilité + IPP' : '', result?.access?.client ? 'Suivi client' : ''].filter(Boolean).join(' · ') || 'Devis, factures, tarifs, Mode Terrain et Google Drive restent gratuits.';
 
+  const expiryDetailsHtml = renderSubscriptionExpiryDetails(result);
+
   subscriptionModalText.innerHTML = `
-    <div class="subscription-status-box"><strong>Statut : ${escapeHtml(label)}</strong><span>${escapeHtml(accessText)}</span></div>
+    <div class="subscription-status-box"><strong>Statut : ${escapeHtml(label)}</strong><span>${escapeHtml(accessText)}</span>${expiryDetailsHtml}</div>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
       ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients et les chantiers.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers', 'Suivi commercial'])}
