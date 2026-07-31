@@ -122,10 +122,16 @@ function ensureSubscriptionModalStyles() {
   const style = document.createElement('style');
   style.id = 'bastcompta-subscription-styles';
   style.textContent = `
+    .subscription-top-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(230px, 280px);
+      align-items: stretch;
+      gap: 16px;
+      margin: 0 0 16px;
+    }
     .subscription-status-box {
-      float: right;
-      max-width: 280px;
-      margin: 0 0 16px 20px;
+      max-width: none;
+      margin: 0;
       padding: 14px 16px;
       border: 1px solid #bfdbfe;
       border-radius: 14px;
@@ -134,19 +140,10 @@ function ensureSubscriptionModalStyles() {
       text-align: left;
       box-shadow: 0 6px 18px rgba(37, 99, 235, 0.10);
     }
-    .subscription-status-box strong {
-      display: block;
-      margin-bottom: 4px;
-      color: #1d4ed8;
-      font-size: 1.05rem;
-    }
-    .subscription-status-box > span {
-      display: block;
-    }
     .subscription-expiry-details {
-      margin-top: 9px;
-      padding-top: 9px;
-      border-top: 1px solid #bfdbfe;
+      margin: 0;
+      padding: 0;
+      border: 0;
       font-size: 0.88rem;
       line-height: 1.45;
       color: #1e40af;
@@ -168,8 +165,7 @@ function ensureSubscriptionModalStyles() {
       line-height: 1.65;
     }
     .trial-activation-box {
-      clear: both;
-      margin: 18px 0 8px;
+      margin: 0;
       padding: 16px;
       border: 1px solid #e5e7eb;
       border-radius: 14px;
@@ -196,10 +192,8 @@ function ensureSubscriptionModalStyles() {
       cursor: not-allowed;
     }
     @media (max-width: 720px) {
-      .subscription-status-box {
-        float: none;
-        max-width: none;
-        margin: 0 0 14px;
+      .subscription-top-row {
+        grid-template-columns: 1fr;
       }
     }
   `;
@@ -2701,27 +2695,24 @@ function showSubscriptionModal(result = currentSubscriptionState) {
   if (!subscriptionModal) return;
 
   ensureSubscriptionModalStyles();
-  const label = statusLabel(result);
   const canActivateTrial = result?.status !== 'owner' && result?.status !== 'trial' && data.trialUsed !== true && !result?.allowed;
-  const accessText = result?.access?.premium
-    ? 'Tous les modules sont accessibles.'
-    : [result?.access?.accounting ? 'Comptabilité + IPP' : '', result?.access?.client ? 'Suivi client' : ''].filter(Boolean).join(' · ') || 'Devis, factures, tarifs, Mode Terrain et Google Drive restent gratuits.';
-
   const expiryDetailsHtml = renderSubscriptionExpiryDetails(result);
 
   subscriptionModalText.innerHTML = `
-    <div class="subscription-status-box"><strong>Statut : ${escapeHtml(label)}</strong><span>${escapeHtml(accessText)}</span>${expiryDetailsHtml}</div>
+    <div class="subscription-top-row">
+      <div class="trial-activation-box">
+        <h3>Essai gratuit de 30 jours</h3>
+        <p>L’essai débloque tous les packs pendant 30 jours.</p>
+        <button id="activateTrialBtn" type="button" ${canActivateTrial ? '' : 'disabled'}>${canActivateTrial ? 'Activer l’essai gratuit' : (data.trialUsed ? 'Essai déjà utilisé' : 'Essai indisponible')}</button>
+      </div>
+      ${expiryDetailsHtml ? `<div class="subscription-status-box">${expiryDetailsHtml}</div>` : ''}
+    </div>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
       ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients et les chantiers.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers', 'Suivi commercial'])}
       ${renderPlanCard('premium', 'Premium complet', 'Tous les modules dans une seule formule.', ['Pack Comptabilité', 'Pack Suivi client', 'Toutes les futures fonctions Premium'])}
     </div>
-    <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>
-    <div class="trial-activation-box">
-      <h3>Essai gratuit de 30 jours</h3>
-      <p>L’essai débloque tous les packs pendant 30 jours.</p>
-      <button id="activateTrialBtn" type="button" ${canActivateTrial ? '' : 'disabled'}>${canActivateTrial ? 'Activer l’essai gratuit' : (data.trialUsed ? 'Essai déjà utilisé' : 'Essai indisponible')}</button>
-    </div>`;
+    <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>`;
 
   activateTrialBtn = document.getElementById('activateTrialBtn');
   activateTrialBtn?.addEventListener('click', activateTrial);
