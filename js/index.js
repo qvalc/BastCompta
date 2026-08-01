@@ -3133,3 +3133,36 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+
+
+/* ===== Centre d’aide dans une iframe ===== */
+(() => {
+  const openButton = document.getElementById('openHelpBtn');
+  const modal = document.getElementById('helpFrameModal');
+  const frame = document.getElementById('helpFrame');
+  const closeButton = document.getElementById('closeHelpFrameBtn');
+  if (!openButton || !modal || !frame) return;
+
+  function openHelpFrame() {
+    if (!frame.src || frame.src === 'about:blank') frame.src = frame.dataset.src || 'faq.html?embedded=1';
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('help-modal-open');
+    settingsMenu?.classList.remove('open');
+    sidebarSettingsBtn?.setAttribute('aria-expanded', 'false');
+    sidebarSettingsBtn?.classList.remove('active');
+    closeButton?.focus();
+  }
+
+  function closeHelpFrame() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('help-modal-open');
+    openButton.focus();
+  }
+
+  openButton.addEventListener('click', openHelpFrame);
+  closeButton?.addEventListener('click', closeHelpFrame);
+  modal.addEventListener('click', event => { if (event.target === modal) closeHelpFrame(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('open')) closeHelpFrame(); });
+})();

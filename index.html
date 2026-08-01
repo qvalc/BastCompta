@@ -662,7 +662,7 @@
 <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
 <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
 <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
-<button id="openHelpBtn" onclick="window.location.href='faq.html'" type="button">Présentation &amp; FAQ</button>
+<button id="openHelpBtn" type="button">Présentation &amp; FAQ</button>
 <div class="settings-separator"></div>
 <button class="danger-link" id="logoutBtn" type="button">Déconnecter</button>
 </div>
@@ -708,6 +708,19 @@
 </div>
 </div>
 </section>
+</div>
+
+<div aria-hidden="true" class="help-frame-modal" id="helpFrameModal">
+  <div class="help-frame-dialog" role="dialog" aria-modal="true" aria-labelledby="helpFrameTitle">
+    <div class="help-frame-head">
+      <div><strong id="helpFrameTitle">Présentation &amp; FAQ</strong><span>Centre d’aide BastCompta</span></div>
+      <div class="help-frame-actions">
+        <a href="faq.html" target="_blank" title="Ouvrir dans un nouvel onglet">↗</a>
+        <button id="closeHelpFrameBtn" type="button" aria-label="Fermer le centre d’aide">×</button>
+      </div>
+    </div>
+    <iframe id="helpFrame" title="Centre d’aide BastCompta" src="about:blank" data-src="faq.html?embedded=1"></iframe>
+  </div>
 </div>
 <div aria-hidden="true" class="drive-modal" id="hiddenDriveModal">
 <div class="drive-modal-card">

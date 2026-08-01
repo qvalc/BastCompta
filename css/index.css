@@ -3788,3 +3788,35 @@ html {
   .landing-faq-answer { padding: 0 15px 16px; gap: 10px; }
   .landing-faq-answer-block { padding: 12px 13px; }
 }
+
+
+/* ===== Centre d’aide intégré ===== */
+.help-frame-modal {
+  position: fixed; inset: 0; z-index: 12000; display: none; align-items: center; justify-content: center;
+  padding: 22px; background: rgba(8, 24, 40, .58); backdrop-filter: blur(5px);
+}
+.help-frame-modal.open { display: flex; }
+.help-frame-dialog {
+  width: min(1460px, 96vw); height: min(920px, 94vh); min-height: 540px; overflow: hidden;
+  display: flex; flex-direction: column; background: #f4f7fb; border: 1px solid rgba(255,255,255,.7);
+  border-radius: 20px; box-shadow: 0 28px 80px rgba(4, 23, 39, .34);
+}
+.help-frame-head {
+  min-height: 62px; padding: 10px 14px 10px 20px; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; background: #fff; border-bottom: 1px solid #dbe4ef;
+}
+.help-frame-head strong { display: block; color: #10233f; font-size: 17px; }
+.help-frame-head span { display: block; color: #687890; font-size: 12px; margin-top: 2px; }
+.help-frame-actions { display: flex; align-items: center; gap: 8px; }
+.help-frame-actions a, .help-frame-actions button {
+  width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px;
+  border: 1px solid #d7e0eb; background: #fff; color: #17314f; text-decoration: none; font-size: 22px; cursor: pointer;
+}
+.help-frame-actions a:hover, .help-frame-actions button:hover { background: #eef4ff; border-color: #aebfe5; }
+#helpFrame { width: 100%; height: 100%; min-height: 0; flex: 1; border: 0; background: #f4f7fb; }
+body.help-modal-open { overflow: hidden !important; }
+@media (max-width: 700px) {
+  .help-frame-modal { padding: 0; }
+  .help-frame-dialog { width: 100vw; height: 100vh; min-height: 0; border: 0; border-radius: 0; }
+  .help-frame-head { min-height: 56px; padding: 8px 10px 8px 14px; }
+}
