@@ -555,9 +555,12 @@ async function loadDriveFiles(showAlert = true) {
     );
 
     render();
-    ensureDriveFileIndex(true).then(() => {
-      if (activePage === 'crm') render();
-    });
+
+    // Ne construit plus automatiquement l'index complet de tous les documents Drive.
+    // Cet index est chargé à la demande à l'ouverture du CRM, ou plus tard en arrière-plan.
+    if (activePage === 'crm') {
+      ensureDriveIndexForCrm(false).catch(console.error);
+    }
 
   } catch (error) {
     console.error(error);
@@ -2157,6 +2160,42 @@ async function ensureDriveFileIndex(force = false) {
   return googleDriveFiles.map(file => driveFileIndex[file.id]).filter(Boolean);
 }
 
+
+let driveIndexBuildPromise = null;
+let driveIndexBackgroundHandle = null;
+
+async function ensureDriveIndexForCrm(force = false) {
+  if (!googleAccessToken || !googleDriveFiles.length) return [];
+
+  if (!driveIndexBuildPromise) {
+    driveIndexBuildPromise = ensureDriveFileIndex(force)
+      .finally(() => {
+        driveIndexBuildPromise = null;
+      });
+  }
+
+  const result = await driveIndexBuildPromise;
+  if (activePage === 'crm') render();
+  return result;
+}
+
+function scheduleDriveIndexInBackground() {
+  if (!googleAccessToken || !googleDriveFiles.length || driveIndexBuildPromise || driveIndexBackgroundHandle) return;
+
+  const run = () => {
+    driveIndexBackgroundHandle = null;
+    ensureDriveIndexForCrm(false).catch(error => {
+      console.error('Erreur pendant l’indexation différée de Drive :', error);
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    driveIndexBackgroundHandle = window.requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    driveIndexBackgroundHandle = window.setTimeout(run, 1500);
+  }
+}
+
 function getIndexedDriveDocsForClient(client) {
   const clientKey = normalizeClientNumberForMatch(client.clientNumber);
   const docs = Object.values(driveFileIndex).filter(doc => normalizeClientNumberForMatch(doc.clientNumber) === clientKey);
@@ -3109,6 +3148,7 @@ function scheduleFullRenderAfterInvoiceOpen() {
       // afin de conserver l'ensemble des fonctions du module Devis & Factures.
       render();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      scheduleDriveIndexInBackground();
     } catch (error) {
       console.error('Erreur pendant le chargement différé du module Devis & Factures :', error);
     } finally {
@@ -3199,9 +3239,27 @@ window.addEventListener('message', async (event) => {
     if (googleAccessToken && window.gapi?.client) {
       try {
         gapi.client.setToken({ access_token: googleAccessToken });
-        await loadSyncDataFromDriveIfAvailable();
-        await loadDriveFiles();
-        await ensureDriveFileIndex(true);
+
+        // Charge uniquement la liste légère des fichiers au démarrage.
+        // La lecture du contenu de tous les documents est différée pour ne pas bloquer
+        // l'ouverture d'une facture depuis la comptabilité.
+        await loadDriveFiles(false);
+
+        const loadRemainingData = async () => {
+          try {
+            await loadSyncDataFromDriveIfAvailable();
+            render();
+            scheduleDriveIndexInBackground();
+          } catch (error) {
+            console.error('Erreur pendant le chargement différé des données Drive :', error);
+          }
+        };
+
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(loadRemainingData, { timeout: 1500 });
+        } else {
+          window.setTimeout(loadRemainingData, 300);
+        }
       } catch (error) {
         console.error(error);
       }
@@ -3774,13 +3832,21 @@ function canAccessDevisPage(pageKey) {
   return pageKey !== 'peppol' || hasAccountingPackAccess();
 }
 
-function openDevisPage(pageKey) {
+async function openDevisPage(pageKey) {
   if (!canAccessDevisPage(pageKey)) {
     window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION', pack: 'accounting' }, window.location.origin);
     return;
   }
+
   activePage = pageKey;
   render();
+
+  // Le CRM reste entièrement accessible dans Devis & Factures.
+  // Son index Drive est simplement construit au premier accès au lieu de ralentir
+  // l'ouverture initiale d'une facture.
+  if (pageKey === 'crm') {
+    await ensureDriveIndexForCrm(false);
+  }
 }
 
 function renderTabs() {
