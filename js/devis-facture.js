@@ -3097,46 +3097,82 @@ async function findInvoiceDriveFileByNumber(invoiceNumber, preferredFileId = '')
   return (list.result.files || []).find(file => invoiceFileMatchesNumber(file, normalized)) || null;
 }
 
+let isOpeningInvoiceFromAccounting = false;
+let deferredFullRenderHandle = null;
+
+function scheduleFullRenderAfterInvoiceOpen() {
+  const runFullRender = () => {
+    deferredFullRenderHandle = null;
+
+    try {
+      // Une fois la facture visible, on charge normalement toutes les autres pages
+      // afin de conserver l'ensemble des fonctions du module Devis & Factures.
+      render();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.error('Erreur pendant le chargement différé du module Devis & Factures :', error);
+    } finally {
+      isOpeningInvoiceFromAccounting = false;
+    }
+  };
+
+  // Laisse d'abord au navigateur le temps d'afficher la facture.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if ('requestIdleCallback' in window) {
+        deferredFullRenderHandle = window.requestIdleCallback(runFullRender, { timeout: 600 });
+      } else {
+        deferredFullRenderHandle = window.setTimeout(runFullRender, 0);
+      }
+    });
+  });
+}
+
 async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileId = '') {
+  isOpeningInvoiceFromAccounting = true;
+
   try {
     const normalized = String(invoiceNumber || '').trim();
     const file = await findInvoiceDriveFileByNumber(normalized, preferredFileId);
     if (!file) {
+      isOpeningInvoiceFromAccounting = false;
       alert(`Aucune facture trouvée sur Drive pour le numéro ${normalized}.`);
       return false;
     }
 
     const parsed = await fetchDriveFileParsed(file.id);
     if (!parsed?.invoice) {
+      isOpeningInvoiceFromAccounting = false;
       alert('Le fichier trouvé ne contient pas de facture valide.');
       return false;
     }
 
     const loadedNumber = String(parsed.invoice?.documentNumber || '').trim();
     if (normalized && loadedNumber && normalizeInvoiceLookupValue(loadedNumber) !== normalizeInvoiceLookupValue(normalized)) {
+      isOpeningInvoiceFromAccounting = false;
       alert(`Le fichier trouvé (${file.name || file.id}) contient la facture ${loadedNumber}, pas ${normalized}.`);
       return false;
     }
 
-    // Important : ne jamais remplacer tout "data" ici.
-    // On charge uniquement la facture à imprimer afin de préserver le CRM complet.
+    // Ne remplace jamais tout "data" : seul le document demandé est chargé.
     data.invoice = mergeDeep(structuredClone(defaultData.invoice), parsed.invoice);
     selectedDriveFileId = file.id;
     activePage = 'invoice';
     syncCommunicationFromInvoice(false);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    render();
 
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    setTimeout(() => {
-      window.focus();
-      printCurrentPage();
-    }, 250);
+    // Premier affichage ciblé : la facture modifiable apparaît immédiatement.
+    renderInvoiceFirst();
 
+    // Le reste du module est construit juste après, sans bloquer l'ouverture.
+    scheduleFullRenderAfterInvoiceOpen();
+
+    // L'impression automatique a volontairement été supprimée.
+    // L'utilisateur peut employer le bouton Imprimer une fois la facture ouverte.
     return true;
   } catch (error) {
+    isOpeningInvoiceFromAccounting = false;
     console.error(error);
-    alert("Impossible d’ouvrir l’aperçu d’impression de cette facture.");
+    alert("Impossible d’ouvrir cette facture.");
     return false;
   }
 }
@@ -5279,6 +5315,24 @@ function renderPages() {
   `;
 }
 
+function renderInvoiceFirst() {
+  syncCommunicationFromInvoice(false);
+  renderTabs();
+
+  const wrap = document.getElementById('pages');
+  if (!wrap) return;
+
+  wrap.innerHTML = `
+    ${renderInvoice()}
+    ${renderEmailDatalist()}
+  `;
+
+  requestAnimationFrame(() => {
+    wrap.querySelectorAll('textarea').forEach(autoResize);
+    hydrateBastDocumentPhotos().catch(console.warn);
+  });
+}
+
 function render() {
   syncCommunicationFromInvoice(false);
   renderTabs();
@@ -5723,8 +5777,11 @@ window.addEventListener('load', async () => {
 });
 
 window.addEventListener('focus', async () => {
-  try {
+  // Lorsqu'une facture est en cours d'ouverture depuis la comptabilité,
+  // ne lance pas en parallèle une synchronisation Drive et un second rendu complet.
+  if (isOpeningInvoiceFromAccounting) return;
 
+  try {
     if (googleAccessToken && window.gapi?.client) {
       await loadSyncDataFromDriveIfAvailable();
     } else {
@@ -5732,7 +5789,6 @@ window.addEventListener('focus', async () => {
     }
 
     render();
-
   } catch (err) {
     console.error('Erreur rafraîchissement CRM Devis & Facture :', err);
   }
