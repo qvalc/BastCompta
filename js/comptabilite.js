@@ -11,6 +11,7 @@ let purchasePdfDriveFiles = [];
 let selectedDriveFileId = '';
 let selectedDriveFileIds = [];
 let selectedPurchasePdfRowIndex = null;
+const purchasePdfPreviewCache = new Map();
 
 function notifyPortalBusinessChange(detail) {
   try {
@@ -31,6 +32,8 @@ function notifyParentToRefreshGoogleToken() {
 }
 
 function resetGoogleDriveSession() {
+  purchasePdfPreviewCache.forEach(url => URL.revokeObjectURL(url));
+  purchasePdfPreviewCache.clear();
   googleAccessToken = null;
   googleDriveFiles = [];
   invoiceDriveFiles = [];
@@ -926,21 +929,61 @@ async function openPurchasePdf(fileId) {
     return;
   }
 
+  const cachedUrl = purchasePdfPreviewCache.get(fileId);
+  if (cachedUrl) {
+    window.open(cachedUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  // Ouvrir la fenêtre pendant le clic utilisateur évite le blocage des pop-ups
+  // et donne immédiatement un retour visuel pendant le téléchargement Drive.
+  const previewWindow = window.open('', '_blank');
+  if (!previewWindow) {
+    alert('Le navigateur a bloqué la fenêtre. Autorise les fenêtres contextuelles pour BastCompta.');
+    return;
+  }
+
   try {
+    previewWindow.opener = null;
+    previewWindow.document.title = 'Chargement de la facture';
+    previewWindow.document.body.innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:Arial,sans-serif;background:#f5f7fa;color:#1f2937;">
+        <div style="text-align:center;max-width:460px;">
+          <h2 style="margin:0 0 12px;">Chargement de la facture…</h2>
+          <p style="margin:0;color:#6b7280;">Le PDF est récupéré depuis Google Drive.</p>
+        </div>
+      </div>`;
+
     const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${googleAccessToken}` }
     });
 
-    if (!res) return;
+    if (!res) {
+      previewWindow.close();
+      return;
+    }
     if (!res.ok) throw new Error(await res.text());
 
     const blob = await res.blob();
-    const url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const pdfBlob = blob.type === 'application/pdf'
+      ? blob
+      : new Blob([blob], { type: 'application/pdf' });
+    const url = URL.createObjectURL(pdfBlob);
+
+    purchasePdfPreviewCache.set(fileId, url);
+    previewWindow.location.replace(url);
   } catch (error) {
     console.error(error);
-    alert('Impossible d’ouvrir ce PDF.');
+    if (!previewWindow.closed) {
+      previewWindow.document.title = 'Erreur de chargement';
+      previewWindow.document.body.innerHTML = `
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:Arial,sans-serif;background:#f5f7fa;color:#1f2937;">
+          <div style="text-align:center;max-width:460px;">
+            <h2 style="margin:0 0 12px;">Impossible d’ouvrir ce PDF</h2>
+            <p style="margin:0;color:#6b7280;">Le document n’a pas pu être téléchargé depuis Google Drive.</p>
+          </div>
+        </div>`;
+    }
   }
 }
 
