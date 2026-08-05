@@ -8,6 +8,7 @@ let googleAccessToken = null;
 let googleDriveFiles = [];
 let invoiceDriveFiles = [];
 let purchasePdfDriveFiles = [];
+let purchasePdfPanelOpen = false;
 let selectedDriveFileId = '';
 let selectedDriveFileIds = [];
 let selectedPurchasePdfRowIndex = null;
@@ -1024,17 +1025,28 @@ async function deletePurchasePdf(fileId) {
   }
 }
 
-function renderPurchasePdfList() {
-  if (!googleAccessToken) {
-    return '<div class="muted-box">Connecte Google Drive pour afficher les factures PDF d’achat.</div>';
+function getPurchasePdfYear(file) {
+  const name = String(file?.name || '');
+  const match = name.match(/(?:^|[^0-9])((?:19|20)\d{2})(?:[^0-9]|$)/);
+  if (match) return match[1];
+
+  if (file?.modifiedTime) {
+    const modifiedDate = new Date(file.modifiedTime);
+    if (!Number.isNaN(modifiedDate.getTime())) {
+      return String(modifiedDate.getFullYear());
+    }
   }
 
-  if (!purchasePdfDriveFiles.length) {
-    return '<div class="muted-box">Aucune facture PDF d’achat trouvée sur Google Drive.</div>';
-  }
+  return 'Sans année';
+}
 
+function setPurchasePdfPanelOpen(isOpen) {
+  purchasePdfPanelOpen = !!isOpen;
+}
+
+function renderPurchasePdfTable(files) {
   return `
-    <div style="overflow:auto; margin-top:12px;">
+    <div style="overflow:auto; margin-top:10px;">
       <table class="table-purchases" style="table-layout:fixed; width:100%;">
         <colgroup>
           <col style="width: 45%;">
@@ -1049,9 +1061,9 @@ function renderPurchasePdfList() {
           </tr>
         </thead>
         <tbody>
-          ${purchasePdfDriveFiles.map(file => {
-    const modified = file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('fr-BE') : '—';
-    return `
+          ${files.map(file => {
+            const modified = file.modifiedTime ? new Date(file.modifiedTime).toLocaleString('fr-BE') : '—';
+            return `
               <tr>
                 <td>${escapeHtml(file.name || 'facture.pdf')}</td>
                 <td>${escapeHtml(modified)}</td>
@@ -1063,17 +1075,60 @@ function renderPurchasePdfList() {
                 </td>
               </tr>
             `;
-  }).join('')}
+          }).join('')}
         </tbody>
       </table>
     </div>
   `;
 }
 
+function renderPurchasePdfList() {
+  if (!googleAccessToken) {
+    return '<div class="muted-box">Connecte Google Drive pour afficher les factures PDF d’achat.</div>';
+  }
+
+  if (!purchasePdfDriveFiles.length) {
+    return '<div class="muted-box">Aucune facture PDF d’achat trouvée sur Google Drive.</div>';
+  }
+
+  const groups = purchasePdfDriveFiles.reduce((acc, file) => {
+    const year = getPurchasePdfYear(file);
+    if (!acc[year]) acc[year] = [];
+    acc[year].push(file);
+    return acc;
+  }, {});
+
+  const years = Object.keys(groups).sort((a, b) => {
+    if (a === 'Sans année') return 1;
+    if (b === 'Sans année') return -1;
+    return Number(b) - Number(a);
+  });
+
+  return years.map(year => {
+    const files = groups[year].slice().sort((a, b) => {
+      const aTime = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+      const bTime = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { numeric: true });
+    });
+
+    return `
+      <section style="margin-top:18px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid #dbe3ec;">
+          <h4 style="margin:0;font-size:1rem;">${escapeHtml(year)}</h4>
+          <span style="font-size:.86rem;color:#64748b;">${files.length} fichier${files.length > 1 ? 's' : ''}</span>
+        </div>
+        ${renderPurchasePdfTable(files)}
+      </section>
+    `;
+  }).join('');
+}
+
 window.pickPurchasePdf = pickPurchasePdf;
 window.handlePurchasePdfUpload = handlePurchasePdfUpload;
 window.openPurchasePdf = openPurchasePdf;
 window.deletePurchasePdf = deletePurchasePdf;
+window.setPurchasePdfPanelOpen = setPurchasePdfPanelOpen;
 
 window.addEventListener('message', async (event) => {
   if (event.origin !== window.location.origin) return;
@@ -3057,14 +3112,23 @@ function renderPurchases() {
       </div>
 
       <div class="card">
-        <div class="section-head">
-          <div>
-            <h3>Factures PDF d’achat sur Google Drive</h3>
-            <div class="hint">Liste des PDF ajoutés depuis les lignes d’achat. Tu peux les consulter ou les supprimer.</div>
+        <details ${purchasePdfPanelOpen ? 'open' : ''} ontoggle="setPurchasePdfPanelOpen(this.open)">
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:16px;cursor:pointer;list-style:none;user-select:none;">
+            <div>
+              <h3 style="margin:0;">Factures PDF d’achat sur Google Drive</h3>
+              <div class="hint" style="margin-top:4px;">${purchasePdfDriveFiles.length} fichier${purchasePdfDriveFiles.length > 1 ? 's' : ''} disponible${purchasePdfDriveFiles.length > 1 ? 's' : ''}, classé${purchasePdfDriveFiles.length > 1 ? 's' : ''} par année.</div>
+            </div>
+            <span aria-hidden="true" style="font-size:1.25rem;color:#64748b;">▾</span>
+          </summary>
+
+          <div style="padding-top:16px;margin-top:14px;border-top:1px solid #e2e8f0;">
+            <div class="section-head" style="margin-bottom:0;">
+              <div class="hint">Liste des PDF ajoutés depuis les lignes d’achat. Tu peux les consulter ou les supprimer.</div>
+              <button type="button" onclick="loadPurchasePdfDriveFiles(true).then(() => render())">Actualiser</button>
+            </div>
+            ${renderPurchasePdfList()}
           </div>
-          <button type="button" onclick="loadPurchasePdfDriveFiles(true).then(() => render())">Actualiser</button>
-        </div>
-        ${renderPurchasePdfList()}
+        </details>
       </div>
     </section>
   `;
