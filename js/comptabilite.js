@@ -2779,10 +2779,24 @@ function totals() {
 
   const netVat = salesVat - purchasesVat - carryover;
 
-  const totalVatPaid = data.vat.declarations
-    .reduce((sum, dec) => sum + (dec.paymentAmount || 0), 0);
+  // Le bilan doit reprendre la situation réellement ouverte du suivi TVA,
+  // et non recalculer une TVA annuelle en soustrayant simplement les paiements.
+  // Une période déjà payée ne constitue plus une dette. Un crédit reporté reste
+  // une créance TVA et n'est compté qu'une seule fois, via la dernière période.
+  const vatLedger = isVatExempt() ? null : computeVatLedger();
+  const lastVatRow = vatLedger?.rows?.length
+    ? vatLedger.rows[vatLedger.rows.length - 1]
+    : null;
+  const openVatCredit = isVatExempt()
+    ? 0
+    : round2(lastVatRow ? lastVatRow.computed.creditAmount : carryover);
+  const openVatDue = isVatExempt()
+    ? 0
+    : round2(vatLedger?.totalDueOpen || 0);
 
-  const realVat = netVat - totalVatPaid;
+  // Conservé comme solde net pour les usages internes/compatibilité, mais
+  // l'actif et le passif utilisent séparément la créance et la dette ouvertes.
+  const realVat = round2(openVatDue - openVatCredit);
 
   const netFixedAssets = assetsGross - totalAmortized;
 
@@ -2790,8 +2804,8 @@ function totals() {
     toNumber(data.settings.bankBalance) +
     toNumber(data.settings.cashBalance);
 
-  const receivableVat = realVat < 0 ? Math.abs(realVat) : 0;
-  const payableVat = realVat > 0 ? realVat : 0;
+  const receivableVat = openVatCredit;
+  const payableVat = openVatDue;
   const resultRetained = estimatedProfit;
 
   const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
@@ -4231,7 +4245,7 @@ function render() {
       metricVat.previousElementSibling.textContent = 'TVA à payer';
       metricVat.textContent = money(t.payableVat);
     } else if (t.receivableVat > 0) {
-      metricVat.previousElementSibling.textContent = 'TVA à retoucher';
+      metricVat.previousElementSibling.textContent = 'TVA à recevoir';
       metricVat.textContent = money(t.receivableVat);
     } else {
       metricVat.previousElementSibling.textContent = 'TVA';
