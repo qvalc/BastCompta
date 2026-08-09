@@ -2853,6 +2853,9 @@ function totals() {
 }
 
 function setField(path, value) {
+  // Les paramètres sont de vraies données métier : signaler la modification
+  // au portail afin que la disquette propose bien une synchronisation Drive.
+  notifyPortalBusinessChange('Paramètre comptable modifié');
   const keys = path.split('.');
   let ref = data;
   for (let i = 0; i < keys.length - 1; i++) ref = ref[keys[i]];
