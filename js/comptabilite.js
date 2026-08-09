@@ -22,11 +22,6 @@ function notifyPortalBusinessChange(detail) {
   }
 }
 
-function saveBusinessData(detail = 'Donnée comptable modifiée') {
-  notifyPortalBusinessChange(detail);
-  return saveData(false);
-}
-
 function notifyParentToRefreshGoogleToken() {
   try {
     window.parent.postMessage({
@@ -194,6 +189,7 @@ const defaultData = {
   stock: [],
   losses: [],
   km: [],
+  privateMovements: [],
   vat: {
     declarations: []
   },
@@ -204,6 +200,7 @@ const defaultData = {
     cashBalance: 0,
     capitalStart: 0,
     retainedEarnings: 0,
+    ownerAccountCarryover: 0,
     socialExemptionThreshold: 1881.76,
     socialContributionRate: 20.5,
     socialContributionFeeRate: 3.5
@@ -283,6 +280,7 @@ function hasExistingAccountingEntries() {
     data.stock,
     data.losses,
     data.km,
+    data.privateMovements,
     data.vat?.declarations
   ].some(rows => Array.isArray(rows) && rows.length > 0);
 }
@@ -308,7 +306,6 @@ function setVatRegime(value) {
     return;
   }
 
-  notifyPortalBusinessChange('Régime TVA modifié');
   data.settings.vatRegime = requestedRegime;
   applyVatRegimeRules();
 
@@ -322,7 +319,7 @@ function setVatRegime(value) {
 function renderLossTypeSelect(row, index) {
   const currentType = getLossType(row);
   return `
-            <select onchange="data.losses[${index}].type=this.value; saveBusinessData('Taxe ou cotisation modifiée')">
+            <select onchange="data.losses[${index}].type=this.value; saveData(false)">
               ${LOSS_TYPE_OPTIONS.map(option => `
                 <option value="${escapeAttr(option.value)}" ${currentType === option.value ? 'selected' : ''}>${escapeHtml(option.label)}</option>
               `).join('')}
@@ -339,6 +336,7 @@ const pageDefs = [
   { key: 'losses', label: 'Taxes & cotisations' },
   { key: 'stock', label: 'Stock' },
   { key: 'km', label: 'Kilomètres' },
+  { key: 'private', label: "Prélèvements de l'exploitant" },
   { key: 'result', label: 'Compte de résultat' },
   { key: 'balance', label: 'Bilan simplifié' },
   { key: 'vat', label: 'TVA' },
@@ -1272,6 +1270,8 @@ function buildNextExerciseData(targetYear) {
   nextData.sales = [];
   nextData.losses = [];
   nextData.km = [];
+  nextData.privateMovements = [];
+  nextData.settings.ownerAccountCarryover = round2(toNumber(t.ownerAccountBalance));
   nextData.vat = { declarations: [] };
 
   return nextData;
@@ -2381,7 +2381,6 @@ function sortVatDeclarations() {
 }
 
 function syncVatDeclarationPeriod(index) {
-  notifyPortalBusinessChange('Période TVA modifiée');
   const row = data.vat.declarations[index];
   if (!row) return;
   const bounds = getQuarterBounds(row.year, row.quarter);
@@ -2413,7 +2412,6 @@ function toggleVatExtraCodes(id) {
 }
 
 function setVatClosed(index, checked) {
-  notifyPortalBusinessChange('Statut de clôture TVA modifié');
   const dec = data.vat.declarations[index];
   if (!dec) return;
   dec.closed = !!checked;
@@ -2754,6 +2752,16 @@ function totals() {
   }, 0);
   const kmTotal = data.km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
 
+  // Compte exploitant : les mouvements privés n'affectent jamais le compte de résultat.
+  // Un apport/remboursement augmente les capitaux propres ; un prélèvement privé les diminue.
+  const ownerAccountCarryover = toNumber(data.settings.ownerAccountCarryover);
+  const privateMovementsNet = data.privateMovements.reduce((sum, row) => {
+    const amount = Math.abs(toNumber(row.amount));
+    const type = row.type || 'withdrawal';
+    return sum + (type === 'withdrawal' ? -amount : amount);
+  }, 0);
+  const ownerAccountBalance = round2(ownerAccountCarryover + privateMovementsNet);
+
   const carryover = toNumber(data.settings.vatCarryover);
 
   // Les cotisations sociales ne sont pas reprises dans les charges du compte de résultat.
@@ -2820,6 +2828,7 @@ function totals() {
   const liabilitiesSide =
     toNumber(data.settings.capitalStart) +
     toNumber(data.settings.retainedEarnings) +
+    ownerAccountBalance +
     resultRetained +
     payableVat;
 
@@ -2842,6 +2851,9 @@ function totals() {
     financialChargesTotal,
     exceptionalChargesTotal,
     kmTotal,
+    ownerAccountCarryover,
+    privateMovementsNet,
+    ownerAccountBalance,
     totalCharges,
     estimatedProfit,
     deductibleSocialContributions,
@@ -2928,6 +2940,7 @@ function renderPages() {
         ${renderStock()}
         ${renderLosses()}
         ${renderKm()}
+        ${renderPrivateMovements()}
         ${renderResult()}
         ${renderBalance()}
         ${renderGoogleDrive()}
@@ -2954,7 +2967,8 @@ function renderDashboard() {
                 <strong>Lignes ventes :</strong> ${data.sales.length}<br>
                 <strong>Investissements :</strong> ${t.investmentComputed.length}<br>
                 <strong>Immobilisations manuelles :</strong> ${data.assets.length}<br>
-                <strong>Km encodés :</strong> ${num(t.kmTotal, 0)} km
+                <strong>Km encodés :</strong> ${num(t.kmTotal, 0)} km<br>
+                <strong>Prélèvements de l'exploitant :</strong> ${money(t.ownerAccountBalance)}
               </div>
               <div class="muted-box">
                 <strong>TVA ventes :</strong> ${money(t.salesVat)}<br>
@@ -3187,17 +3201,17 @@ function renderInvestments() {
     rows: t.investmentComputed.map((row, i) => `
       <tr>
   <tr>
-  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.investments[${i}].date=this.value; saveBusinessData('Investissement modifié')"></td>
+  <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.investments[${i}].date=this.value; saveData(false)"></td>
 
-  <td><input value="${escapeAttr(data.investments[i].supplier || '')}" onchange="data.investments[${i}].supplier=this.value; saveBusinessData('Investissement modifié')"></td>
+  <td><input value="${escapeAttr(data.investments[i].supplier || '')}" onchange="data.investments[${i}].supplier=this.value; saveData(false)"></td>
 
-  <td><input value="${escapeAttr(data.investments[i].invoiceNumber || '')}" onchange="data.investments[${i}].invoiceNumber=this.value; saveBusinessData('Investissement modifié')"></td>
+  <td><input value="${escapeAttr(data.investments[i].invoiceNumber || '')}" onchange="data.investments[${i}].invoiceNumber=this.value; saveData(false)"></td>
 
-  <td><input value="${escapeAttr(data.investments[i].description || '')}" onchange="data.investments[${i}].description=this.value; saveBusinessData('Investissement modifié')"></td>
+  <td><input value="${escapeAttr(data.investments[i].description || '')}" onchange="data.investments[${i}].description=this.value; saveData(false)"></td>
 
-  <td><input type="number" step="0.01" value="${num(row.amount)}" onchange="data.investments[${i}].amount=parseFloat(this.value)||0; saveBusinessData('Investissement modifié')"></td>
+  <td><input type="number" step="0.01" value="${num(row.amount)}" onchange="data.investments[${i}].amount=parseFloat(this.value)||0; saveData(false)"></td>
 
-  <td><input type="number" min="1" step="1" value="${parseInt(row.durationMonths || 60, 10)}" onchange="data.investments[${i}].durationMonths=parseInt(this.value,10)||1; saveBusinessData('Investissement modifié')"></td>
+  <td><input type="number" min="1" step="1" value="${parseInt(row.durationMonths || 60, 10)}" onchange="data.investments[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"></td>
 
   <td>${money(row.amortYear)}</td>
   <td>${money(row.amortTotal)}</td>
@@ -3233,21 +3247,21 @@ function renderAssets() {
         <input
           type="date"
           value="${escapeAttr(row.date)}"
-          onchange="data.assets[${i}].date=this.value; saveBusinessData('Immobilisation modifiée')"
+          onchange="data.assets[${i}].date=this.value; saveData(false)"
         >
       </td>
 
       <td>
         <input
           value="${escapeAttr(row.label)}"
-          onchange="data.assets[${i}].label=this.value; saveBusinessData('Immobilisation modifiée')"
+          onchange="data.assets[${i}].label=this.value; saveData(false)"
         >
       </td>
 
       <td>
         <input
           value="${escapeAttr(row.supplier)}"
-          onchange="data.assets[${i}].supplier=this.value; saveBusinessData('Immobilisation modifiée')"
+          onchange="data.assets[${i}].supplier=this.value; saveData(false)"
         >
       </td>
 
@@ -3256,7 +3270,7 @@ function renderAssets() {
           type="number"
           step="0.01"
           value="${num(row.amount)}"
-          onchange="data.assets[${i}].amount=parseFloat(this.value)||0; saveBusinessData('Immobilisation modifiée')"
+          onchange="data.assets[${i}].amount=parseFloat(this.value)||0; saveData(false)"
         >
       </td>
 
@@ -3266,7 +3280,7 @@ function renderAssets() {
           min="1"
           step="1"
           value="${parseInt(row.durationMonths || 60, 10)}"
-          onchange="data.assets[${i}].durationMonths=parseInt(this.value,10)||1; saveBusinessData('Immobilisation modifiée')"
+          onchange="data.assets[${i}].durationMonths=parseInt(this.value,10)||1; saveData(false)"
         >
       </td>
 
@@ -3305,9 +3319,9 @@ function renderStock() {
     headers: ['Libellé', 'Quantité', 'Prix unitaire', 'Valeur', ''],
     rows: data.stock.map((row, i) => `
           <tr>
-            <td><input value="${escapeAttr(row.label)}" onchange="data.stock[${i}].label=this.value; saveBusinessData('Stock modifié')"></td>
-            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.stock[${i}].quantity=parseFloat(this.value)||0; saveBusinessData('Stock modifié')"></td>
-            <td><input type="number" step="0.01" value="${num(row.unitPrice, 4)}" onchange="data.stock[${i}].unitPrice=parseFloat(this.value)||0; saveBusinessData('Stock modifié')"></td>
+            <td><input value="${escapeAttr(row.label)}" onchange="data.stock[${i}].label=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.stock[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.unitPrice, 4)}" onchange="data.stock[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
             <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('stock', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
@@ -3327,11 +3341,11 @@ function renderLosses() {
     headers: ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
     rows: data.losses.map((row, i) => `
           <tr>
-            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.losses[${i}].date=this.value; saveBusinessData('Taxe ou cotisation modifiée')"></td>
+            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.losses[${i}].date=this.value; saveData(false)"></td>
             <td>${renderLossTypeSelect(row, i)}</td>
-            <td><input value="${escapeAttr(row.label)}" onchange="data.losses[${i}].label=this.value; saveBusinessData('Taxe ou cotisation modifiée')"></td>
-            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.losses[${i}].quantity=parseFloat(this.value)||0; saveBusinessData('Taxe ou cotisation modifiée')"></td>
-            <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.losses[${i}].unitPrice=parseFloat(this.value)||0; saveBusinessData('Taxe ou cotisation modifiée')"></td>
+            <td><input value="${escapeAttr(row.label)}" onchange="data.losses[${i}].label=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.quantity)}" onchange="data.losses[${i}].quantity=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="data.losses[${i}].unitPrice=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${money(toNumber(row.quantity) * toNumber(row.unitPrice))}</td>
             <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('losses', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
@@ -3356,16 +3370,72 @@ function renderKm() {
     headers: ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux', ''],
     rows: data.km.map((row, i) => `
           <tr>
-            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.km[${i}].date=this.value; saveBusinessData('Kilométrage modifié')"></td>
-            <td><input value="${escapeAttr(row.person)}" onchange="data.km[${i}].person=this.value; saveBusinessData('Kilométrage modifié')"></td>
-            <td><input value="${escapeAttr(row.route)}" onchange="data.km[${i}].route=this.value; saveBusinessData('Kilométrage modifié')"></td>
-            <td><input type="number" step="0.01" value="${num(row.km)}" onchange="data.km[${i}].km=parseFloat(this.value)||0; saveBusinessData('Kilométrage modifié')"></td>
-            <td><input type="number" step="0.01" value="${num(row.trips)}" onchange="data.km[${i}].trips=parseFloat(this.value)||0; saveBusinessData('Kilométrage modifié')"></td>
+            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.km[${i}].date=this.value; saveData(false)"></td>
+            <td><input value="${escapeAttr(row.person)}" onchange="data.km[${i}].person=this.value; saveData(false)"></td>
+            <td><input value="${escapeAttr(row.route)}" onchange="data.km[${i}].route=this.value; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.km)}" onchange="data.km[${i}].km=parseFloat(this.value)||0; saveData(false)"></td>
+            <td><input type="number" step="0.01" value="${num(row.trips)}" onchange="data.km[${i}].trips=parseFloat(this.value)||0; saveData(false)"></td>
             <td>${num(toNumber(row.km) * toNumber(row.trips), 2)} km</td>
             <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('km', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
           </tr>
         `).join(''),
     footer: `<div class="kv"><span>Total kilomètres</span><span>${num(t.kmTotal, 2)} km</span></div>`
+  });
+}
+
+
+function getPrivateMovementTypeLabel(type) {
+  const labels = {
+    withdrawal: 'Prélèvement privé',
+    contribution: 'Apport privé',
+    reimbursement: 'Remboursement privé'
+  };
+  return labels[type] || labels.withdrawal;
+}
+
+function renderPrivateMovementTypeSelect(row, index) {
+  const current = row?.type || 'withdrawal';
+  return `
+    <select onchange="data.privateMovements[${index}].type=this.value; saveData(false)">
+      <option value="withdrawal" ${current === 'withdrawal' ? 'selected' : ''}>Prélèvement privé</option>
+      <option value="contribution" ${current === 'contribution' ? 'selected' : ''}>Apport privé</option>
+      <option value="reimbursement" ${current === 'reimbursement' ? 'selected' : ''}>Remboursement privé</option>
+    </select>
+  `;
+}
+
+function renderPrivateMovements() {
+  const t = totals();
+  const withdrawals = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') === 'withdrawal' ? Math.abs(toNumber(row.amount)) : 0), 0);
+  const additions = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') !== 'withdrawal' ? Math.abs(toNumber(row.amount)) : 0), 0);
+
+  return renderTablePage({
+    key: 'private',
+    title: "Prélèvements de l'exploitant",
+    hint: "Enregistre ici les prélèvements effectués par l'exploitant à titre privé ainsi que leurs éventuels remboursements ou apports. Ces mouvements n'affectent pas le compte de résultat et sont repris séparément au passif du bilan.",
+    addLabel: 'Ajouter un mouvement',
+    onAdd: `addRow('privateMovements', { date: '', type: 'withdrawal', label: '', amount: 0 })`,
+    headers: ['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif', ''],
+    rows: data.privateMovements.map((row, i) => {
+      const amount = Math.abs(toNumber(row.amount));
+      const effect = (row.type || 'withdrawal') === 'withdrawal' ? -amount : amount;
+      return `
+        <tr>
+          <td><input type="date" value="${escapeAttr(row.date || '')}" onchange="data.privateMovements[${i}].date=this.value; saveData(false)"></td>
+          <td>${renderPrivateMovementTypeSelect(row, i)}</td>
+          <td><input value="${escapeAttr(row.label || '')}" placeholder="Ex. retrait personnel, remboursement d'une erreur..." onchange="data.privateMovements[${i}].label=this.value; saveData(false)"></td>
+          <td><input type="number" min="0" step="0.01" value="${num(amount)}" onchange="data.privateMovements[${i}].amount=Math.abs(parseFloat(this.value)||0); saveData(false)"></td>
+          <td class="${effect < 0 ? 'status-bad' : 'status-good'}">${money(effect)}</td>
+          <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('privateMovements', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
+        </tr>
+      `;
+    }).join(''),
+    footer: `
+      <div class="kv"><span>Prélèvements privés de l'exercice</span><span>${money(withdrawals)}</span></div>
+      <div class="kv"><span>Apports / remboursements privés de l'exercice</span><span>${money(additions)}</span></div>
+      <div class="kv"><span>Solde compte exploitant reporté</span><span>${money(t.ownerAccountCarryover)}</span></div>
+      <div class="kv"><span><strong>Prélèvements de l'exploitant au passif</strong></span><span><strong>${money(t.ownerAccountBalance)}</strong></span></div>
+    `
   });
 }
 
@@ -3487,6 +3557,7 @@ function renderBalance() {
             <div class="section-head"><h3>Passif simplifié</h3></div>
             <div class="kv"><span>Capital de départ</span><span>${money(data.settings.capitalStart)}</span></div>
             <div class="kv"><span>Résultat reporté</span><span>${money(data.settings.retainedEarnings)}</span></div>
+            <div class="kv"><span>Prélèvements de l'exploitant</span><span>${money(t.ownerAccountBalance)}</span></div>
             <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.estimatedProfit)}</span></div>
             <div class="kv"><span>TVA à payer</span><span>${money(t.payableVat)}</span></div>
             <div class="kv"><span><strong>Total passif</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
@@ -3634,13 +3705,13 @@ function renderVat() {
                                 <option value="3" ${parseInt(dec.quarter, 10) === 3 ? 'selected' : ''}>T3 (juillet à septembre)</option>
                                 <option value="4" ${parseInt(dec.quarter, 10) === 4 ? 'selected' : ''}>T4 (octobre à décembre)</option>
                               </select></td></tr>
-                              <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].dueDate=this.value; saveBusinessData('Déclaration TVA modifiée')"></td></tr>
-                              <tr><td>Déclaration déposée</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveBusinessData('Déclaration TVA modifiée')"><option value="false" ${!dec.filed ? 'selected' : ''}>Non</option><option value="true" ${dec.filed ? 'selected' : ''}>Oui</option></select></td></tr>
-                              <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].filedDate=this.value; saveBusinessData('Déclaration TVA modifiée')"></td></tr>
-                              <tr><td>Paiement effectué</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveBusinessData('Déclaration TVA modifiée')"><option value="false" ${!dec.paid ? 'selected' : ''}>Non</option><option value="true" ${dec.paid ? 'selected' : ''}>Oui</option></select></td></tr>
-                              <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].paidDate=this.value; saveBusinessData('Déclaration TVA modifiée')"></td></tr>
-                              <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" ${disableAttr} onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveBusinessData('Déclaration TVA modifiée')"></td></tr>
-                              <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveBusinessData('Déclaration TVA modifiée')"><option value="false" ${!dec.reimbursementRequested ? 'selected' : ''}>Non</option><option value="true" ${dec.reimbursementRequested ? 'selected' : ''}>Oui</option></select></td></tr>
+                              <tr><td>Date limite</td><td><input type="date" value="${escapeAttr(dec.dueDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].dueDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Déclaration déposée</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].filed=this.value==='true'; saveData(false)"><option value="false" ${!dec.filed ? 'selected' : ''}>Non</option><option value="true" ${dec.filed ? 'selected' : ''}>Oui</option></select></td></tr>
+                              <tr><td>Date dépôt</td><td><input type="date" value="${escapeAttr(dec.filedDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].filedDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Paiement effectué</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].paid=this.value==='true'; saveData(false)"><option value="false" ${!dec.paid ? 'selected' : ''}>Non</option><option value="true" ${dec.paid ? 'selected' : ''}>Oui</option></select></td></tr>
+                              <tr><td>Date paiement</td><td><input type="date" value="${escapeAttr(dec.paidDate || '')}" ${disableAttr} onchange="data.vat.declarations[${i}].paidDate=this.value; saveData(false)"></td></tr>
+                              <tr><td>Montant payé</td><td><input type="number" step="0.01" value="${num(dec.paymentAmount)}" ${disableAttr} onchange="data.vat.declarations[${i}].paymentAmount=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                              <tr><td>Demande de remboursement</td><td><select ${disableAttr} onchange="data.vat.declarations[${i}].reimbursementRequested=this.value==='true'; saveData(false)"><option value="false" ${!dec.reimbursementRequested ? 'selected' : ''}>Non</option><option value="true" ${dec.reimbursementRequested ? 'selected' : ''}>Oui</option></select></td></tr>
                               <tr><td>Clôturé</td><td><label style="display:flex; align-items:center; gap:10px;"><input type="checkbox" style="width:auto;" ${dec.closed ? 'checked' : ''} onchange="setVatClosed(${i}, this.checked)"><span>${dec.closed ? 'Oui — période verrouillée, décoche pour modifier à nouveau' : 'Coche pour verrouiller la période'}</span></label></td></tr>
                             </tbody>
                           </table>
@@ -3700,21 +3771,21 @@ function renderVat() {
                                 </tr>
                               </thead>
                               <tbody>
-                                <tr><td>44</td><td>Prestations/services particuliers</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['44'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['44']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>46</td><td>Livraisons intracom / opérations assimilées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['46'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['46']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>47</td><td>Autres opérations exemptées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['47'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['47']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>48</td><td>Notes de crédit sur opérations antérieures</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['48'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['48']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>49</td><td>Autres opérations sans TVA belge</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['49'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['49']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>55</td><td>TVA due acquisitions intracom / autoliquidation</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['55'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['55']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>56</td><td>TVA due opérations cocontractant</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['56'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['56']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>57</td><td>TVA importations / autres régularisations dues</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['57'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['57']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>61</td><td>Régularisations TVA en faveur de l’État</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['61'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['61']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>62</td><td>Régularisations TVA en votre faveur</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['62'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['62']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>63</td><td>Crédit antérieur / autres TVA déductibles</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['63'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['63']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
+                                <tr><td>44</td><td>Prestations/services particuliers</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['44'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['44']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>46</td><td>Livraisons intracom / opérations assimilées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['46'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['46']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>47</td><td>Autres opérations exemptées</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['47'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['47']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>48</td><td>Notes de crédit sur opérations antérieures</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['48'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['48']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>49</td><td>Autres opérations sans TVA belge</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['49'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['49']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>55</td><td>TVA due acquisitions intracom / autoliquidation</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['55'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['55']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>56</td><td>TVA due opérations cocontractant</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['56'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['56']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>57</td><td>TVA importations / autres régularisations dues</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['57'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['57']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>61</td><td>Régularisations TVA en faveur de l’État</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['61'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['61']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>62</td><td>Régularisations TVA en votre faveur</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['62'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['62']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>63</td><td>Crédit antérieur / autres TVA déductibles</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['63'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['63']=parseFloat(this.value)||0; saveData(false)"></td></tr>
                                 <tr><td>81</td><td>Achats marchandises / matières</td><td>${money(c.boxes['81'])}</td></tr>
                                 <tr><td>82</td><td>Services, biens divers et autres</td><td>${money(c.boxes['82'])}</td></tr>
-                                <tr><td>83</td><td>Biens d’investissement</td><td><input type="number" step="0.01" value="${num(c.boxes['83'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['83']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
-                                <tr><td>91</td><td>Acompte de décembre (si applicable)</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['91'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['91']=parseFloat(this.value)||0; saveBusinessData('Grille TVA modifiée')"></td></tr>
+                                <tr><td>83</td><td>Biens d’investissement</td><td><input type="number" step="0.01" value="${num(c.boxes['83'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['83']=parseFloat(this.value)||0; saveData(false)"></td></tr>
+                                <tr><td>91</td><td>Acompte de décembre (si applicable)</td><td><input type="number" step="0.01" value="${num(dec.manualBoxes['91'])}" ${disableAttr} onchange="data.vat.declarations[${i}].manualBoxes['91']=parseFloat(this.value)||0; saveData(false)"></td></tr>
                               </tbody>
                             </table>
                           </div>
@@ -3723,7 +3794,7 @@ function renderVat() {
 
                       <div style="margin-top:16px;">
                         <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
-                        <textarea ${disableAttr} onchange="data.vat.declarations[${i}].notes=this.value; saveBusinessData('Déclaration TVA modifiée')">${escapeHtml(dec.notes || '')}</textarea>
+                        <textarea ${disableAttr} onchange="data.vat.declarations[${i}].notes=this.value; saveData(false)">${escapeHtml(dec.notes || '')}</textarea>
                       </div>
 
                       <div class="inline-actions" style="margin-top:16px;">
@@ -3772,6 +3843,7 @@ function renderSettings() {
                 <tr><td>Caisse</td><td><input type="number" step="0.01" value="${num(data.settings.cashBalance)}" onchange="setField('settings.cashBalance', parseFloat(this.value)||0)"></td></tr>
                 <tr><td>Capital de départ</td><td><input type="number" step="0.01" value="${num(data.settings.capitalStart)}" onchange="setField('settings.capitalStart', parseFloat(this.value)||0)"></td></tr>
                 <tr><td>Résultat reporté</td><td><input type="number" step="0.01" value="${num(data.settings.retainedEarnings)}" onchange="setField('settings.retainedEarnings', parseFloat(this.value)||0)"></td></tr>
+                <tr><td>Prélèvements de l'exploitant reportés</td><td><input type="number" step="0.01" value="${num(data.settings.ownerAccountCarryover)}" onchange="setField('settings.ownerAccountCarryover', parseFloat(this.value)||0)"><div class="hint" style="margin-top:6px;">Solde repris d'un exercice précédent. Les mouvements de l'année se saisissent dans l'onglet Prélèvements de l'exploitant.</div></td></tr>
               </tbody>
             </table>
           </div>
@@ -3952,6 +4024,18 @@ function buildPrintReportHtml() {
     money(toNumber(row.quantity) * toNumber(row.unitPrice))
   ]);
 
+  const privateMovementRows = data.privateMovements.map(row => {
+    const amount = Math.abs(toNumber(row.amount));
+    const effect = (row.type || 'withdrawal') === 'withdrawal' ? -amount : amount;
+    return [
+      escapeHtml(row.date || '—'),
+      escapeHtml(getPrivateMovementTypeLabel(row.type)),
+      escapeHtml(row.label || '—'),
+      money(amount),
+      money(effect)
+    ];
+  });
+
   const kmRows = data.km.map(row => [
     printableDate(row.date),
     escapeHtml(row.person || '—'),
@@ -4079,6 +4163,7 @@ function buildPrintReportHtml() {
     ['Investissements', String(t.investmentComputed.length)],
     ['Immobilisations', String(data.assets.length)],
     ['Km encodés', `${num(t.kmTotal, 0)} km`],
+    ["Prélèvements de l'exploitant", money(t.ownerAccountBalance)],
     ['Stock estimé', money(t.stockValue)]
   ])}</div></div>
         <div class="panel soft"><div class="panel-body">${reportKv([
@@ -4138,6 +4223,16 @@ function buildPrintReportHtml() {
     </section>
 
     <section class="section">
+      <h2 class="section-title">Prélèvements de l'exploitant</h2>
+      ${reportTable(['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif'], privateMovementRows)}
+      <div style="margin-top:12px;">${reportKv([
+        ['Solde compte exploitant reporté', money(t.ownerAccountCarryover)],
+        ["Mouvements de l'exploitant nets de l’exercice", money(t.privateMovementsNet)],
+        ["Prélèvements de l'exploitant au passif", money(t.ownerAccountBalance)]
+      ])}</div>
+    </section>
+
+    <section class="section">
       <h2 class="section-title">Compte de résultat</h2>
       <div class="totals-grid">
         <div class="result-card">
@@ -4173,6 +4268,7 @@ function buildPrintReportHtml() {
         <div class="panel"><div class="panel-body">${reportKv([
     ['Capital de départ', money(data.settings.capitalStart)],
     ['Résultat reporté', money(data.settings.retainedEarnings)],
+    ["Prélèvements de l'exploitant", money(t.ownerAccountBalance)],
     ['Résultat de l’exercice', money(t.estimatedProfit)],
     ['TVA à payer', money(t.payableVat)],
     ['Total passif', money(t.liabilitiesSide)]
@@ -4203,7 +4299,8 @@ function buildPrintReportHtml() {
     ['Banque', money(data.settings.bankBalance)],
     ['Caisse', money(data.settings.cashBalance)],
     ['Capital de départ', money(data.settings.capitalStart)],
-    ['Résultat reporté', money(data.settings.retainedEarnings)]
+    ['Résultat reporté', money(data.settings.retainedEarnings)],
+    ["Prélèvements de l'exploitant reportés", money(data.settings.ownerAccountCarryover)]
   ])}</div></div>
         <div class="panel"><div class="panel-body">${reportKv([
     ['Seuil exonération cotisations sociales', money(data.settings.socialExemptionThreshold)],
