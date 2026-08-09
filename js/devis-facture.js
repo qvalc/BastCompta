@@ -17,6 +17,11 @@ function notifyPortalBusinessChange(detail, beforeSnapshot = null) {
   }
 }
 
+function saveBusinessData(detail = 'Donnée Devis & Facture modifiée') {
+  notifyPortalBusinessChange(detail);
+  return saveData(false);
+}
+
 function notifyParentToRefreshGoogleToken() {
   try {
     window.parent.postMessage({
@@ -1340,6 +1345,7 @@ async function createCreditNoteFromInvoice() {
   }
   if (!confirm(`Créer une note de crédit liée à la facture ${original} ?\n\nUn numéro NC sera attribué automatiquement et les lignes seront reprises en négatif pour corriger la vente et la TVA.`)) return;
 
+  notifyPortalBusinessChange('Note de crédit créée');
   await refreshDocumentNumberSources();
   const creditNumber = makeCreditNoteNumber(original);
 
@@ -2687,6 +2693,7 @@ function renderChantierOptionsForDocument(doc) {
 }
 
 function setDocumentChantier(docKey, projectId) {
+  notifyPortalBusinessChange(`${docKey === 'quote' ? 'Devis' : docKey === 'invoice' ? 'Facture' : 'Document'} : chantier modifié`);
   const doc = data[docKey];
   if (!doc) return;
   const chantiersData = loadChantiersLocalData();
@@ -3020,6 +3027,7 @@ function renderEmailDatalist() {
 }
 
 function setClientEmail(docKey, value) {
+  notifyPortalBusinessChange(`${docKey === 'quote' ? 'Devis' : docKey === 'invoice' ? 'Facture' : 'Document'} : email client modifié`);
   data[docKey].clientEmail = value;
   rememberClientEmail(value);
   saveData(false);
@@ -3488,6 +3496,7 @@ function addPeppolHistory(label) {
 }
 
 function setInvoicePeppolStatus(status) {
+  notifyPortalBusinessChange('Statut Peppol modifié');
   data.invoice.peppolStatus = status;
   const labels = {
     ready: 'Facture marquée prête à envoyer',
@@ -4119,7 +4128,7 @@ function renderDocumentPage(docKey) {
     <div class="invoice-status-display invoice-status-${escapeAttr(invoiceStatus)}">
       ${escapeHtml(getInvoiceStatusLabel(invoiceStatus))}
     </div>
-    ${invoiceStatus === 'credit_note' ? `<input placeholder="Facture d’origine" value="${escapeAttr(doc.linkedInvoiceNumber || '')}" onchange="data.invoice.linkedInvoiceNumber=this.value; saveData(false)">` : ''}
+    ${invoiceStatus === 'credit_note' ? `<input placeholder="Facture d’origine" value="${escapeAttr(doc.linkedInvoiceNumber || '')}" onchange="data.invoice.linkedInvoiceNumber=this.value; saveBusinessData('Facture modifiée')">` : ''}
       </div>
     ` : ''}
 
@@ -4131,7 +4140,7 @@ function renderDocumentPage(docKey) {
         </select>
         <input placeholder="Nom / société" value="${escapeAttr(doc.clientName)}" onchange="setDocumentField('${docKey}', 'clientName', this.value)">
         <input type="email" list="client-email-suggestions" placeholder="Email client" value="${escapeAttr(doc.clientEmail || '')}" onchange="setClientEmail('${docKey}', this.value)">
-        <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveData(false)">${escapeHtml(doc.address || '')}</textarea>
+        <textarea placeholder="Adresse client" oninput="autoResize(this); data.${docKey}.address=this.value" onchange="saveBusinessData('${docKey === 'quote' ? 'Devis' : docKey === 'invoice' ? 'Facture' : 'Rappel'} modifié')">${escapeHtml(doc.address || '')}</textarea>
       </div>
     </div>
 
@@ -4164,7 +4173,7 @@ function renderDocumentPage(docKey) {
   <div>
     <div class="notes-block">
       <div class="box-title">${notesLabel}</div>
-      <textarea oninput="autoResize(this); data.${docKey}.notes=this.value" onchange="saveData(false)">${escapeHtml(doc.notes || '')}</textarea>
+      <textarea oninput="autoResize(this); data.${docKey}.notes=this.value" onchange="saveBusinessData('${docKey === 'quote' ? 'Devis' : docKey === 'invoice' ? 'Facture' : 'Rappel'} modifié')">${escapeHtml(doc.notes || '')}</textarea>
 ${!isQuote ? `<div style="margin-top:6px; white-space:pre-line; font-size:12px; line-height:1.35;">${escapeHtml(`Paiement : ${money(balance)}
 Compte : ${data.company.iban || 'IBAN'}
 Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
@@ -4257,7 +4266,7 @@ function handleLogoUpload(event) {
   const reader = new FileReader();
   reader.onload = () => {
     data.company.logo = reader.result;
-    saveData(false);
+    saveBusinessData('Logo modifié');
   };
   reader.readAsDataURL(file);
 }
@@ -4352,7 +4361,7 @@ function renderSettings() {
 
                 <div class="field">
                   <label>Message email devis</label>
-                  <textarea oninput="autoResize(this); data.mail.quoteBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.quoteBody || '')}</textarea>
+                  <textarea oninput="autoResize(this); data.mail.quoteBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.quoteBody || '')}</textarea>
                 </div>
 
                 <div class="field">
@@ -4362,7 +4371,7 @@ function renderSettings() {
 
                 <div class="field">
                   <label>Message email facture</label>
-                  <textarea oninput="autoResize(this); data.mail.invoiceBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.invoiceBody || '')}</textarea>
+                  <textarea oninput="autoResize(this); data.mail.invoiceBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.invoiceBody || '')}</textarea>
                 </div>
 
                 <div class="field">
@@ -4372,12 +4381,12 @@ function renderSettings() {
 
                 <div class="field">
                   <label>Message email rappel</label>
-                  <textarea oninput="autoResize(this); data.mail.reminderBody=this.value" onchange="saveData(false)">${escapeHtml(data.mail.reminderBody || '')}</textarea>
+                  <textarea oninput="autoResize(this); data.mail.reminderBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.reminderBody || '')}</textarea>
                 </div>
 
                 <div class="field">
                   <label>Conditions</label>
-                  <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveData(false)">${escapeHtml(data.company.conditions || '')}</textarea>
+                  <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveBusinessData('Conditions modifiées')">${escapeHtml(data.company.conditions || '')}</textarea>
                 </div>
 
                 <div class="simple-box" style="line-height:1.7;">
