@@ -3393,10 +3393,22 @@ function getPrivateMovementTypeLabel(type) {
   return labels[type] || labels.withdrawal;
 }
 
+function updatePrivateMovementField(index, field, value) {
+  const row = data.privateMovements?.[index];
+  if (!row) return;
+
+  const nextValue = field === 'amount' ? Math.abs(toNumber(value)) : value;
+  if (row[field] === nextValue) return;
+
+  row[field] = nextValue;
+  notifyPortalBusinessChange("Prélèvement de l'exploitant modifié");
+  saveData(false);
+}
+
 function renderPrivateMovementTypeSelect(row, index) {
   const current = row?.type || 'withdrawal';
   return `
-    <select onchange="data.privateMovements[${index}].type=this.value; saveData(false)">
+    <select onchange="updatePrivateMovementField(${index}, 'type', this.value)">
       <option value="withdrawal" ${current === 'withdrawal' ? 'selected' : ''}>Prélèvement privé</option>
       <option value="contribution" ${current === 'contribution' ? 'selected' : ''}>Apport privé</option>
       <option value="reimbursement" ${current === 'reimbursement' ? 'selected' : ''}>Remboursement privé</option>
@@ -3421,10 +3433,10 @@ function renderPrivateMovements() {
       const effect = (row.type || 'withdrawal') === 'withdrawal' ? -amount : amount;
       return `
         <tr>
-          <td><input type="date" value="${escapeAttr(row.date || '')}" onchange="data.privateMovements[${i}].date=this.value; saveData(false)"></td>
+          <td><input type="date" value="${escapeAttr(row.date || '')}" onchange="updatePrivateMovementField(${i}, 'date', this.value)"></td>
           <td>${renderPrivateMovementTypeSelect(row, i)}</td>
-          <td><input value="${escapeAttr(row.label || '')}" placeholder="Ex. retrait personnel, remboursement d'une erreur..." onchange="data.privateMovements[${i}].label=this.value; saveData(false)"></td>
-          <td><input type="number" min="0" step="0.01" value="${num(amount)}" onchange="data.privateMovements[${i}].amount=Math.abs(parseFloat(this.value)||0); saveData(false)"></td>
+          <td><input value="${escapeAttr(row.label || '')}" placeholder="Ex. retrait personnel, remboursement d'une erreur..." onchange="updatePrivateMovementField(${i}, 'label', this.value)"></td>
+          <td><input type="number" min="0" step="0.01" value="${num(amount)}" onchange="updatePrivateMovementField(${i}, 'amount', this.value)"></td>
           <td class="${effect < 0 ? 'status-bad' : 'status-good'}">${money(effect)}</td>
           <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('privateMovements', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
         </tr>
