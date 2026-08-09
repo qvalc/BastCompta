@@ -1258,7 +1258,7 @@ function buildNextExerciseData(targetYear) {
   nextData.settings = preservedSettings;
   nextData.settings.retainedEarnings = round2(
     toNumber(preservedSettings.retainedEarnings)
-    + toNumber(t.taxableEstimatedProfit)
+    + toNumber(t.estimatedProfit)
   );
   nextData.settings.vatCarryover = Math.max(0, round2(toNumber(t.receivableVat)));
 
@@ -2772,10 +2772,10 @@ function totals() {
   const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * socialContributionFeeRate / 100);
   const socialContributionDue = socialBaseContribution + socialFeeContribution;
 
-  const taxableEstimatedProfit = estimatedProfit
-    + socialContributionRecovered
-    + excessSocialRefund
-    - socialContributionDue;
+  // Le résultat de l'exercice reste le résultat du compte de résultat.
+  // Les informations de cotisations/remboursements sont affichées à titre informatif
+  // et ne modifient pas le résultat de l'exercice courant.
+  const taxableEstimatedProfit = estimatedProfit;
 
   const netVat = salesVat - purchasesVat - carryover;
 
@@ -2792,7 +2792,7 @@ function totals() {
 
   const receivableVat = realVat < 0 ? Math.abs(realVat) : 0;
   const payableVat = realVat > 0 ? realVat : 0;
-  const resultRetained = taxableEstimatedProfit;
+  const resultRetained = estimatedProfit;
 
   const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
   const liabilitiesSide =
@@ -2947,8 +2947,8 @@ function renderDashboard() {
             <div class="kv"><span>Écart bilan</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
             <div class="kv">
   <span>Résultat estimé</span>
-  <span class="${t.taxableEstimatedProfit >= 0 ? 'status-good' : 'status-bad'}">
-    ${money(t.taxableEstimatedProfit)}
+  <span class="${t.estimatedProfit >= 0 ? 'status-good' : 'status-bad'}">
+    ${money(t.estimatedProfit)}
   </span>
 </div>
           </div>
@@ -3353,13 +3353,12 @@ function renderResult() {
   const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
   const isExemptSocial = t.estimatedProfit <= exemptionThreshold;
   const socialTotalContribution = t.socialContributionDue;
-  const taxableBase = t.taxableEstimatedProfit;
   const socialStatusLabel = isExemptSocial
     ? `Exonéré de cotisations sociales (≤ ${money(exemptionThreshold)})`
     : `Non exonéré de cotisations sociales (> ${money(exemptionThreshold)})`;
   const hasExcessSocialRefund = excessSocialRefund > 0;
   const socialDetailLabel = hasExcessSocialRefund
-    ? 'Excédent de remboursements ajouté aux produits professionnels'
+    ? 'Information uniquement — remboursement à traiter l’année de sa perception'
     : isExemptSocial
       ? 'Cotisations sociales récupérées'
       : `Cotisations sociales (${num(contributionRate, 1)}%) + frais caisse (${num(contributionFeeRate, 1)}%)`;
@@ -3441,10 +3440,6 @@ function renderResult() {
       : `${isExemptSocial ? '+' : '-'} ${money(isExemptSocial ? taxAndSocial : socialTotalContribution)}`}
                 </div>
               </div>
-              <div style="display:grid; grid-template-columns: 1fr 180px; border:1px solid var(--line);">
-                <div style="padding:10px 12px; background:#e2e8f0; font-weight:700; text-align:right;">Solde imposable :</div>
-                <div style="padding:10px 12px; background:#fef08a; font-weight:700; text-align:right;">${money(taxableBase)}</div>
-              </div>
             </div>
           </div>
         </section>
@@ -3467,7 +3462,7 @@ function renderBalance() {
             <div class="section-head"><h3>Passif simplifié</h3></div>
             <div class="kv"><span>Capital de départ</span><span>${money(data.settings.capitalStart)}</span></div>
             <div class="kv"><span>Résultat reporté</span><span>${money(data.settings.retainedEarnings)}</span></div>
-            <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.taxableEstimatedProfit)}</span></div>
+            <div class="kv"><span>Résultat de l'exercice</span><span>${money(t.estimatedProfit)}</span></div>
             <div class="kv"><span>TVA à payer</span><span>${money(t.payableVat)}</span></div>
             <div class="kv"><span><strong>Total passif</strong></span><span><strong>${money(t.liabilitiesSide)}</strong></span></div>
             <div class="kv"><span>Écart</span><span class="${Math.abs(t.assetsSide - t.liabilitiesSide) < 0.01 ? 'status-good' : 'status-bad'}">${money(t.assetsSide - t.liabilitiesSide)}</span></div>
@@ -3859,7 +3854,6 @@ function buildPrintReportHtml() {
   const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
   const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
   const socialTotalContribution = socialBaseContribution + socialFeeContribution;
-  const taxableBase = t.taxableEstimatedProfit;
   const vatLedger = computeVatLedger();
   const vatReportRows = vatLedger.rows.flatMap(row => [
     [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – période`, `${printableDate(row.computed.startDate)} au ${printableDate(row.computed.endDate)}`],
@@ -4135,9 +4129,8 @@ function buildPrintReportHtml() {
     ['Exercice', String(year)],
     ['Seuil exonération sociale', money(exemptionThreshold)],
     ['Cotisations sociales estimées', money(socialTotalContribution)],
-    ['Excédent remboursement à réintégrer', money(excessSocialRefund)],
-    ['Statut social', escapeHtml(isExemptSocial ? 'Exonéré' : 'Non exonéré')],
-    ['Solde imposable', money(taxableBase)]
+    ['Excédent remboursement (information)', money(excessSocialRefund)],
+    ['Statut social', escapeHtml(isExemptSocial ? 'Exonéré' : 'Non exonéré')]
   ])}</div></div>
       </div>
     </section>
@@ -4245,7 +4238,7 @@ function render() {
       metricVat.textContent = money(0);
     }
   }
-  if (metricProfit) metricProfit.textContent = money(t.taxableEstimatedProfit);
+  if (metricProfit) metricProfit.textContent = money(t.estimatedProfit);
 }
 
 
