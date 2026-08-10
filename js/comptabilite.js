@@ -2758,7 +2758,7 @@ function totals() {
   const privateMovementsNet = data.privateMovements.reduce((sum, row) => {
     const amount = Math.abs(toNumber(row.amount));
     const type = row.type || 'withdrawal';
-    return sum + (type === 'withdrawal' ? -amount : amount);
+    return sum + (['withdrawal', 'regularization'].includes(type) ? -amount : amount);
   }, 0);
   const ownerAccountBalance = round2(ownerAccountCarryover + privateMovementsNet);
 
@@ -3387,6 +3387,7 @@ function renderKm() {
 function getPrivateMovementTypeLabel(type) {
   const labels = {
     withdrawal: 'Prélèvement privé',
+    regularization: 'Régularisation',
     contribution: 'Apport privé',
     reimbursement: 'Remboursement privé'
   };
@@ -3410,6 +3411,7 @@ function renderPrivateMovementTypeSelect(row, index) {
   return `
     <select onchange="updatePrivateMovementField(${index}, 'type', this.value)">
       <option value="withdrawal" ${current === 'withdrawal' ? 'selected' : ''}>Prélèvement privé</option>
+      <option value="regularization" ${current === 'regularization' ? 'selected' : ''}>Régularisation</option>
       <option value="contribution" ${current === 'contribution' ? 'selected' : ''}>Apport privé</option>
       <option value="reimbursement" ${current === 'reimbursement' ? 'selected' : ''}>Remboursement privé</option>
     </select>
@@ -3419,7 +3421,8 @@ function renderPrivateMovementTypeSelect(row, index) {
 function renderPrivateMovements() {
   const t = totals();
   const withdrawals = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') === 'withdrawal' ? Math.abs(toNumber(row.amount)) : 0), 0);
-  const additions = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') !== 'withdrawal' ? Math.abs(toNumber(row.amount)) : 0), 0);
+  const regularizations = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') === 'regularization' ? Math.abs(toNumber(row.amount)) : 0), 0);
+  const additions = data.privateMovements.reduce((sum, row) => sum + (['contribution', 'reimbursement'].includes(row.type || 'withdrawal') ? Math.abs(toNumber(row.amount)) : 0), 0);
 
   return renderTablePage({
     key: 'private',
@@ -3430,7 +3433,7 @@ function renderPrivateMovements() {
     headers: ['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif', ''],
     rows: data.privateMovements.map((row, i) => {
       const amount = Math.abs(toNumber(row.amount));
-      const effect = (row.type || 'withdrawal') === 'withdrawal' ? -amount : amount;
+      const effect = ['withdrawal', 'regularization'].includes(row.type || 'withdrawal') ? -amount : amount;
       return `
         <tr>
           <td><input type="date" value="${escapeAttr(row.date || '')}" onchange="updatePrivateMovementField(${i}, 'date', this.value)"></td>
@@ -3444,6 +3447,7 @@ function renderPrivateMovements() {
     }).join(''),
     footer: `
       <div class="kv"><span>Prélèvements privés de l'exercice</span><span>${money(withdrawals)}</span></div>
+      <div class="kv"><span>Régularisations historiques</span><span>${money(regularizations)}</span></div>
       <div class="kv"><span>Apports / remboursements privés de l'exercice</span><span>${money(additions)}</span></div>
       <div class="kv"><span>Solde compte exploitant reporté</span><span>${money(t.ownerAccountCarryover)}</span></div>
       <div class="kv"><span><strong>Prélèvements de l'exploitant au passif</strong></span><span><strong>${money(t.ownerAccountBalance)}</strong></span></div>
@@ -4038,7 +4042,7 @@ function buildPrintReportHtml() {
 
   const privateMovementRows = data.privateMovements.map(row => {
     const amount = Math.abs(toNumber(row.amount));
-    const effect = (row.type || 'withdrawal') === 'withdrawal' ? -amount : amount;
+    const effect = ['withdrawal', 'regularization'].includes(row.type || 'withdrawal') ? -amount : amount;
     return [
       escapeHtml(row.date || '—'),
       escapeHtml(getPrivateMovementTypeLabel(row.type)),
