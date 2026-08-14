@@ -19,6 +19,7 @@ let crmDropdownClientsCache = [];
 let terrainDraftsCache = [];
 const crmPhotoObjectUrls = new Map();
 let suiviClientLoadingCount = 0;
+let selectedSummaryYear = String(new Date().getFullYear());
 
 const statusLabels = {
   planned: 'À suivre',
@@ -791,20 +792,49 @@ function projectSupplySaleValue(item) {
   return Number(item?.suppliesSaleHtva ?? item?.suppliesHtva ?? 0) || 0;
 }
 
-function projectTotals(project) {
+function extractItemYear(item) {
+  const candidates = [
+    item?.date,
+    item?.addedAt,
+    item?.modifiedTime,
+    item?.createdAt,
+    item?.updatedAt
+  ];
+
+  for (const value of candidates) {
+    const text = String(value || '').trim();
+    if (!text) continue;
+
+    const isoMatch = text.match(/^(\d{4})[-/]/);
+    if (isoMatch) return isoMatch[1];
+
+    const localMatch = text.match(/(?:^|\D)(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})(?:\D|$)/);
+    if (localMatch) return localMatch[3];
+  }
+
+  return '';
+}
+
+function itemMatchesSummaryYear(item, year = selectedSummaryYear) {
+  return year === 'all' || extractItemYear(item) === String(year);
+}
+
+function projectTotals(project, year = 'all') {
   // Suivi client : les devis ne pilotent plus le calcul.
   // CA facturé = factures complètes HTVA (prestations + fournitures facturées).
-  const invoices = sum((project.linkedInvoices || []).map(projectMoneyValue));
+  const linkedInvoices = (project.linkedInvoices || []).filter(item => itemMatchesSummaryYear(item, year));
+  const manualCostItems = (project.costs || []).filter(item => itemMatchesSummaryYear(item, year));
+  const invoices = sum(linkedInvoices.map(projectMoneyValue));
 
   // Coûts = prix de revient réel des fournitures + coûts manuels éventuels.
-  const manualCosts = sum((project.costs || []).map(projectMoneyValue));
-  const invoiceSupplyCosts = sum((project.linkedInvoices || []).map(projectSupplyValue));
+  const manualCosts = sum(manualCostItems.map(projectMoneyValue));
+  const invoiceSupplyCosts = sum(linkedInvoices.map(projectSupplyValue));
   const costs = manualCosts + invoiceSupplyCosts;
 
   // Marge réelle = CA facturé - prix de revient - coûts manuels.
   // Si aucun prix de revient n'est saisi, l'ancien comportement est conservé (coût = prix facturé des fournitures).
-  const invoiceWorkTotal = sum((project.linkedInvoices || []).map(projectWorkValue));
-  const invoiceSupplySales = sum((project.linkedInvoices || []).map(projectSupplySaleValue));
+  const invoiceWorkTotal = sum(linkedInvoices.map(projectWorkValue));
+  const invoiceSupplySales = sum(linkedInvoices.map(projectSupplySaleValue));
   const margin = invoices - costs;
   const marginRate = invoices > 0 ? (margin / invoices) * 100 : 0;
 
@@ -834,19 +864,60 @@ function render() {
   renderMain();
 }
 
+function getSummaryYears() {
+  const years = new Set([String(new Date().getFullYear())]);
+
+  data.projects.forEach(project => {
+    [
+      ...(project.linkedInvoices || []),
+      ...(project.costs || []),
+      ...(project.documents || [])
+    ].forEach(item => {
+      const year = extractItemYear(item);
+      if (year) years.add(year);
+    });
+  });
+
+  return Array.from(years).sort((a, b) => Number(b) - Number(a));
+}
+
+function renderSummaryYearFilter() {
+  const select = document.getElementById('summaryYearFilter');
+  if (!select) return;
+
+  const years = getSummaryYears();
+  if (selectedSummaryYear !== 'all' && !years.includes(selectedSummaryYear)) {
+    years.push(selectedSummaryYear);
+    years.sort((a, b) => Number(b) - Number(a));
+  }
+
+  select.innerHTML = [
+    ...years.map(year => `<option value="${year}">${year}</option>`),
+    '<option value="all">Toutes années</option>'
+  ].join('');
+  select.value = selectedSummaryYear;
+}
+
+function setSummaryYear(year) {
+  selectedSummaryYear = year === 'all' ? 'all' : String(year || new Date().getFullYear());
+  renderMetrics();
+}
+
 function renderMetrics() {
+  renderSummaryYearFilter();
+
   const totals = data.projects.reduce((acc, project) => {
-    const t = projectTotals(project);
+    const t = projectTotals(project, selectedSummaryYear);
     acc.invoices += t.invoices;
     acc.costs += t.costs;
     acc.margin += t.margin;
-    acc.docs += project.documents.length;
-    acc.active += project.status === 'active' ? 1 : 0;
+    acc.docs += (project.documents || []).filter(item => itemMatchesSummaryYear(item, selectedSummaryYear)).length;
     return acc;
-  }, { invoices: 0, costs: 0, margin: 0, docs: 0, active: 0 });
+  }, { invoices: 0, costs: 0, margin: 0, docs: 0 });
 
   const margin = totals.margin;
   const rate = totals.invoices > 0 ? (margin / totals.invoices) * 100 : 0;
+  const periodLabel = selectedSummaryYear === 'all' ? 'toutes années' : selectedSummaryYear;
 
   document.getElementById('metricProjects').textContent = getAllCrmClients().length;
   document.getElementById('metricProjectsSub').textContent = 'base officielle';
@@ -854,7 +925,7 @@ function renderMetrics() {
   document.getElementById('metricCosts').textContent = formatMoney(totals.costs);
   document.getElementById('metricMargin').textContent = formatMoney(margin);
   document.getElementById('metricMargin').className = 'metric-value ' + (margin >= 0 ? 'margin-positive' : 'margin-negative');
-  document.getElementById('metricMarginRate').textContent = rate.toFixed(1).replace('.', ',') + '%';
+  document.getElementById('metricMarginRate').textContent = rate.toFixed(1).replace('.', ',') + '% · ' + periodLabel;
   document.getElementById('metricDocs').textContent = totals.docs;
 }
 

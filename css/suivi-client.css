@@ -159,6 +159,38 @@ button:disabled {
     background: var(--panel-soft);
 }
 
+.summary-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+}
+
+.summary-period {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .92);
+    box-shadow: var(--shadow-soft);
+}
+
+.summary-period label {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.summary-period select {
+    width: auto;
+    min-width: 128px;
+    padding: 8px 34px 8px 10px;
+    border-radius: 10px;
+    font-weight: 700;
+}
+
 .summary-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(170px, 1fr));

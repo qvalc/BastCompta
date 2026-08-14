@@ -8,7 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Suivi client</title>
-  <link rel="stylesheet" href="css/suivi-client.css?v=4">
+  <link rel="stylesheet" href="css/suivi-client.css?v=5">
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -38,6 +38,15 @@
             <button onclick="loadFromDrive(); closeFileMenu()">Charger depuis Google Drive</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="summary-toolbar">
+      <div class="summary-period">
+        <label for="summaryYearFilter">Période des indicateurs</label>
+        <select id="summaryYearFilter" onchange="setSummaryYear(this.value)">
+          <option value="all">Toutes années</option>
+        </select>
       </div>
     </div>
 
@@ -164,7 +173,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="js/suivi-client.js?v=3"></script>
+  <script src="js/suivi-client.js?v=4"></script>
 </body>
 
 </html>
