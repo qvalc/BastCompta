@@ -94,7 +94,7 @@ const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
 const FREE_MAIN_TABS = ['devis', 'tarifs', 'terrain'];
-const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'accounting', chantier: 'client' };
+const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'client', chantier: 'client' };
 const SUBSCRIPTION_PACKS = {
   accounting: { label: 'Pack Comptabilité', shortLabel: 'Comptabilité', code: 'COMPTA' },
   client: { label: 'Pack Suivi client', shortLabel: 'Suivi client', code: 'CLIENT' },
@@ -288,7 +288,7 @@ function getSubscriptionExpiryItems(result = currentSubscriptionState) {
   }
   if (isSubscriptionEntryActive(subscriptions.client, now)) {
     const endValue = subscriptions.client?.endsAt || subscriptions.client?.subscriptionEndsAt;
-    items.push({ label: 'Pack Suivi client', endValue, noEnd: !endValue });
+    items.push({ label: 'Pack Suivi client + Personnel', endValue, noEnd: !endValue });
   }
   return items;
 }
@@ -372,7 +372,7 @@ function statusLabel(subscription = currentSubscriptionState) {
   if (subscription?.access?.premium) active.push('Premium complet');
   else {
     if (subscription?.access?.accounting) active.push('Pack Comptabilité');
-    if (subscription?.access?.client) active.push('Pack Suivi client');
+    if (subscription?.access?.client) active.push('Pack Suivi client + Personnel');
   }
   return active.length ? active.join(' + ') : 'Gratuit';
 }
@@ -2726,7 +2726,7 @@ function showSubscriptionModal(result = currentSubscriptionState) {
     </div>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
-      ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients et les chantiers.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers', 'Suivi commercial'])}
+      ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients, les chantiers et le personnel.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers et suivi commercial', 'Personnel : salaires, prestations, congés et absences'])}
       ${renderPlanCard('premium', 'Premium complet', 'Tous les modules dans une seule formule.', ['Pack Comptabilité', 'Pack Suivi client', 'Toutes les futures fonctions Premium'])}
     </div>
     <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>`;
