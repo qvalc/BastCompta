@@ -6,7 +6,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Personnel</title>
-  <link rel="stylesheet" href="css/personnel.css?v=2">
+  <link rel="stylesheet" href="css/personnel.css?v=3">
 </head>
 <body>
   <div class="app">
@@ -35,13 +35,23 @@
     </section>
 
     <section class="summary-grid">
-      <article class="card indicator-card" id="indicatorTotal" onclick="setIndicatorFilter('total')" title="Afficher tout le personnel"><div class="metric-label">Total personnel</div><div class="metric-value" id="metricTotal">0</div><div class="metric-sub" id="metricTotalSub">0 ouvrier · 0 employé</div></article>
-      <article class="card indicator-card" id="indicatorActive" onclick="setIndicatorFilter('active')" title="Afficher le personnel actuellement au travail"><div class="metric-label">Actifs</div><div class="metric-value" id="metricActive">0</div><div class="metric-sub">actuellement au travail</div></article>
-      <article class="card indicator-card" id="indicatorLeave" onclick="setIndicatorFilter('leave')" title="Afficher les personnes actuellement en congé"><div class="metric-label">En congé</div><div class="metric-value" id="metricLeave">0</div><div class="metric-sub">aujourd’hui</div></article>
-      <article class="card indicator-card" id="indicatorIllness" onclick="setIndicatorFilter('illness')" title="Afficher les personnes actuellement en maladie"><div class="metric-label">En maladie</div><div class="metric-value" id="metricIllness">0</div><div class="metric-sub">aujourd’hui</div></article>
-      <article class="card indicator-card" id="indicatorOther" onclick="setIndicatorFilter('other')" title="Afficher les autres absences en cours"><div class="metric-label">Autres absences</div><div class="metric-value" id="metricOther">0</div><div class="metric-sub">accident, absence, autre</div></article>
+      <article class="card indicator-card indicator-total" id="indicatorTotal" onclick="setIndicatorFilter('total')" title="Afficher tout le personnel">
+        <div class="indicator-icon" aria-hidden="true">👥</div><div class="indicator-copy"><div class="metric-value" id="metricTotal">0</div><div class="metric-label">Total personnel</div><div class="metric-sub" id="metricTotalSub">0 ouvrier · 0 employé</div></div>
+      </article>
+      <article class="card indicator-card indicator-active" id="indicatorActive" onclick="setIndicatorFilter('active')" title="Afficher le personnel actuellement au travail">
+        <div class="indicator-icon" aria-hidden="true">✓</div><div class="indicator-copy"><div class="metric-value" id="metricActive">0</div><div class="metric-label">Actifs</div><div class="metric-sub">Réellement au travail</div></div>
+      </article>
+      <article class="card indicator-card indicator-leave" id="indicatorLeave" onclick="setIndicatorFilter('leave')" title="Afficher les personnes actuellement en congé">
+        <div class="indicator-icon" aria-hidden="true">☂</div><div class="indicator-copy"><div class="metric-value" id="metricLeave">0</div><div class="metric-label">En congé</div><div class="metric-sub">Aujourd’hui</div></div>
+      </article>
+      <article class="card indicator-card indicator-illness" id="indicatorIllness" onclick="setIndicatorFilter('illness')" title="Afficher les personnes actuellement en maladie">
+        <div class="indicator-icon" aria-hidden="true">✚</div><div class="indicator-copy"><div class="metric-value" id="metricIllness">0</div><div class="metric-label">En maladie</div><div class="metric-sub">Aujourd’hui</div></div>
+      </article>
+      <article class="card indicator-card indicator-other" id="indicatorOther" onclick="setIndicatorFilter('other')" title="Afficher les autres absences en cours">
+        <div class="indicator-icon" aria-hidden="true">◷</div><div class="indicator-copy"><div class="metric-value" id="metricOther">0</div><div class="metric-label">Autres absences</div><div class="metric-sub">Accident, formation, RTT…</div></div>
+      </article>
     </section>
-    <div class="indicator-hint">Cliquez sur un indicateur pour afficher directement les personnes correspondantes.</div>
+    <div class="indicator-hint"><span class="hint-icon">i</span><span>Cliquez sur une carte pour afficher la liste correspondante.</span></div>
 
     <section class="workspace">
       <aside class="side-panel">
@@ -64,6 +74,6 @@
 
   <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modal"></div></div>
   <div class="toast" id="toast"></div>
-  <script src="js/personnel.js?v=2"></script>
+  <script src="js/personnel.js?v=3"></script>
 </body>
 </html>
