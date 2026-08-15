@@ -81,6 +81,7 @@ const devisFrame = document.getElementById('devisFrame');
 const terrainFrame = document.getElementById('terrainFrame');
 const comptaFrame = document.getElementById('comptaFrame');
 const chantierFrame = document.getElementById('chantierFrame');
+const personnelFrame = document.getElementById('personnelFrame');
 const impotsFrame = document.getElementById('impotsFrame');
 const tarifsFrame = document.getElementById('tarifsFrame');
 const subscriptionModal = document.getElementById('subscriptionModal');
@@ -93,7 +94,7 @@ const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
 const FREE_MAIN_TABS = ['devis', 'tarifs', 'terrain'];
-const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', chantier: 'client' };
+const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'accounting', chantier: 'client' };
 const SUBSCRIPTION_PACKS = {
   accounting: { label: 'Pack Comptabilité', shortLabel: 'Comptabilité', code: 'COMPTA' },
   client: { label: 'Pack Suivi client', shortLabel: 'Suivi client', code: 'CLIENT' },
@@ -427,6 +428,7 @@ function switchMainTab(tabName) {
   document.getElementById('panel-terrain')?.classList.toggle('active', tabName === 'terrain');
   document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
   document.getElementById('panel-chantier').classList.toggle('active', tabName === 'chantier');
+  document.getElementById('panel-personnel')?.classList.toggle('active', tabName === 'personnel');
   document.getElementById('panel-impots').classList.toggle('active', tabName === 'impots');
 }
 
@@ -549,6 +551,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
     { tab: 'terrain', frame: terrainFrame },
     { tab: 'compta', frame: comptaFrame },
     { tab: 'chantier', frame: chantierFrame },
+    { tab: 'personnel', frame: personnelFrame },
     { tab: 'impots', frame: impotsFrame },
     { tab: 'tarifs', frame: tarifsFrame }
   ].forEach(({ tab, frame }) => {
@@ -569,7 +572,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 }
 
 function unloadProtectedFrames() {
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     if (!frame) return;
     frame.setAttribute('src', 'about:blank');
   });
@@ -666,6 +669,7 @@ function getLoadedModuleFrames() {
     { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
     { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
     { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
+    { key: 'personnel', label: 'Personnel', frame: personnelFrame },
     { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
   ].filter(item => {
     if (!item.frame) return false;
@@ -1072,6 +1076,7 @@ async function saveAllModulesFromPortal() {
   { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
   { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
   { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
+  { key: 'personnel', label: 'Personnel', frame: personnelFrame },
   { key: 'impots', label: 'Impôts IPP', frame: impotsFrame }
 ].filter(item => item.frame).forEach(installDirtyTracking);
 
@@ -1232,10 +1237,11 @@ async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileI
 window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
 
 
-const BAST_BACKUP_VERSION = 5;
+const BAST_BACKUP_VERSION = 6;
 const LOCAL_DEVIS_KEY = 'devis-facture-style-vrai-document';
 const LOCAL_COMPTA_KEY = 'comptabilite-local-v1';
 const LOCAL_CHANTIERS_KEY = 'bastcompta-chantiers-v1';
+const LOCAL_PERSONNEL_KEY = 'bastcompta-personnel-v1';
 const LOCAL_IMPOTS_KEY = 'bastcompta-impots-belgique-v1';
 const LOCAL_TARIFS_KEY = 'bastcompta_tarifs_v7_vierge_sans_fiche';
 const LOCAL_TARIFS_CATEGORIES_KEY = 'bastcompta_tarifs_categories_v3_vierge_sans_fiche';
@@ -1279,6 +1285,7 @@ const HIDDEN_DRIVE_CATEGORIES = [
   { key: 'rappels', label: 'Rappels' },
   { key: 'comptabilite', label: 'Comptabilité' },
   { key: 'clients', label: 'Clients / chantiers' },
+  { key: 'personnel', label: 'Personnel' },
   { key: 'impots', label: 'Impôts' },
   { key: 'sauvegardes', label: 'Sauvegardes' },
   { key: 'autres', label: 'Autres' }
@@ -1294,6 +1301,7 @@ function detectHiddenDriveCategory(file = {}) {
   if (name.startsWith('rappel ') || name.includes(' rappel ') || name.includes(' reminder ')) return 'rappels';
   if (name.includes('comptabilite') || name.includes(' compta ') || name.includes(' achat ') || name.includes(' achats ') || name.includes(' vente ') || name.includes(' ventes ') || name.includes(' frais ')) return 'comptabilite';
   if (name.includes('suivi client') || name.includes('suivi-client') || name.includes(' chantier ') || name.includes(' chantiers ') || name.includes(' client ') || name.includes(' crm ')) return 'clients';
+  if (name.includes('personnel') || name.includes('travailleur') || name.includes('salaire') || name.includes('ouvrier') || name.includes('employe')) return 'personnel';
   if (name.includes('impot') || name.includes('impots') || name.includes(' ipp ') || name.includes(' fiscal ') || name.includes(' taxe ') || name.includes(' taxes ')) return 'impots';
   if (name.includes('tarif') || name.includes('prix') || name.includes('poste')) return 'autres';
   return 'autres';
@@ -1538,6 +1546,7 @@ function getLocalBackupData() {
     devisFacture: safeJsonParse(localStorage.getItem(LOCAL_DEVIS_KEY), {}),
     comptabilite: safeJsonParse(localStorage.getItem(LOCAL_COMPTA_KEY), {}),
     chantiers: safeJsonParse(localStorage.getItem(LOCAL_CHANTIERS_KEY), { version: 1, projects: [] }),
+    personnel: safeJsonParse(localStorage.getItem(LOCAL_PERSONNEL_KEY), { version: 1, workers: [] }),
     impots: safeJsonParse(localStorage.getItem(LOCAL_IMPOTS_KEY), {}),
     tarifs: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_KEY), []),
     tarifsCategories: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_CATEGORIES_KEY), [])
@@ -1552,6 +1561,7 @@ function detectDocumentInfo(fileName, parsed, registry) {
   else if (lower.startsWith('rappel-')) { docKey = 'reminder'; folder = 'Rappels'; label = 'rappel'; }
   else if (lower.startsWith('comptabilite-') || lower.includes('comptabilite')) { folder = 'Comptabilite/Donnees'; label = 'comptabilite'; }
   else if (lower.includes('suivi-client') || lower.includes('suivi client') || lower.includes('chantier') || lower.includes('chantiers')) { folder = 'Suivi-client/Donnees'; label = 'suivi-client'; }
+  else if (lower.includes('personnel') || lower.includes('travailleur') || lower.includes('salaire')) { folder = 'Personnel/Donnees'; label = 'personnel'; }
 
   const doc = docKey && parsed ? (parsed[docKey] || {}) : {};
   if (docKey && doc.clientId && Array.isArray(parsed?.clients)) {
@@ -1870,6 +1880,7 @@ function backupZipPathForDriveFile(file, parsed = null, registry = null) {
     if (info.docKey) return 'Clients/' + info.clientName + '/' + info.folder + '/' + name;
     if (info.label === 'comptabilite') return 'Comptabilite/Donnees/' + name;
     if (info.label === 'suivi-client' || info.label === 'chantier') return 'Suivi-client/Donnees/' + name;
+    if (info.label === 'personnel') return 'Personnel/Donnees/' + name;
   }
   if (lower.endsWith('.pdf')) {
     if (lower.includes('achat') || lower.includes('fournisseur')) return 'Comptabilite/Achats-PDF/' + name;
@@ -1881,7 +1892,7 @@ function backupZipPathForDriveFile(file, parsed = null, registry = null) {
 }
 
 async function addApplicationSourceFiles(zip) {
-  for (const fileName of ['index.html', 'devis-facture.html', 'comptabilite.html', 'suivi-client.html']) {
+  for (const fileName of ['index.html', 'devis-facture.html', 'comptabilite.html', 'suivi-client.html', 'personnel.html']) {
     try {
       const res = await fetch(fileName, { cache: 'no-store' });
       if (res.ok) zip.file('Application/' + fileName, await res.text());
@@ -1896,6 +1907,7 @@ async function createFullBackupZip() {
   await waitForFrameReady(devisFrame);
   await waitForFrameReady(comptaFrame);
   await waitForFrameReady(chantierFrame);
+  await waitForFrameReady(personnelFrame);
   await waitForFrameReady(impotsFrame);
 
   const zip = new JSZip();
@@ -1905,6 +1917,7 @@ async function createFullBackupZip() {
   const localDevis = localData.devisFacture || {};
   const localCompta = localData.comptabilite || {};
   const localChantiers = localData.chantiers || { version: 1, projects: [] };
+  const localPersonnel = localData.personnel || { version: 1, workers: [] };
   const localImpots = localData.impots || {};
   const localTarifs = Array.isArray(localData.tarifs) ? localData.tarifs : [];
   const localTarifsCategories = Array.isArray(localData.tarifsCategories) ? localData.tarifsCategories : [];
@@ -1927,9 +1940,9 @@ async function createFullBackupZip() {
       displayName: currentUser.displayName || ''
     },
     backupType: 'complete-local-drive-pdf-crm-suivi-client-faithful',
-    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'impots', 'tarifs'],
+    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'personnel', 'impots', 'tarifs'],
     restore: { localStorage: true, googleDrive: true, pdfFiles: true, clients: true, crm: true, mode: 'complete-reconstruction' },
-    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, impots: LOCAL_IMPOTS_KEY, tarifs: LOCAL_TARIFS_KEY, tarifsCategories: LOCAL_TARIFS_CATEGORIES_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
+    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, personnel: LOCAL_PERSONNEL_KEY, impots: LOCAL_IMPOTS_KEY, tarifs: LOCAL_TARIFS_KEY, tarifsCategories: LOCAL_TARIFS_CATEGORIES_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
     crm: { clients: [], count: 0, exports: [] },
     clients: [],
     files: []
@@ -1947,11 +1960,13 @@ async function createFullBackupZip() {
   zip.file('01-donnees-locales/devis-facture-local.json', JSON.stringify(localDevis, null, 2));
   zip.file('01-donnees-locales/comptabilite-local.json', JSON.stringify(localCompta, null, 2));
   zip.file('01-donnees-locales/suivi-client-local.json', JSON.stringify(localChantiers, null, 2));
+  zip.file('01-donnees-locales/personnel-local.json', JSON.stringify(localPersonnel, null, 2));
   zip.file('01-donnees-locales/impots-ipp-local.json', JSON.stringify(localImpots, null, 2));
   zip.file('01-donnees-locales/tarifs-local.json', JSON.stringify({ categories: localTarifsCategories, tarifs: localTarifs }, null, 2));
   addFile('01-donnees-locales/devis-facture-local.json', 'localStorage', { module: 'devis-facture' });
   addFile('01-donnees-locales/comptabilite-local.json', 'localStorage', { module: 'comptabilite' });
   addFile('01-donnees-locales/suivi-client-local.json', 'localStorage', { module: 'suivi-client' });
+  addFile('01-donnees-locales/personnel-local.json', 'localStorage', { module: 'personnel' });
   addFile('01-donnees-locales/impots-ipp-local.json', 'localStorage', { module: 'impots' });
   addFile('01-donnees-locales/tarifs-local.json', 'localStorage', { module: 'tarifs' });
 
@@ -2135,12 +2150,14 @@ async function handleFullRestoreFile(event) {
     const devisData = await readJsonFromZip('01-donnees-locales/devis-facture-local.json', null);
     const comptaData = await readJsonFromZip('01-donnees-locales/comptabilite-local.json', null);
     const suiviData = await readJsonFromZip('01-donnees-locales/suivi-client-local.json', null);
+    const personnelData = await readJsonFromZip('01-donnees-locales/personnel-local.json', null);
     const impotsData = await readJsonFromZip('01-donnees-locales/impots-ipp-local.json', null);
     const tarifsData = await readJsonFromZip('01-donnees-locales/tarifs-local.json', null);
 
     if (devisData) localStorage.setItem(LOCAL_DEVIS_KEY, JSON.stringify(devisData));
     if (comptaData) localStorage.setItem(LOCAL_COMPTA_KEY, JSON.stringify(comptaData));
     if (suiviData) localStorage.setItem(LOCAL_CHANTIERS_KEY, JSON.stringify(suiviData));
+    if (personnelData) localStorage.setItem(LOCAL_PERSONNEL_KEY, JSON.stringify(personnelData));
     if (impotsData) localStorage.setItem(LOCAL_IMPOTS_KEY, JSON.stringify(impotsData));
     if (tarifsData) {
       if (Array.isArray(tarifsData.tarifs)) localStorage.setItem(LOCAL_TARIFS_KEY, JSON.stringify(tarifsData.tarifs));
@@ -2378,7 +2395,7 @@ function broadcastDriveConnected() {
     expiresAt: googleTokenExpiresAt
   };
 
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
@@ -2388,13 +2405,13 @@ function broadcastDriveDisconnected() {
     type: 'BASTCOMPTA_GOOGLE_LOGOUT'
   };
 
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
 
 function bindIframeMessaging() {
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, tarifsFrame].forEach(frame => {
     frame?.addEventListener('load', () => {
       if (isTokenFresh()) broadcastDriveConnected();
       else broadcastDriveDisconnected();
@@ -2899,7 +2916,7 @@ function configureModuleIframe(frame) {
   frame.setAttribute('scrolling', 'yes');
 }
 
-[devisFrame, terrainFrame, comptaFrame, chantierFrame, impotsFrame].forEach((frame) => {
+[devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame].forEach((frame) => {
   configureModuleIframe(frame);
   frame?.addEventListener('load', () => configureModuleIframe(frame));
 });
@@ -2997,11 +3014,12 @@ onAuthStateChanged(auth, async (user) => {
     devis: 'Devis & Factures',
     compta: 'Comptabilité',
     chantier: 'Suivi client',
+    personnel: 'Personnel',
     terrain: 'Mode terrain',
     impots: 'Impôts IPP'
   };
-  const defaults = { devis: 'quote', compta: 'sales', impots: 'summary' };
-  const frames = { devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, impots: impotsFrame };
+  const defaults = { devis: 'quote', compta: 'sales', personnel: 'summary', impots: 'summary' };
+  const frames = { devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, personnel: personnelFrame, impots: impotsFrame };
 
   function closeMobileSidebar() {
     shell?.classList.remove('sidebar-open');

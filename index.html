@@ -635,6 +635,23 @@
 <button data-client-action="new" data-main-tab="chantier" type="button">Nouveau client CRM</button>
 </div>
 </div>
+<div class="sidebar-group" data-sidebar-group="personnel">
+<button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="personnel" type="button">
+<span class="sidebar-icon">♟</span><span>Personnel</span><span class="sidebar-chevron">⌄</span>
+</button>
+<div class="sidebar-submenu">
+<button data-main-tab="personnel" data-page-key="summary" type="button">Tableau de bord</button>
+<button data-main-tab="personnel" data-page-key="workers" type="button">Travailleurs</button>
+<button data-main-tab="personnel" data-page-key="salary" type="button">Salaires</button>
+<button data-main-tab="personnel" data-page-key="time" type="button">Prestations</button>
+<button data-main-tab="personnel" data-page-key="leave" type="button">Congés</button>
+<button data-main-tab="personnel" data-page-key="absence" type="button">Maladies &amp; absences</button>
+<button data-main-tab="personnel" data-page-key="bonus" type="button">Primes &amp; avantages</button>
+<button data-main-tab="personnel" data-page-key="document" type="button">Documents</button>
+<button data-main-tab="personnel" data-page-key="training" type="button">Formations</button>
+<button data-main-tab="personnel" data-page-key="equipment" type="button">Matériel</button>
+</div>
+</div>
 <div class="sidebar-group" data-sidebar-group="impots">
 <button aria-expanded="false" class="main-tab sidebar-module" data-main-tab="impots" type="button">
 <span class="sidebar-icon">▧</span><span>Impôts IPP</span><span class="sidebar-chevron">⌄</span>
@@ -702,6 +719,9 @@
 <div class="tab-panel" id="panel-chantier">
 <iframe data-src="suivi-client.html?embedded=1" id="chantierFrame" scrolling="yes" src="about:blank" title="Suivi client"></iframe>
 </div>
+<div class="tab-panel" id="panel-personnel">
+<iframe data-src="personnel.html?embedded=1" id="personnelFrame" scrolling="yes" src="about:blank" title="Personnel"></iframe>
+</div>
 <div class="tab-panel" id="panel-impots">
 <iframe data-src="impots.html?embedded=1" id="impotsFrame" scrolling="yes" src="about:blank" title="Impôts IPP"></iframe>
 </div>
@@ -744,6 +764,7 @@
 <button class="hidden-drive-tab" data-drive-category="rappels" type="button">Rappels</button>
 <button class="hidden-drive-tab" data-drive-category="comptabilite" type="button">Comptabilité</button>
 <button class="hidden-drive-tab" data-drive-category="clients" type="button">Clients / chantiers</button>
+<button class="hidden-drive-tab" data-drive-category="personnel" type="button">Personnel</button>
 <button class="hidden-drive-tab" data-drive-category="impots" type="button">Impôts</button>
 <button class="hidden-drive-tab" data-drive-category="sauvegardes" type="button">Sauvegardes</button>
 <button class="hidden-drive-tab" data-drive-category="autres" type="button">Autres</button>

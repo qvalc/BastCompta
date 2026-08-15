@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <script src="js/storage.js"></script>
+  <script src="js/personnel-access.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personnel</title>
+  <link rel="stylesheet" href="css/personnel.css?v=1">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>Personnel</h1>
+        <p>Ouvriers et employés : salaires, prestations, congés, absences, primes, documents et coût réel.</p>
+      </div>
+      <div class="actions">
+        <button class="primary" type="button" onclick="openWorkerModal()">+ Nouveau travailleur</button>
+        <div class="dropdown" id="fileDropdown">
+          <button type="button" onclick="toggleFileMenu(event)">Fichier ▼</button>
+          <div class="dropdown-menu">
+            <button type="button" onclick="exportDataLocal();closeFileMenu()">Exporter vers ce PC</button>
+            <label class="file-label">Importer depuis ce PC<input type="file" accept="application/json" onchange="importDataLocal(event)"></label>
+            <button type="button" onclick="exportJsonToDrive();closeFileMenu()">Sauvegarder sur Google Drive</button>
+            <button type="button" onclick="loadFromDrive();closeFileMenu()">Charger depuis Google Drive</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="summary-toolbar">
+      <div><label for="summaryYearFilter">Période des indicateurs</label><select id="summaryYearFilter" onchange="setSummaryYear(this.value)"><option value="all">Toutes années</option></select></div>
+      <div class="drive-state" id="driveState">Google Drive : en attente</div>
+    </section>
+
+    <section class="summary-grid">
+      <article class="card"><div class="metric-label">Personnel actif</div><div class="metric-value" id="metricActive">0</div><div class="metric-sub" id="metricActiveSub">0 ouvrier · 0 employé</div></article>
+      <article class="card"><div class="metric-label">Salaires bruts</div><div class="metric-value" id="metricGross">0,00 €</div><div class="metric-sub">période sélectionnée</div></article>
+      <article class="card"><div class="metric-label">Coût employeur</div><div class="metric-value" id="metricEmployerCost">0,00 €</div><div class="metric-sub">salaires + charges + avantages + primes</div></article>
+      <article class="card"><div class="metric-label">Absences en cours</div><div class="metric-value" id="metricAbsences">0</div><div class="metric-sub">maladie, accident, autres</div></article>
+      <article class="card"><div class="metric-label">Congés restants</div><div class="metric-value" id="metricLeave">0 j</div><div class="metric-sub">congés légaux des actifs</div></article>
+    </section>
+
+    <section class="workspace">
+      <aside class="side-panel">
+        <div class="panel-head">
+          <div class="panel-head-row"><h2>Travailleurs</h2><button class="small primary" onclick="openWorkerModal()">Ajouter</button></div>
+          <input id="workerSearch" class="search-input" placeholder="Rechercher nom, fonction, statut…" oninput="renderWorkerList()">
+          <div class="filters">
+            <select id="workerStatusFilter" onchange="renderWorkerList()"><option value="active">Actifs</option><option value="all">Tous</option><option value="inactive">Sortis / inactifs</option></select>
+            <select id="workerTypeFilter" onchange="renderWorkerList()"><option value="all">Ouvriers + employés</option><option value="worker">Ouvriers</option><option value="employee">Employés</option></select>
+          </div>
+        </div>
+        <div id="workerList" class="worker-list"></div>
+      </aside>
+
+      <main class="main-panel" id="mainPanel">
+        <div id="mainContent"></div>
+      </main>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modal"></div></div>
+  <div class="toast" id="toast"></div>
+  <script src="js/personnel.js?v=1"></script>
+</body>
+</html>
