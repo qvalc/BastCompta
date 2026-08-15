@@ -6,6 +6,7 @@ let googleAccessToken = null;
 let selectedWorkerId = '';
 let selectedTab = 'overview';
 let selectedSummaryYear = String(new Date().getFullYear());
+let selectedIndicatorFilter = 'total';
 let data = loadData();
 let driveSaveTimer = null;
 
@@ -57,25 +58,51 @@ function buildYearOptions(){
 }
 function setSummaryYear(value){ selectedSummaryYear=value; renderSummary(); renderMain(); }
 
+function isCurrentLeave(l){ const t=today(); return l.status!=='cancelled' && l.status!=='requested' && l.startDate<=t && (!l.endDate || l.endDate>=t); }
+function currentLeave(w){ return (w.leaves||[]).find(isCurrentLeave)||null; }
+function currentAbsence(w){ return (w.absences||[]).find(isCurrentAbsence)||null; }
+function currentPersonnelState(w){
+  if(!w.active) return 'inactive';
+  const a=currentAbsence(w);
+  if(a) return a.type==='illness'?'illness':'other';
+  if(currentLeave(w)) return 'leave';
+  return 'active';
+}
+function indicatorLabel(state){ return ({total:'Tout le personnel',active:'Actifs',leave:'En congé',illness:'En maladie',other:'Autres absences'}[state]||'Travailleurs'); }
+function setIndicatorFilter(filter){
+  selectedIndicatorFilter=filter;
+  const status=document.getElementById('workerStatusFilter'); if(status) status.value=filter==='total'?'all':'active';
+  selectedWorkerId='';
+  renderSummary(); renderWorkerList(); renderMain();
+}
 function renderSummary(){
-  const active=data.workers.filter(w=>w.active); const workers=active.filter(w=>w.type==='worker').length, employees=active.filter(w=>w.type==='employee').length;
-  let gross=0,cost=0,abs=0,leave=0;
-  data.workers.forEach(w=>{
-    w.salaries.filter(inSelectedYear).forEach(s=>{gross+=num(s.gross);cost+=salaryCost(s)});
-    w.bonuses.filter(inSelectedYear).forEach(b=>cost+=bonusCost(b));
-    abs+=w.absences.filter(a=>isCurrentAbsence(a)).length;
-    if(w.active) leave+=Math.max(0,num(w.annualLeaveDays)-usedLegalLeave(w,selectedSummaryYear==='all'?String(new Date().getFullYear()):selectedSummaryYear));
-  });
-  document.getElementById('metricActive').textContent=active.length;
-  document.getElementById('metricActiveSub').textContent=`${workers} ouvrier${workers!==1?'s':''} · ${employees} employé${employees!==1?'s':''}`;
-  document.getElementById('metricGross').textContent=money(gross); document.getElementById('metricEmployerCost').textContent=money(cost);
-  document.getElementById('metricAbsences').textContent=abs; document.getElementById('metricLeave').textContent=`${leave.toLocaleString('fr-BE',{maximumFractionDigits:1})} j`;
+  const employed=data.workers.filter(w=>w.active);
+  const workers=employed.filter(w=>w.type==='worker').length, employees=employed.filter(w=>w.type==='employee').length;
+  const counts={active:0,leave:0,illness:0,other:0};
+  employed.forEach(w=>{ const state=currentPersonnelState(w); if(counts[state]!==undefined) counts[state]++; });
+  document.getElementById('metricTotal').textContent=employed.length;
+  document.getElementById('metricTotalSub').textContent=`${workers} ouvrier${workers!==1?'s':''} · ${employees} employé${employees!==1?'s':''}`;
+  document.getElementById('metricActive').textContent=counts.active;
+  document.getElementById('metricLeave').textContent=counts.leave;
+  document.getElementById('metricIllness').textContent=counts.illness;
+  document.getElementById('metricOther').textContent=counts.other;
+  ['total','active','leave','illness','other'].forEach(k=>document.getElementById('indicator'+k.charAt(0).toUpperCase()+k.slice(1))?.classList.toggle('selected',selectedIndicatorFilter===k));
 }
 function renderWorkerList(){
   const q=(document.getElementById('workerSearch')?.value||'').toLowerCase(); const status=document.getElementById('workerStatusFilter')?.value||'active'; const type=document.getElementById('workerTypeFilter')?.value||'all';
-  const list=data.workers.filter(w=>{ if(status==='active'&&!w.active)return false;if(status==='inactive'&&w.active)return false;if(type!=='all'&&w.type!==type)return false;return `${workerName(w)} ${w.functionTitle} ${w.department}`.toLowerCase().includes(q);}).sort((a,b)=>workerName(a).localeCompare(workerName(b),'fr'));
-  document.getElementById('workerList').innerHTML=list.length?list.map(w=>`<button class="worker-item ${w.id===selectedWorkerId?'active':''}" onclick="selectWorker('${w.id}')"><div class="worker-name">${esc(workerName(w))}</div><div class="worker-meta"><span class="badge ${w.active?'active':'inactive'}">${w.active?'Actif':'Inactif'}</span><span>${w.type==='worker'?'Ouvrier':'Employé'}</span>${w.functionTitle?`<span>· ${esc(w.functionTitle)}</span>`:''}</div></button>`).join(''):'<div class="empty-state" style="min-height:180px"><div>Aucun travailleur.</div></div>';
+  const list=data.workers.filter(w=>{
+    if(status==='active'&&!w.active)return false;if(status==='inactive'&&w.active)return false;if(type!=='all'&&w.type!==type)return false;
+    if(selectedIndicatorFilter!=='total' && currentPersonnelState(w)!==selectedIndicatorFilter)return false;
+    return `${workerName(w)} ${w.functionTitle} ${w.department}`.toLowerCase().includes(q);
+  }).sort((a,b)=>workerName(a).localeCompare(workerName(b),'fr'));
+  const title=document.getElementById('workerListTitle'); if(title) title.textContent=`${indicatorLabel(selectedIndicatorFilter)} (${list.length})`;
+  document.getElementById('workerList').innerHTML=list.length?list.map(w=>{
+    const state=currentPersonnelState(w), leave=currentLeave(w), absence=currentAbsence(w);
+    const stateHtml=state==='leave'?`<span class="badge warn">En congé</span>${leave?.endDate?`<span>jusqu’au ${dateLabel(leave.endDate)}</span>`:''}`:state==='illness'?`<span class="badge danger">Maladie</span>${absence?.endDate?`<span>jusqu’au ${dateLabel(absence.endDate)}</span>`:''}`:state==='other'?`<span class="badge warn">Autre absence</span>${absence?.endDate?`<span>jusqu’au ${dateLabel(absence.endDate)}</span>`:''}`:state==='active'?'<span class="badge active">Au travail</span>':'<span class="badge inactive">Inactif</span>';
+    return `<button class="worker-item ${w.id===selectedWorkerId?'active':''}" onclick="selectWorker('${w.id}')"><div class="worker-name">${esc(workerName(w))}</div><div class="worker-meta">${stateHtml}<span>${w.type==='worker'?'Ouvrier':'Employé'}</span>${w.functionTitle?`<span>· ${esc(w.functionTitle)}</span>`:''}</div></button>`;
+  }).join(''):'<div class="empty-state" style="min-height:180px"><div>Aucune personne dans cette catégorie.</div></div>';
 }
+function setWorkerStatusFilter(){ selectedIndicatorFilter='total'; renderSummary(); renderWorkerList(); }
 function selectWorker(id){ selectedWorkerId=id; selectedTab='overview'; renderWorkerList(); renderMain(); }
 
 const tabLabels={overview:'Résumé',salary:'Salaires',time:'Prestations',leave:'Congés',absence:'Maladies & absences',bonus:'Primes & avantages',document:'Documents',training:'Formations',equipment:'Matériel',history:'Historique'};
