@@ -2726,7 +2726,7 @@ function showSubscriptionModal(result = currentSubscriptionState) {
     </div>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
-      ${renderPlanCard('client', 'Pack Suivi client', 'Pour organiser les clients, les chantiers et le personnel.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers et suivi commercial', 'Personnel : salaires, prestations, congés et absences'])}
+      ${renderPlanCard('client', 'Pack Suivi client - Personnel', 'Pour organiser les clients, les chantiers et le personnel.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers et suivi commercial', 'Personnel : salaires, contrats, prestations, absences, etc...'])}
       ${renderPlanCard('premium', 'Premium complet', 'Tous les modules dans une seule formule.', ['Pack Comptabilité', 'Pack Suivi client', 'Toutes les futures fonctions Premium'])}
     </div>
     <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>`;
