@@ -5,6 +5,7 @@ const DRIVE_SYNC_FILE_NAME = 'bastcompta-personnel-sync.json';
 let googleAccessToken = null;
 let selectedWorkerId = '';
 let selectedTab = 'overview';
+let selectedPage = 'summary';
 let selectedSummaryYear = String(new Date().getFullYear());
 let selectedIndicatorFilter = 'total';
 let data = loadData();
@@ -56,7 +57,7 @@ function buildYearOptions(){
   sel.innerHTML=[...years].sort((a,b)=>b.localeCompare(a)).map(y=>`<option value="${y}">${y}</option>`).join('')+'<option value="all">Toutes années</option>';
   if(![...sel.options].some(o=>o.value===selectedSummaryYear)) selectedSummaryYear=String(new Date().getFullYear()); sel.value=selectedSummaryYear;
 }
-function setSummaryYear(value){ selectedSummaryYear=value; renderSummary(); renderMain(); }
+function setSummaryYear(value){ selectedSummaryYear=value; renderSummary(); renderCurrentView(); }
 
 function isCurrentLeave(l){ const t=today(); return l.status!=='cancelled' && l.status!=='requested' && l.startDate<=t && (!l.endDate || l.endDate>=t); }
 function currentLeave(w){ return (w.leaves||[]).find(isCurrentLeave)||null; }
@@ -71,9 +72,10 @@ function currentPersonnelState(w){
 function indicatorLabel(state){ return ({total:'Tout le personnel',active:'Actifs',leave:'En congé',illness:'En maladie',other:'Autres absences'}[state]||'Travailleurs'); }
 function setIndicatorFilter(filter){
   selectedIndicatorFilter=filter;
+  selectedPage='workers';
   const status=document.getElementById('workerStatusFilter'); if(status) status.value=filter==='total'?'all':'active';
   selectedWorkerId='';
-  renderSummary(); renderWorkerList(); renderMain();
+  renderSummary(); renderWorkerList(); renderCurrentView();
 }
 function renderSummary(){
   const employed=data.workers.filter(w=>w.active);
@@ -103,10 +105,103 @@ function renderWorkerList(){
   }).join(''):'<div class="empty-state" style="min-height:180px"><div>Aucune personne dans cette catégorie.</div></div>';
 }
 function setWorkerStatusFilter(){ selectedIndicatorFilter='total'; renderSummary(); renderWorkerList(); }
-function selectWorker(id){ selectedWorkerId=id; selectedTab='overview'; renderWorkerList(); renderMain(); }
+function selectWorker(id){ selectedWorkerId=id; selectedTab='overview'; selectedPage='worker'; renderWorkerList(); renderCurrentView(); }
 
 const tabLabels={overview:'Résumé',salary:'Salaires',time:'Prestations',leave:'Congés',absence:'Maladies & absences',bonus:'Primes & avantages',document:'Documents',training:'Formations',equipment:'Matériel',history:'Historique'};
-function setWorkerTab(tab){ selectedTab=tab; renderMain(); }
+function setWorkerTab(tab){ selectedTab=tab; selectedPage='worker'; renderCurrentView(); }
+function globalYearMatch(item){
+  if(selectedSummaryYear==='all') return true;
+  const raw=item.date||item.startDate||item.month||item.obtainedDate||item.assignedDate||item.expiryDate||'';
+  return String(raw).slice(0,4)===selectedSummaryYear;
+}
+function workersForIndicator(filter=selectedIndicatorFilter){
+  return data.workers.filter(w=>{
+    if(filter==='total') return w.active;
+    return currentPersonnelState(w)===filter;
+  }).sort((a,b)=>workerName(a).localeCompare(workerName(b),'fr'));
+}
+function openWorkerSection(workerId,tab='overview'){
+  selectedWorkerId=workerId;
+  selectedTab=tab;
+  selectedPage='worker';
+  renderWorkerList();
+  renderCurrentView();
+}
+function pageTitle(key){
+  return ({summary:'Tableau de bord',workers:'Travailleurs',salary:'Salaires',time:'Prestations',leave:'Congés',absence:'Maladies & absences',bonus:'Primes & avantages',document:'Documents',training:'Formations',equipment:'Matériel'}[key]||'Personnel');
+}
+function stateBadge(w){
+  const state=currentPersonnelState(w), leave=currentLeave(w), absence=currentAbsence(w);
+  if(state==='leave') return `<span class="badge warn">En congé</span>${leave?.endDate?` <span class="global-muted">jusqu’au ${dateLabel(leave.endDate)}</span>`:''}`;
+  if(state==='illness') return `<span class="badge danger">Maladie</span>${absence?.endDate?` <span class="global-muted">jusqu’au ${dateLabel(absence.endDate)}</span>`:''}`;
+  if(state==='other') return `<span class="badge warn">Autre absence</span>${absence?.endDate?` <span class="global-muted">jusqu’au ${dateLabel(absence.endDate)}</span>`:''}`;
+  if(state==='active') return '<span class="badge active">Au travail</span>';
+  return '<span class="badge inactive">Inactif</span>';
+}
+function renderGlobalWorkers(filter=selectedIndicatorFilter){
+  const workers=workersForIndicator(filter);
+  const label=indicatorLabel(filter);
+  return `<div class="global-page"><div class="global-head"><div><h2>${esc(label)}</h2><p>${workers.length} personne${workers.length!==1?'s':''} dans cette vue.</p></div><button class="primary" onclick="openWorkerModal()">+ Nouveau travailleur</button></div>
+  <div class="global-filter-tabs">${['total','active','leave','illness','other'].map(k=>`<button class="global-filter-btn ${filter===k?'active':''}" onclick="setIndicatorFilter('${k}')">${indicatorLabel(k)} (${workersForIndicator(k).length})</button>`).join('')}</div>
+  ${workers.length?`<div class="global-table-wrap"><table class="data-table global-table"><thead><tr><th>Nom</th><th>Type</th><th>Fonction</th><th>État actuel</th><th>Entrée</th><th></th></tr></thead><tbody>${workers.map(w=>`<tr><td><strong>${esc(workerName(w))}</strong></td><td>${w.type==='worker'?'Ouvrier':'Employé'}</td><td>${esc(w.functionTitle||'—')}</td><td>${stateBadge(w)}</td><td>${dateLabel(w.startDate)}</td><td class="num"><button class="small" onclick="openWorkerSection('${w.id}','overview')">Ouvrir la fiche</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state global-empty"><div>Aucune personne dans cette catégorie.</div></div>'}</div>`;
+}
+function globalRecords(page){
+  const spec={salary:['salaries','salary'],time:['timeEntries','time'],leave:['leaves','leave'],absence:['absences','absence'],bonus:['bonuses','bonus'],document:['documents','document'],training:['trainings','training'],equipment:['equipment','equipment']}[page];
+  if(!spec) return [];
+  const [array,tab]=spec;
+  const rows=[];
+  data.workers.forEach(w=>(w[array]||[]).forEach(r=>{ if(globalYearMatch(r)) rows.push({worker:w,record:r,tab}); }));
+  return rows.sort((a,b)=>String(b.record.date||b.record.startDate||b.record.month||b.record.obtainedDate||b.record.assignedDate||'').localeCompare(String(a.record.date||a.record.startDate||a.record.month||a.record.obtainedDate||a.record.assignedDate||'')));
+}
+function renderGlobalRecords(page){
+  const rows=globalRecords(page);
+  const period=selectedSummaryYear==='all'?'Toutes années':selectedSummaryYear;
+  const configs={
+    salary:{cols:[['Mois',x=>esc(x.record.month||'—')],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Brut',x=>money(x.record.gross),'num'],['Net',x=>money(x.record.net),'num'],['Coût employeur',x=>money(salaryCost(x.record)),'num']]},
+    time:{cols:[['Date',x=>dateLabel(x.record.date)],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Heures',x=>`${num(x.record.hours)} h`,'num'],['H. supp.',x=>`${num(x.record.overtimeHours)} h`,'num'],['Client / chantier',x=>esc(x.record.client||'—')]]},
+    leave:{cols:[['Début',x=>dateLabel(x.record.startDate)],['Fin',x=>dateLabel(x.record.endDate)],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Type',x=>cellValue(x.record,'type','leaveType')],['Jours',x=>num(x.record.days)||daysInclusive(x.record.startDate,x.record.endDate),'num'],['Statut',x=>esc(x.record.status||'—')]]},
+    absence:{cols:[['Début',x=>dateLabel(x.record.startDate)],['Fin',x=>dateLabel(x.record.endDate)],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Type',x=>cellValue(x.record,'type','absenceType')],['Certificat',x=>esc(x.record.certificate||'—')],['Note',x=>esc(x.record.note||'—')]]},
+    bonus:{cols:[['Date',x=>dateLabel(x.record.date)],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Type',x=>esc(x.record.type||'—')],['Description',x=>esc(x.record.description||'—')],['Montant',x=>money(x.record.amount),'num']]},
+    document:{cols:[['Date',x=>dateLabel(x.record.date)],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Type',x=>esc(x.record.type||'—')],['Document',x=>esc(x.record.name||'—')],['Échéance',x=>dateLabel(x.record.expiryDate)]]},
+    training:{cols:[['Formation / brevet',x=>esc(x.record.name||'—')],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Obtention',x=>dateLabel(x.record.obtainedDate)],['Expiration',x=>dateLabel(x.record.expiryDate)],['Organisme',x=>esc(x.record.provider||'—')]]},
+    equipment:{cols:[['Matériel',x=>esc(x.record.name||'—')],['Travailleur',x=>`<strong>${esc(workerName(x.worker))}</strong>`],['Référence',x=>esc(x.record.serial||'—')],['Remis le',x=>dateLabel(x.record.assignedDate)],['Restitué le',x=>dateLabel(x.record.returnedDate)],['État',x=>esc(x.record.condition||'—')]]}
+  };
+  const cfg=configs[page];
+  return `<div class="global-page"><div class="global-head"><div><h2>${pageTitle(page)}</h2><p>Vue globale du personnel · ${period} · ${rows.length} enregistrement${rows.length!==1?'s':''}.</p></div></div>
+  ${rows.length?`<div class="global-table-wrap"><table class="data-table global-table"><thead><tr>${cfg.cols.map(c=>`<th>${c[0]}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(x=>`<tr>${cfg.cols.map(c=>`<td class="${c[2]||''}">${c[1](x)}</td>`).join('')}<td class="num"><button class="small" onclick="openWorkerSection('${x.worker.id}','${x.tab}')">Voir la fiche</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state global-empty"><div>Aucune donnée pour la période sélectionnée.</div></div>'}</div>`;
+}
+function renderGlobalSummary(){
+  const active=data.workers.filter(w=>w.active), leave=workersForIndicator('leave'), illness=workersForIndicator('illness'), other=workersForIndicator('other');
+  const birthDates=active.filter(w=>w.birthDate).length;
+  const contractsEnding=active.filter(w=>w.endDate&&w.endDate>=today()).length;
+  const trainingDue=active.reduce((n,w)=>n+(w.trainings||[]).filter(t=>t.expiryDate&&t.expiryDate>=today()).length,0);
+  return `<div class="dashboard-grid"><aside class="quick-summary"><h3>Résumé rapide</h3><div class="quick-line"><span>Personnel actif</span><strong>${active.length}</strong></div><div class="quick-line"><span>En congé aujourd’hui</span><strong>${leave.length}</strong></div><div class="quick-line"><span>En maladie aujourd’hui</span><strong>${illness.length}</strong></div><div class="quick-line"><span>Autres absences</span><strong>${other.length}</strong></div><div class="quick-line"><span>Dates de naissance renseignées</span><strong>${birthDates}</strong></div><div class="quick-line"><span>Contrats avec échéance</span><strong>${contractsEnding}</strong></div><div class="quick-line"><span>Formations avec échéance</span><strong>${trainingDue}</strong></div></aside>
+  <section class="overview-panel"><div class="global-head"><div><h2>Aperçu du personnel</h2><p>Situation actuelle de l’ensemble de l’équipe.</p></div><button class="small" onclick="setPersonnelPage('workers')">Voir tous les travailleurs</button></div>${renderGlobalWorkers('total')}</section></div>`;
+}
+function setPersonnelPage(page){
+  selectedPage=page||'summary';
+  selectedWorkerId='';
+  if(page==='workers') selectedIndicatorFilter='total';
+  renderSummary();
+  renderWorkerList();
+  renderCurrentView();
+}
+function renderCurrentView(){
+  const workspace=document.querySelector('.workspace');
+  if(!workspace) return;
+  if(selectedPage==='worker'){
+    workspace.classList.remove('global-view');
+    renderMain();
+    return;
+  }
+  workspace.classList.add('global-view');
+  const root=document.getElementById('mainContent');
+  if(!root) return;
+  if(selectedPage==='summary') root.innerHTML=renderGlobalSummary();
+  else if(selectedPage==='workers') root.innerHTML=renderGlobalWorkers(selectedIndicatorFilter);
+  else root.innerHTML=renderGlobalRecords(selectedPage);
+}
+
 function renderMain(){
   const root=document.getElementById('mainContent'), w=getWorker();
   if(!w){ root.innerHTML=`<div class="empty-state"><div><h2>Gestion du personnel</h2><p>Sélectionnez un travailleur ou créez une nouvelle fiche.</p><button class="primary" onclick="openWorkerModal()">+ Ajouter un travailleur</button></div></div>`; return; }
@@ -206,7 +301,7 @@ async function saveRecord(type,id=''){
 }
 async function deleteRecord(type,id){ const w=getWorker(),cfg=recordConfigs[type];if(!w||!cfg)return; const arr=w[cfg.array],r=arr.find(x=>x.id===id);if(!r||!confirm('Supprimer cet enregistrement ?'))return; if(type==='document'&&r.driveFileId&&googleAccessToken&&confirm('Supprimer aussi le fichier associé de Google Drive ?')) await deleteDriveFile(r.driveFileId); w[cfg.array]=arr.filter(x=>x.id!==id);saveLocal(`${workerName(w)} : ${cfg.title.toLowerCase()} supprimé`);renderAll(); }
 
-function renderAll(){ buildYearOptions();renderSummary();renderWorkerList();renderMain(); }
+function renderAll(){ buildYearOptions();renderSummary();renderWorkerList();renderCurrentView(); }
 
 function toggleFileMenu(event){event?.stopPropagation();document.getElementById('fileDropdown').classList.toggle('open');}
 function closeFileMenu(){document.getElementById('fileDropdown').classList.remove('open');}
@@ -232,7 +327,8 @@ window.addEventListener('message',async event=>{
   if(m.type==='BASTCOMPTA_GOOGLE_TOKEN'){googleAccessToken=m.accessToken||null;setDriveState(!!googleAccessToken);if(googleAccessToken){const loaded=await loadSyncDataFromDrive(false,true);if(loaded)notify('Personnel actualisé depuis Google Drive.');}}
   if(m.type==='BASTCOMPTA_GOOGLE_LOGOUT'){googleAccessToken=null;setDriveState(false);}
   if(m.type==='BASTCOMPTA_SET_ACTIVE_PAGE'){
-    const map={summary:'overview',workers:'overview',salary:'salary',time:'time',leave:'leave',absence:'absence',bonus:'bonus',document:'document',training:'training',equipment:'equipment'};if(map[m.pageKey]){selectedTab=map[m.pageKey];renderMain();}
+    const allowed=['summary','workers','salary','time','leave','absence','bonus','document','training','equipment'];
+    if(allowed.includes(m.pageKey)) setPersonnelPage(m.pageKey);
   }
 });
 window.addEventListener('storage',e=>{if(e.key===STORAGE_KEY){data=loadData();renderAll();}});
