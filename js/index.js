@@ -78,6 +78,7 @@ const backupOverlay = document.getElementById('backupOverlay');
 const backupOverlayTitle = document.getElementById('backupOverlayTitle');
 const backupOverlayText = document.getElementById('backupOverlayText');
 const devisFrame = document.getElementById('devisFrame');
+const supplierFrame = document.getElementById('supplierFrame');
 const terrainFrame = document.getElementById('terrainFrame');
 const comptaFrame = document.getElementById('comptaFrame');
 const chantierFrame = document.getElementById('chantierFrame');
@@ -425,6 +426,7 @@ function switchMainTab(tabName) {
   });
 
   document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
+  document.getElementById('panel-fournisseurs')?.classList.remove('active');
   document.getElementById('panel-terrain')?.classList.toggle('active', tabName === 'terrain');
   document.getElementById('panel-compta').classList.toggle('active', tabName === 'compta');
   document.getElementById('panel-chantier').classList.toggle('active', tabName === 'chantier');
@@ -548,6 +550,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
   try { sessionStorage.setItem('bastcompta_subscription_access', JSON.stringify(subscription?.access || {})); } catch (error) {}
   [
     { tab: 'devis', frame: devisFrame },
+    { tab: 'devis', frame: supplierFrame },
     { tab: 'terrain', frame: terrainFrame },
     { tab: 'compta', frame: comptaFrame },
     { tab: 'chantier', frame: chantierFrame },
@@ -572,7 +575,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 }
 
 function unloadProtectedFrames() {
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     if (!frame) return;
     frame.setAttribute('src', 'about:blank');
   });
@@ -666,6 +669,7 @@ function getFrameModuleSaveApi(frame) {
 function getLoadedModuleFrames() {
   return [
     { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+    { key: 'fournisseurs', label: 'Fournisseurs', frame: supplierFrame },
     { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
     { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
     { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
@@ -1073,6 +1077,7 @@ async function saveAllModulesFromPortal() {
 // Mise en place du suivi pour les modules chargés maintenant ou plus tard.
 [
   { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+  { key: 'fournisseurs', label: 'Fournisseurs', frame: supplierFrame },
   { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
   { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
   { key: 'suivi-client', label: 'Suivi client', frame: chantierFrame },
@@ -2402,7 +2407,7 @@ function broadcastDriveConnected() {
     expiresAt: googleTokenExpiresAt
   };
 
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
@@ -2412,13 +2417,13 @@ function broadcastDriveDisconnected() {
     type: 'BASTCOMPTA_GOOGLE_LOGOUT'
   };
 
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     postToFrame(frame, payload);
   });
 }
 
 function bindIframeMessaging() {
-  [devisFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, tarifsFrame].forEach(frame => {
+  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, tarifsFrame].forEach(frame => {
     frame?.addEventListener('load', () => {
       if (isTokenFresh()) broadcastDriveConnected();
       else broadcastDriveDisconnected();
@@ -2428,6 +2433,17 @@ function bindIframeMessaging() {
 
 window.addEventListener('message', event => {
   if (event.origin !== window.location.origin) return;
+  if (event.data?.type === 'BASTCOMPTA_OPEN_DEVIS_PAGE') {
+    const pageKey = ['quote','invoice','tarifs','reminder','communication','peppol','settings'].includes(event.data.pageKey) ? event.data.pageKey : 'quote';
+    switchMainTab('devis');
+    document.getElementById('panel-fournisseurs')?.classList.remove('active');
+    document.getElementById('panel-devis')?.classList.add('active');
+    const btn = document.querySelector(`.sidebar-submenu [data-main-tab="devis"][data-page-key="${pageKey}"]`);
+    document.querySelectorAll('.sidebar-submenu button').forEach(b => b.classList.toggle('active', b === btn));
+    if (devisFrame?.contentDocument?.readyState === 'complete') devisFrame.contentWindow?.postMessage({ type: 'BASTCOMPTA_SET_ACTIVE_PAGE', pageKey }, window.location.origin);
+    else devisFrame?.addEventListener('load', () => devisFrame.contentWindow?.postMessage({ type: 'BASTCOMPTA_SET_ACTIVE_PAGE', pageKey }, window.location.origin), { once: true });
+    return;
+  }
   if (
     event.data?.type === 'BASTCOMPTA_DRIVE_REQUEST_TOKEN' ||
     event.data?.type === 'BASTCOMPTA_REFRESH_TOKEN' ||
@@ -3028,6 +3044,17 @@ onAuthStateChanged(auth, async (user) => {
   const defaults = { devis: 'quote', compta: 'sales', personnel: 'summary', impots: 'summary' };
   const frames = { devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, personnel: personnelFrame, impots: impotsFrame };
 
+  function showDevisSubpage(pageKey) {
+    const suppliers = pageKey === 'suppliers';
+    document.getElementById('panel-devis')?.classList.toggle('active', !suppliers);
+    document.getElementById('panel-fournisseurs')?.classList.toggle('active', suppliers);
+    if (suppliers && supplierFrame) {
+      const targetSrc = supplierFrame.dataset.src || 'fournisseurs.html?embedded=1';
+      if (!supplierFrame.getAttribute('src') || supplierFrame.getAttribute('src') === 'about:blank') supplierFrame.setAttribute('src', targetSrc);
+      if (isTokenFresh()) postToFrame(supplierFrame, { type: 'BASTCOMPTA_GOOGLE_TOKEN', accessToken: googleAccessToken, expiresAt: googleTokenExpiresAt });
+    }
+  }
+
   function closeMobileSidebar() {
     shell?.classList.remove('sidebar-open');
     toggleBtn?.setAttribute('aria-expanded', 'false');
@@ -3083,6 +3110,7 @@ onAuthStateChanged(auth, async (user) => {
       }
 
       switchMainTab(tabName);
+      if (tabName === 'devis') showDevisSubpage(pageKey);
       const actualTab = document.querySelector('.sidebar-module.active')?.dataset.mainTab || tabName;
       if (actualTab !== tabName) {
         const fallback = document.querySelector(`.sidebar-submenu [data-main-tab="${actualTab}"][data-page-key="${defaults[actualTab] || ''}"]`);
@@ -3092,7 +3120,7 @@ onAuthStateChanged(auth, async (user) => {
         return;
       }
       updateSidebarState(tabName, isModuleHeader ? null : button);
-      sendNavigation(tabName, pageKey, clientAction);
+      if (!(tabName === 'devis' && pageKey === 'suppliers')) sendNavigation(tabName, pageKey, clientAction);
       closeMobileSidebar();
       event.stopImmediatePropagation();
     }, true);

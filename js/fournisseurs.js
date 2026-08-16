@@ -16,7 +16,7 @@ let data=loadData();
 function saveLocal(detail='Fournisseurs modifiés'){data.updatedAt=new Date().toISOString();localStorage.setItem(STORAGE_KEY,JSON.stringify(data));try{window.parent?.BastComptaPortal?.markChanged?.('fournisseurs',detail)}catch{};if(googleAccessToken){clearTimeout(driveSaveTimer);driveSaveTimer=setTimeout(()=>saveSyncToDrive(false),900)}}
 function notify(msg){const e=document.getElementById('toast');e.textContent=msg;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2200)}
 function supplier(){return data.suppliers.find(s=>s.id===selectedSupplierId)||null}
-function returnToDevis(page='tarifs'){location.href=`devis-facture.html?embedded=1&open=${encodeURIComponent(page)}`}
+function returnToDevis(page='tarifs'){if(window.parent&&window.parent!==window){safePostToParent({type:'BASTCOMPTA_OPEN_DEVIS_PAGE',pageKey:page});return}location.href=`devis-facture.html?embedded=1&open=${encodeURIComponent(page)}`}
 function addSupplier(){const s=normalizeSupplier({name:'Nouveau fournisseur'});data.suppliers.unshift(s);selectedSupplierId=s.id;selectedTab='info';saveLocal('Fournisseur ajouté');renderAll()}
 function deleteSupplier(){const s=supplier();if(!s||!confirm(`Supprimer « ${s.name||'ce fournisseur'} » et ses articles ?`))return;data.suppliers=data.suppliers.filter(x=>x.id!==s.id);selectedSupplierId='';saveLocal('Fournisseur supprimé');renderAll()}
 function setField(k,v){const s=supplier();if(!s)return;s[k]=v;saveLocal('Fiche fournisseur modifiée');renderSupplierList()}
