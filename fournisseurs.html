@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <script src="js/storage.js"></script>
+  <script src="js/devis-facture-access.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fournisseurs</title>
+  <link rel="stylesheet" href="css/fournisseurs.css?v=1">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <button class="back-link" type="button" onclick="returnToDevis()">← Devis & Facture</button>
+        <h1>Fournisseurs</h1>
+        <p>Fiches fournisseurs et articles de référence</p>
+      </div>
+      <div class="top-actions">
+        <span id="driveState" class="drive-state">Google Drive : non connecté</span>
+        <button type="button" class="secondary" onclick="saveSyncToDrive(true)">Sauvegarder Drive</button>
+        <button type="button" class="primary" onclick="addSupplier()">+ Ajouter un fournisseur</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="supplier-panel">
+        <div class="panel-head">
+          <h2>Fournisseurs <span id="supplierCount">0</span></h2>
+          <input id="supplierSearch" type="search" placeholder="Rechercher..." oninput="renderSupplierList()">
+        </div>
+        <div id="supplierList" class="supplier-list"></div>
+      </aside>
+
+      <section id="workspace" class="workspace"></section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="js/fournisseurs.js"></script>
+</body>
+</html>

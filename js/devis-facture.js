@@ -287,6 +287,7 @@ const pageDefs = [
   { key: 'quote', label: 'Devis' },
   { key: 'invoice', label: 'Facture' },
   { key: 'tarifs', label: 'Tarifs' },
+  { key: 'suppliers', label: 'Fournisseurs', external: 'fournisseurs.html?embedded=1' },
   { key: 'reminder', label: 'Rappel' },
   { key: 'communication', label: 'Communication structurée' },
   { key: 'peppol', label: 'Peppol / Doccle' },
@@ -3842,6 +3843,11 @@ function canAccessDevisPage(pageKey) {
 }
 
 async function openDevisPage(pageKey) {
+  const pageDef = pageDefs.find(page => page.key === pageKey);
+  if (pageDef?.external) {
+    window.location.href = pageDef.external;
+    return;
+  }
   if (!canAccessDevisPage(pageKey)) {
     window.parent?.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION', pack: 'accounting' }, window.location.origin);
     return;

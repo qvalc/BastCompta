@@ -1237,11 +1237,12 @@ async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileI
 window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccounting;
 
 
-const BAST_BACKUP_VERSION = 6;
+const BAST_BACKUP_VERSION = 7;
 const LOCAL_DEVIS_KEY = 'devis-facture-style-vrai-document';
 const LOCAL_COMPTA_KEY = 'comptabilite-local-v1';
 const LOCAL_CHANTIERS_KEY = 'bastcompta-chantiers-v1';
 const LOCAL_PERSONNEL_KEY = 'bastcompta-personnel-v1';
+const LOCAL_FOURNISSEURS_KEY = 'bastcompta-fournisseurs-v1';
 const LOCAL_IMPOTS_KEY = 'bastcompta-impots-belgique-v1';
 const LOCAL_TARIFS_KEY = 'bastcompta_tarifs_v7_vierge_sans_fiche';
 const LOCAL_TARIFS_CATEGORIES_KEY = 'bastcompta_tarifs_categories_v3_vierge_sans_fiche';
@@ -1547,6 +1548,7 @@ function getLocalBackupData() {
     comptabilite: safeJsonParse(localStorage.getItem(LOCAL_COMPTA_KEY), {}),
     chantiers: safeJsonParse(localStorage.getItem(LOCAL_CHANTIERS_KEY), { version: 1, projects: [] }),
     personnel: safeJsonParse(localStorage.getItem(LOCAL_PERSONNEL_KEY), { version: 1, workers: [] }),
+    fournisseurs: safeJsonParse(localStorage.getItem(LOCAL_FOURNISSEURS_KEY), { version: 1, suppliers: [] }),
     impots: safeJsonParse(localStorage.getItem(LOCAL_IMPOTS_KEY), {}),
     tarifs: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_KEY), []),
     tarifsCategories: safeJsonParse(localStorage.getItem(LOCAL_TARIFS_CATEGORIES_KEY), [])
@@ -1918,6 +1920,7 @@ async function createFullBackupZip() {
   const localCompta = localData.comptabilite || {};
   const localChantiers = localData.chantiers || { version: 1, projects: [] };
   const localPersonnel = localData.personnel || { version: 1, workers: [] };
+  const localFournisseurs = localData.fournisseurs || { version: 1, suppliers: [] };
   const localImpots = localData.impots || {};
   const localTarifs = Array.isArray(localData.tarifs) ? localData.tarifs : [];
   const localTarifsCategories = Array.isArray(localData.tarifsCategories) ? localData.tarifsCategories : [];
@@ -1940,9 +1943,9 @@ async function createFullBackupZip() {
       displayName: currentUser.displayName || ''
     },
     backupType: 'complete-local-drive-pdf-crm-suivi-client-faithful',
-    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'personnel', 'impots', 'tarifs'],
+    modules: ['devis-facture', 'comptabilite', 'suivi-client', 'personnel', 'fournisseurs', 'impots', 'tarifs'],
     restore: { localStorage: true, googleDrive: true, pdfFiles: true, clients: true, crm: true, mode: 'complete-reconstruction' },
-    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, personnel: LOCAL_PERSONNEL_KEY, impots: LOCAL_IMPOTS_KEY, tarifs: LOCAL_TARIFS_KEY, tarifsCategories: LOCAL_TARIFS_CATEGORIES_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
+    restoreHints: { localStorage: { devisFacture: LOCAL_DEVIS_KEY, comptabilite: LOCAL_COMPTA_KEY, suiviClient: LOCAL_CHANTIERS_KEY, chantiers: LOCAL_CHANTIERS_KEY, personnel: LOCAL_PERSONNEL_KEY, fournisseurs: LOCAL_FOURNISSEURS_KEY, impots: LOCAL_IMPOTS_KEY, tarifs: LOCAL_TARIFS_KEY, tarifsCategories: LOCAL_TARIFS_CATEGORIES_KEY }, driveSpace: 'appDataFolder', conflictPolicy: 'replace-existing-by-name-after-confirmation' },
     crm: { clients: [], count: 0, exports: [] },
     clients: [],
     files: []
@@ -1961,12 +1964,14 @@ async function createFullBackupZip() {
   zip.file('01-donnees-locales/comptabilite-local.json', JSON.stringify(localCompta, null, 2));
   zip.file('01-donnees-locales/suivi-client-local.json', JSON.stringify(localChantiers, null, 2));
   zip.file('01-donnees-locales/personnel-local.json', JSON.stringify(localPersonnel, null, 2));
+  zip.file('01-donnees-locales/fournisseurs-local.json', JSON.stringify(localFournisseurs, null, 2));
   zip.file('01-donnees-locales/impots-ipp-local.json', JSON.stringify(localImpots, null, 2));
   zip.file('01-donnees-locales/tarifs-local.json', JSON.stringify({ categories: localTarifsCategories, tarifs: localTarifs }, null, 2));
   addFile('01-donnees-locales/devis-facture-local.json', 'localStorage', { module: 'devis-facture' });
   addFile('01-donnees-locales/comptabilite-local.json', 'localStorage', { module: 'comptabilite' });
   addFile('01-donnees-locales/suivi-client-local.json', 'localStorage', { module: 'suivi-client' });
   addFile('01-donnees-locales/personnel-local.json', 'localStorage', { module: 'personnel' });
+  addFile('01-donnees-locales/fournisseurs-local.json', 'localStorage', { module: 'fournisseurs' });
   addFile('01-donnees-locales/impots-ipp-local.json', 'localStorage', { module: 'impots' });
   addFile('01-donnees-locales/tarifs-local.json', 'localStorage', { module: 'tarifs' });
 
@@ -2151,6 +2156,7 @@ async function handleFullRestoreFile(event) {
     const comptaData = await readJsonFromZip('01-donnees-locales/comptabilite-local.json', null);
     const suiviData = await readJsonFromZip('01-donnees-locales/suivi-client-local.json', null);
     const personnelData = await readJsonFromZip('01-donnees-locales/personnel-local.json', null);
+    const fournisseursData = await readJsonFromZip('01-donnees-locales/fournisseurs-local.json', null);
     const impotsData = await readJsonFromZip('01-donnees-locales/impots-ipp-local.json', null);
     const tarifsData = await readJsonFromZip('01-donnees-locales/tarifs-local.json', null);
 
@@ -2158,6 +2164,7 @@ async function handleFullRestoreFile(event) {
     if (comptaData) localStorage.setItem(LOCAL_COMPTA_KEY, JSON.stringify(comptaData));
     if (suiviData) localStorage.setItem(LOCAL_CHANTIERS_KEY, JSON.stringify(suiviData));
     if (personnelData) localStorage.setItem(LOCAL_PERSONNEL_KEY, JSON.stringify(personnelData));
+    if (fournisseursData) localStorage.setItem(LOCAL_FOURNISSEURS_KEY, JSON.stringify(fournisseursData));
     if (impotsData) localStorage.setItem(LOCAL_IMPOTS_KEY, JSON.stringify(impotsData));
     if (tarifsData) {
       if (Array.isArray(tarifsData.tarifs)) localStorage.setItem(LOCAL_TARIFS_KEY, JSON.stringify(tarifsData.tarifs));
