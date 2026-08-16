@@ -40,6 +40,16 @@ async function saveSyncToDrive(showToast=true){if(!googleAccessToken){if(showToa
 async function loadFromDriveIfNewer(){if(!googleAccessToken)return false;try{const file=(await driveList())[0];if(!file)return false;const r=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:{Authorization:`Bearer ${googleAccessToken}`}});if(!r.ok)return false;const remote=normalizeData(await r.json());if(data.suppliers.length&&String(remote.updatedAt||'')<=String(data.updatedAt||''))return false;data=remote;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));selectedSupplierId='';renderAll();return true}catch(e){console.warn(e);return false}}
 window.addEventListener('message',async e=>{if(location.origin&&location.origin!=='null'&&e.origin!==location.origin)return;const m=e.data||{};if(m.type==='BASTCOMPTA_GOOGLE_TOKEN'){googleAccessToken=m.accessToken||null;setDriveState(!!googleAccessToken);if(googleAccessToken)await loadFromDriveIfNewer()}if(m.type==='BASTCOMPTA_GOOGLE_LOGOUT'){googleAccessToken=null;setDriveState(false)}})
 window.addEventListener('storage',e=>{if(e.key===STORAGE_KEY){data=loadData();renderAll()}})
-async function saveFromPortalGlobal(){saveLocal('Sauvegarde globale Fournisseurs');const drive=googleAccessToken?await saveSyncToDrive(false):false;return{ok:true,module:'fournisseurs',local:true,drive:!!drive}}
+async function saveFromPortalGlobal(){
+  saveLocal('Sauvegarde globale Fournisseurs');
+  if(!googleAccessToken){
+    return{ok:true,module:'fournisseurs',local:true,drive:false,warnings:['Google Drive non connecté']};
+  }
+  const drive=await saveSyncToDrive(false);
+  if(!drive){
+    return{ok:false,module:'fournisseurs',local:true,drive:false,message:'Sauvegarde locale effectuée, mais la sauvegarde Google Drive des fournisseurs a échoué.'};
+  }
+  return{ok:true,module:'fournisseurs',local:true,drive:true};
+}
 window.BastComptaModule={name:'Fournisseurs',save:saveFromPortalGlobal,saveData:saveFromPortalGlobal,getChangeSnapshot:()=>data,getStatus:()=>({ready:true,module:'fournisseurs'})};
 setDriveState(false);renderAll();safePostToParent({type:'BASTCOMPTA_DRIVE_STATUS_REQUEST'});
