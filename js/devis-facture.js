@@ -3053,7 +3053,105 @@ function formatMailTemplate(template, docKey) {
   return String(template || '').replace(/\{(clientName|clientEmail|documentNumber|companyName|totalHTVA|totalTVA|totalTTC|date|dueDate|validity)\}/g, (_, key) => replacements[key] || '');
 }
 
-function sendDocumentEmail(docKey) {
+const BASTCOMPTA_MAIL_WORKER_URL = 'https://bastcompta-mail.qvalc-be.workers.dev/';
+let bastComptaFirebaseTokenWaiter = null;
+
+function requestBastComptaFirebaseToken() {
+  if (window.parent === window) return Promise.resolve('');
+  if (bastComptaFirebaseTokenWaiter) return bastComptaFirebaseTokenWaiter;
+
+  bastComptaFirebaseTokenWaiter = new Promise(resolve => {
+    const timeout = window.setTimeout(() => {
+      bastComptaFirebaseTokenWaiter = null;
+      resolve('');
+    }, 5000);
+
+    const handler = event => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'BASTCOMPTA_FIREBASE_TOKEN') return;
+      window.removeEventListener('message', handler);
+      window.clearTimeout(timeout);
+      const token = String(event.data?.token || '');
+      bastComptaFirebaseTokenWaiter = null;
+      resolve(token);
+    };
+
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: 'BASTCOMPTA_FIREBASE_TOKEN_REQUEST' }, window.location.origin);
+  });
+
+  return bastComptaFirebaseTokenWaiter;
+}
+
+function mailTextToHtml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\r?\n/g, '<br>');
+}
+
+function safePdfFileName(docKey, doc) {
+  const prefix = docKey === 'quote' ? 'Devis' : docKey === 'reminder' ? 'Rappel' : 'Facture';
+  const number = String(doc?.documentNumber || 'document').trim().replace(/[^a-zA-Z0-9._-]+/g, '-');
+  return `${prefix}-${number || 'document'}.pdf`;
+}
+
+async function generateDocumentPdfBase64(docKey) {
+  if (!window.html2canvas || !window.jspdf?.jsPDF) {
+    throw new Error('Les bibliothèques PDF ne sont pas disponibles. Rechargez la page puis réessayez.');
+  }
+
+  const snapshot = cloneForBackup(data);
+  await prepareBastComptaDocumentForBackupPdf(snapshot, docKey);
+
+  try {
+    const page = document.querySelector(`.page[data-page="${docKey}"].active`) || document.querySelector('.page.active');
+    const sheet = page?.querySelector('.sheet');
+    if (!sheet) throw new Error('Document introuvable pour la génération PDF.');
+
+    const canvas = await window.html2canvas(sheet, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: Math.max(sheet.scrollWidth, 1100),
+      windowHeight: Math.max(sheet.scrollHeight, 1500)
+    });
+
+    const pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 24;
+    const imgWidth = pageWidth - margin * 2;
+    const sliceHeight = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+    const pageCanvas = document.createElement('canvas');
+    const ctx = pageCanvas.getContext('2d');
+    pageCanvas.width = canvas.width;
+
+    let y = 0;
+    let pageIndex = 0;
+    while (y < canvas.height) {
+      const currentSliceHeight = Math.min(sliceHeight, canvas.height - y);
+      pageCanvas.height = currentSliceHeight;
+      ctx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(canvas, 0, y, canvas.width, currentSliceHeight, 0, 0, canvas.width, currentSliceHeight);
+      if (pageIndex > 0) pdf.addPage();
+      const h = currentSliceHeight * imgWidth / canvas.width;
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.96), 'JPEG', margin, margin, imgWidth, h);
+      y += currentSliceHeight;
+      pageIndex += 1;
+    }
+
+    return pdf.output('datauristring').split(',')[1] || '';
+  } finally {
+    await restoreBastComptaAfterBackupPdf();
+  }
+}
+
+async function sendDocumentEmail(docKey) {
   const doc = data[docKey] || {};
   const email = sanitizeEmail(doc.clientEmail || '');
   if (!email) {
@@ -3077,8 +3175,40 @@ function sendDocumentEmail(docKey) {
       : data.mail?.invoiceBody;
   const subject = formatMailTemplate(subjectTemplate, docKey);
   const body = formatMailTemplate(bodyTemplate, docKey);
-  const url = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  window.location.href = url;
+
+  try {
+    const firebaseToken = await requestBastComptaFirebaseToken();
+    if (!firebaseToken) throw new Error('Session BastCompta introuvable. Reconnectez-vous puis réessayez.');
+
+    const pdfBase64 = await generateDocumentPdfBase64(docKey);
+    const currentDoc = data[docKey] || doc;
+    const response = await fetch(BASTCOMPTA_MAIL_WORKER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${firebaseToken}`
+      },
+      body: JSON.stringify({
+        to: email,
+        subject,
+        html: mailTextToHtml(body),
+        pdfBase64,
+        pdfName: safePdfFileName(docKey, currentDoc)
+      })
+    });
+
+    let result = {};
+    try { result = await response.json(); } catch { }
+    if (!response.ok || result?.ok === false) {
+      throw new Error(result?.error || `Erreur d'envoi (${response.status}).`);
+    }
+
+    saveData(false);
+    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
+  } catch (error) {
+    console.error('Envoi e-mail Brevo impossible :', error);
+    alert(`Envoi impossible : ${error?.message || 'erreur inconnue'}`);
+  }
 }
 
 function copyCommunication() {

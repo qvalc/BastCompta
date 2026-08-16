@@ -2453,6 +2453,18 @@ window.addEventListener('message', event => {
       .then(() => broadcastDriveConnected())
       .catch(() => broadcastDriveDisconnected());
   }
+  if (event.data?.type === 'BASTCOMPTA_FIREBASE_TOKEN_REQUEST') {
+    const source = event.source;
+    const user = auth.currentUser;
+    if (!user || !source) {
+      source?.postMessage({ type: 'BASTCOMPTA_FIREBASE_TOKEN', token: '' }, event.origin);
+    } else {
+      user.getIdToken(true)
+        .then(token => source.postMessage({ type: 'BASTCOMPTA_FIREBASE_TOKEN', token }, event.origin))
+        .catch(() => source.postMessage({ type: 'BASTCOMPTA_FIREBASE_TOKEN', token: '' }, event.origin));
+    }
+    return;
+  }
   if (event.data?.type === 'BASTCOMPTA_DRIVE_DISCONNECT') {
     disconnectGoogleDrive(true);
   }
