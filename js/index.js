@@ -2434,7 +2434,7 @@ function bindIframeMessaging() {
 window.addEventListener('message', event => {
   if (event.origin !== window.location.origin) return;
   if (event.data?.type === 'BASTCOMPTA_OPEN_DEVIS_PAGE') {
-    const pageKey = ['quote','invoice','tarifs','reminder','communication','peppol','settings'].includes(event.data.pageKey) ? event.data.pageKey : 'quote';
+    const pageKey = ['quote','invoice','tarifs','reminder','sent','communication','peppol','settings'].includes(event.data.pageKey) ? event.data.pageKey : 'quote';
     switchMainTab('devis');
     document.getElementById('panel-fournisseurs')?.classList.remove('active');
     document.getElementById('panel-devis')?.classList.add('active');

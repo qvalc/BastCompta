@@ -259,6 +259,19 @@ const defaultData = {
   clients: [],
   mail: {
     recentEmails: [],
+    sender: {
+      name: '',
+      email: '',
+      senderId: null,
+      credential: '',
+      verified: false,
+      verifiedAt: '',
+      pendingMode: '',
+      pendingSenderId: null,
+      pendingChallenge: ''
+    },
+    defaultCc: '',
+    sentItems: [],
     quoteSubject: 'Votre devis {documentNumber}',
     quoteBody: `Bonjour {clientName},
 
@@ -289,6 +302,7 @@ const pageDefs = [
   { key: 'tarifs', label: 'Tarifs' },
   { key: 'suppliers', label: 'Fournisseurs', external: 'fournisseurs.html?embedded=1' },
   { key: 'reminder', label: 'Rappel' },
+  { key: 'sent', label: 'Messages envoyés' },
   { key: 'communication', label: 'Communication structurée' },
   { key: 'peppol', label: 'Peppol / Doccle' },
   { key: 'settings', label: 'Paramètres' }
@@ -1660,6 +1674,9 @@ async function saveSyncToDrive(showErrorAlert = false) {
       clients: Array.isArray(data.clients) ? data.clients : [],
       mail: {
         recentEmails: Array.isArray(data.mail?.recentEmails) ? data.mail.recentEmails : [],
+        sender: mergeDeep(structuredClone(defaultData.mail.sender), data.mail?.sender || {}),
+        defaultCc: data.mail?.defaultCc || '',
+        sentItems: Array.isArray(data.mail?.sentItems) ? data.mail.sentItems.slice(0, 500) : [],
         quoteSubject: data.mail?.quoteSubject || defaultData.mail.quoteSubject,
         quoteBody: data.mail?.quoteBody || defaultData.mail.quoteBody,
         invoiceSubject: data.mail?.invoiceSubject || defaultData.mail.invoiceSubject,
@@ -3082,6 +3099,202 @@ function requestBastComptaFirebaseToken() {
   return bastComptaFirebaseTokenWaiter;
 }
 
+
+async function callBastComptaMailWorker(action, payload = {}) {
+  const firebaseToken = await requestBastComptaFirebaseToken();
+  if (!firebaseToken) throw new Error('Session BastCompta introuvable. Reconnectez-vous puis réessayez.');
+
+  const response = await fetch(BASTCOMPTA_MAIL_WORKER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${firebaseToken}`
+    },
+    body: JSON.stringify({ action, ...payload })
+  });
+
+  let result = {};
+  try { result = await response.json(); } catch (_) {}
+  if (!response.ok || result?.ok === false) {
+    throw new Error(result?.error || `Erreur e-mail (${response.status}).`);
+  }
+  return result;
+}
+
+function getConfiguredMailSender() {
+  if (!data.mail || typeof data.mail !== 'object') data.mail = structuredClone(defaultData.mail);
+  if (!data.mail.sender || typeof data.mail.sender !== 'object') data.mail.sender = structuredClone(defaultData.mail.sender);
+  return data.mail.sender;
+}
+
+function resetMailSenderVerification(keepIdentity = true) {
+  const current = getConfiguredMailSender();
+  data.mail.sender = {
+    ...structuredClone(defaultData.mail.sender),
+    name: keepIdentity ? String(current.name || '') : '',
+    email: keepIdentity ? String(current.email || '') : ''
+  };
+  saveData(false);
+  render();
+}
+
+function updateMailSenderIdentity(field, value) {
+  const sender = getConfiguredMailSender();
+  const next = String(value || '').trim();
+  if (String(sender[field] || '') === next) return;
+  sender[field] = next;
+  sender.senderId = null;
+  sender.credential = '';
+  sender.verified = false;
+  sender.verifiedAt = '';
+  sender.pendingMode = '';
+  sender.pendingSenderId = null;
+  sender.pendingChallenge = '';
+  saveData(false);
+}
+
+async function requestMailSenderVerification() {
+  const sender = getConfiguredMailSender();
+  const name = String(sender.name || data.company?.name || '').trim();
+  const email = sanitizeEmail(sender.email || data.company?.email || '');
+  if (!name) return alert("Renseigne d'abord le nom d'expéditeur.");
+  if (!email) return alert("Renseigne d'abord l'adresse e-mail d'expédition.");
+
+  sender.name = name;
+  sender.email = email;
+  try {
+    const result = await callBastComptaMailWorker('sender.request', { senderName: name, senderEmail: email });
+    sender.pendingMode = result.mode || 'brevo';
+    sender.pendingSenderId = result.senderId || null;
+    sender.pendingChallenge = result.challenge || '';
+    sender.verified = false;
+    sender.credential = '';
+    saveData(false);
+    render();
+    alert(result.message || `Un code de vérification a été envoyé à ${email}.`);
+  } catch (error) {
+    console.error('Demande de vérification expéditeur impossible :', error);
+    alert(`Vérification impossible : ${error?.message || 'erreur inconnue'}`);
+  }
+}
+
+async function validateMailSenderOtp() {
+  const input = document.getElementById('mailSenderOtp');
+  const otp = String(input?.value || '').replace(/\D/g, '').slice(0, 6);
+  if (otp.length !== 6) return alert('Saisis le code à 6 chiffres reçu par e-mail.');
+
+  const sender = getConfiguredMailSender();
+  if (!sender.pendingMode) return alert("Commence par demander un code de vérification.");
+
+  try {
+    const result = await callBastComptaMailWorker('sender.verify', {
+      mode: sender.pendingMode,
+      senderId: sender.pendingSenderId,
+      challenge: sender.pendingChallenge,
+      senderName: sender.name,
+      senderEmail: sender.email,
+      otp
+    });
+
+    if (result.requiresSecondOtp) {
+      sender.pendingMode = result.mode || 'brevo';
+      sender.pendingSenderId = result.senderId || null;
+      sender.pendingChallenge = '';
+      saveData(false);
+      render();
+      alert(result.message || 'Un nouveau code Brevo vient d’être envoyé. Saisis-le pour terminer la validation.');
+      return;
+    }
+
+    sender.senderId = result.senderId || sender.pendingSenderId;
+    sender.credential = result.senderCredential || '';
+    sender.verified = true;
+    sender.verifiedAt = new Date().toISOString();
+    sender.pendingMode = '';
+    sender.pendingSenderId = null;
+    sender.pendingChallenge = '';
+    saveData(false);
+    render();
+    alert(`Adresse d'envoi validée : ${sender.email}`);
+  } catch (error) {
+    console.error('Validation expéditeur impossible :', error);
+    alert(`Validation impossible : ${error?.message || 'code incorrect ou expiré'}`);
+  }
+}
+
+function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail }) {
+  if (!Array.isArray(data.mail.sentItems)) data.mail.sentItems = [];
+  const item = {
+    id: `mail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    sentAt: new Date().toISOString(),
+    docKey,
+    documentNumber: doc?.documentNumber || '',
+    clientName: doc?.clientName || '',
+    to: to || '',
+    cc: cc || '',
+    subject: subject || '',
+    body: body || '',
+    pdfName: pdfName || '',
+    messageId: messageId || '',
+    senderEmail: senderEmail || ''
+  };
+  data.mail.sentItems.unshift(item);
+  data.mail.sentItems = data.mail.sentItems.slice(0, 500);
+}
+
+function deleteSentMailItem(id) {
+  if (!confirm('Supprimer cette trace de message envoyé ?')) return;
+  data.mail.sentItems = (data.mail.sentItems || []).filter(item => item.id !== id);
+  saveData(false);
+  render();
+}
+
+function clearSentMailHistory() {
+  if (!(data.mail.sentItems || []).length) return;
+  if (!confirm('Vider tout l’historique des messages envoyés ?')) return;
+  data.mail.sentItems = [];
+  saveData(false);
+  render();
+}
+
+function formatSentMailDate(value) {
+  const d = value ? new Date(value) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function renderSentMails() {
+  const items = Array.isArray(data.mail?.sentItems) ? data.mail.sentItems : [];
+  const rows = items.length ? items.map(item => `
+    <tr>
+      <td>${escapeHtml(formatSentMailDate(item.sentAt))}</td>
+      <td><strong>${escapeHtml(item.to || '')}</strong>${item.clientName ? `<div class="muted-small">${escapeHtml(item.clientName)}</div>` : ''}</td>
+      <td>${escapeHtml(item.subject || '')}<div class="muted-small">${escapeHtml(item.documentNumber || '')}</div></td>
+      <td>${escapeHtml(item.senderEmail || '')}</td>
+      <td>${item.pdfName ? `📎 ${escapeHtml(item.pdfName)}` : '—'}</td>
+      <td><button class="danger small" type="button" onclick="deleteSentMailItem('${escapeAttr(item.id)}')">Supprimer</button></td>
+    </tr>`).join('') : `<tr><td colspan="6" class="empty-cell">Aucun message envoyé depuis BastCompta.</td></tr>`;
+
+  return `
+    <section class="page ${activePage === 'sent' ? 'active' : ''}" data-page="sent">
+      <div class="simple-box sent-mail-page">
+        <div class="section-title-row">
+          <div>
+            <h2>Messages envoyés</h2>
+            <p class="muted-small">Historique local des devis, factures et rappels envoyés via BastCompta.</p>
+          </div>
+          <button type="button" class="secondary" onclick="clearSentMailHistory()" ${items.length ? '' : 'disabled'}>Vider l’historique</button>
+        </div>
+        <div class="table-scroll">
+          <table class="sent-mail-table">
+            <thead><tr><th>Date</th><th>Destinataire</th><th>Objet / document</th><th>Expéditeur</th><th>Pièce jointe</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>`;
+}
+
 function mailTextToHtml(text) {
   return String(text || '')
     .replace(/&/g, '&amp;')
@@ -3225,6 +3438,14 @@ async function sendDocumentEmail(docKey) {
     return;
   }
 
+  const sender = getConfiguredMailSender();
+  if (!sender.verified || !sender.credential || !sender.email) {
+    alert("Configure et valide d'abord ton adresse d'envoi dans Paramètres du module > E-mail d'envoi.");
+    activePage = 'settings';
+    render();
+    return;
+  }
+
   rememberClientEmail(email);
 
   const isQuote = docKey === 'quote';
@@ -3245,7 +3466,7 @@ async function sendDocumentEmail(docKey) {
 
   const preview = await openMailPreview(docKey, {
     to: email,
-    cc: 'bastcompta@outlook.be',
+    cc: sanitizeEmail(data.mail?.defaultCc || ''),
     subject: defaultSubject,
     body: defaultBody,
     pdfName
@@ -3253,35 +3474,32 @@ async function sendDocumentEmail(docKey) {
   if (!preview) return;
 
   try {
-    const firebaseToken = await requestBastComptaFirebaseToken();
-    if (!firebaseToken) throw new Error('Session BastCompta introuvable. Reconnectez-vous puis réessayez.');
-
     const pdfBase64 = await generateDocumentPdfBase64(docKey);
     const currentDoc = data[docKey] || doc;
-    const response = await fetch(BASTCOMPTA_MAIL_WORKER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${firebaseToken}`
-      },
-      body: JSON.stringify({
-        to: preview.to,
-        cc: preview.cc,
-        subject: preview.subject,
-        html: mailTextToHtml(preview.body),
-        pdfBase64,
-        pdfName: safePdfFileName(docKey, currentDoc)
-      })
+    const finalPdfName = safePdfFileName(docKey, currentDoc);
+    const result = await callBastComptaMailWorker('send', {
+      senderCredential: sender.credential,
+      to: preview.to,
+      cc: preview.cc,
+      subject: preview.subject,
+      html: mailTextToHtml(preview.body),
+      pdfBase64,
+      pdfName: finalPdfName
     });
 
-    let result = {};
-    try { result = await response.json(); } catch { }
-    if (!response.ok || result?.ok === false) {
-      throw new Error(result?.error || `Erreur d'envoi (${response.status}).`);
-    }
-
+    recordSentMail({
+      docKey,
+      doc: currentDoc,
+      to: preview.to,
+      cc: preview.cc,
+      subject: preview.subject,
+      body: preview.body,
+      pdfName: finalPdfName,
+      messageId: result.messageId || '',
+      senderEmail: sender.email
+    });
     saveData(false);
-    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe${preview.cc ? ' et une copie envoyée à ' + preview.cc : ''}.`);
+    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
   } catch (error) {
     console.error('Envoi e-mail Brevo impossible :', error);
     alert(`Envoi impossible : ${error?.message || 'erreur inconnue'}`);
@@ -4567,6 +4785,41 @@ function renderSettings() {
                   <input value="${escapeAttr(data.company.bic)}" onchange="setField('company.bic', this.value)">
                 </div>
 
+                <div class="mail-sender-settings">
+                  <div class="mail-sender-heading">
+                    <div>
+                      <strong>E-mail d'envoi</strong>
+                      <div class="muted-small">Chaque utilisateur valide sa propre adresse. Aucun compte Brevo n'est nécessaire.</div>
+                    </div>
+                    <span class="mail-sender-status ${data.mail?.sender?.verified ? 'verified' : 'pending'}">${data.mail?.sender?.verified ? '✓ Adresse validée' : 'À valider'}</span>
+                  </div>
+                  <div class="field">
+                    <label>Nom affiché chez le destinataire</label>
+                    <input value="${escapeAttr(data.mail?.sender?.name || data.company.name || '')}" onchange="updateMailSenderIdentity('name', this.value)" placeholder="Ex. Bast Aménagement">
+                  </div>
+                  <div class="field">
+                    <label>Adresse d'expédition</label>
+                    <input type="email" value="${escapeAttr(data.mail?.sender?.email || data.company.email || '')}" onchange="updateMailSenderIdentity('email', this.value)" placeholder="facturation@entreprise.be">
+                  </div>
+                  ${data.mail?.sender?.verified ? `
+                    <div class="verified-sender-box">Les messages partiront avec <strong>${escapeHtml(data.mail.sender.name || '')} &lt;${escapeHtml(data.mail.sender.email || '')}&gt;</strong>.</div>
+                    <button type="button" class="secondary" onclick="resetMailSenderVerification(true)">Changer / revalider l'adresse</button>
+                  ` : `
+                    <div class="mail-sender-actions">
+                      <button type="button" class="secondary" onclick="requestMailSenderVerification()">Envoyer le code de vérification</button>
+                      <div class="mail-otp-row">
+                        <input id="mailSenderOtp" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres">
+                        <button type="button" class="primary" onclick="validateMailSenderOtp()" ${data.mail?.sender?.pendingMode ? '' : 'disabled'}>Valider</button>
+                      </div>
+                    </div>
+                    ${data.mail?.sender?.pendingMode ? `<div class="muted-small">Un code a été demandé pour <strong>${escapeHtml(data.mail.sender.email || '')}</strong>.</div>` : ''}
+                  `}
+                  <div class="field" style="margin-top:12px">
+                    <label>Copie (Cc) par défaut <span class="muted-small">— facultatif</span></label>
+                    <input type="email" value="${escapeAttr(data.mail?.defaultCc || '')}" onchange="setField('mail.defaultCc', this.value)" placeholder="Laisser vide pour aucune copie automatique">
+                  </div>
+                </div>
+
                 <div class="field">
                   <label>Objet email devis</label>
                   <input value="${escapeAttr(data.mail.quoteSubject || '')}" onchange="setField('mail.quoteSubject', this.value)">
@@ -5578,7 +5831,13 @@ Object.assign(window, {
   updateTarifSearch,
   refreshTarifSearchResults,
   rememberTarifCategoryGroupState,
-  receiveTarifLineFromExternalModule
+  receiveTarifLineFromExternalModule,
+  updateMailSenderIdentity,
+  requestMailSenderVerification,
+  validateMailSenderOtp,
+  resetMailSenderVerification,
+  deleteSentMailItem,
+  clearSentMailHistory
 });
 
 document.addEventListener('keydown', event => {
@@ -5595,6 +5854,7 @@ function renderPages() {
     ${renderInvoice()}
     ${renderTarifs()}
     ${renderReminder()}
+    ${renderSentMails()}
     ${renderCommunication()}
     ${renderPeppol()}
     ${renderCRM()}
