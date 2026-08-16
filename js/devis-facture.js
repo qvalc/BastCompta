@@ -308,6 +308,60 @@ const pageDefs = [
   { key: 'settings', label: 'Paramètres' }
 ];
 
+const MAIL_SENDER_PENDING_SESSION_KEY = 'bastcompta_mail_sender_pending_v1';
+
+function readMailSenderPendingSession() {
+  try {
+    const raw = sessionStorage.getItem(MAIL_SENDER_PENDING_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.mode || !parsed.email || Number(parsed.expiresAt || 0) <= Date.now()) {
+      sessionStorage.removeItem(MAIL_SENDER_PENDING_SESSION_KEY);
+      return null;
+    }
+    return parsed;
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeMailSenderPendingSession(sender, ttlMs = 30 * 60 * 1000) {
+  try {
+    sessionStorage.setItem(MAIL_SENDER_PENDING_SESSION_KEY, JSON.stringify({
+      mode: String(sender?.pendingMode || ''),
+      senderId: sender?.pendingSenderId ?? null,
+      challenge: String(sender?.pendingChallenge || ''),
+      name: String(sender?.name || ''),
+      email: sanitizeEmail(sender?.email || ''),
+      expiresAt: Date.now() + ttlMs
+    }));
+  } catch (_) {}
+}
+
+function clearMailSenderPendingSession() {
+  try { sessionStorage.removeItem(MAIL_SENDER_PENDING_SESSION_KEY); } catch (_) {}
+}
+
+function restoreMailSenderPendingSession(sender = null) {
+  const target = sender || getConfiguredMailSender();
+  const pending = readMailSenderPendingSession();
+  if (!pending) return null;
+  const currentEmail = sanitizeEmail(target?.email || '');
+  if (currentEmail && currentEmail !== sanitizeEmail(pending.email || '')) return null;
+  if (!target.name && pending.name) target.name = pending.name;
+  if (!target.email && pending.email) target.email = pending.email;
+  target.pendingMode = pending.mode;
+  target.pendingSenderId = pending.senderId ?? null;
+  target.pendingChallenge = pending.challenge || '';
+  return pending;
+}
+
+function hasPendingMailSenderVerification() {
+  const sender = getConfiguredMailSender();
+  if (sender.pendingMode) return true;
+  return !!restoreMailSenderPendingSession(sender);
+}
+
 let data = loadData();
 let activePage = 'quote';
 let crmExpandedClientId = '';
@@ -1781,7 +1835,16 @@ async function loadSyncDataFromDriveIfAvailable() {
       data.clients = parsed.clients.map(normalizeClient).filter(client => client.name);
     }
     if (parsed.mail && typeof parsed.mail === 'object') {
+      const localSender = mergeDeep(structuredClone(defaultData.mail.sender), data.mail?.sender || {});
+      const pendingSession = readMailSenderPendingSession();
       data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
+
+      // L'état d'authentification/validation de l'expéditeur est local à l'utilisateur
+      // et ne doit jamais être écrasé par une ancienne copie Drive pendant un OTP.
+      if (pendingSession || localSender.verified || localSender.credential) {
+        data.mail.sender = localSender;
+        restoreMailSenderPendingSession(data.mail.sender);
+      }
     }
     if (parsed.tarifs && typeof parsed.tarifs === 'object') {
       ensureTarifsData();
@@ -3128,6 +3191,7 @@ function getConfiguredMailSender() {
 }
 
 function resetMailSenderVerification(keepIdentity = true) {
+  clearMailSenderPendingSession();
   const current = getConfiguredMailSender();
   data.mail.sender = {
     ...structuredClone(defaultData.mail.sender),
@@ -3150,6 +3214,7 @@ function updateMailSenderIdentity(field, value) {
   sender.pendingMode = '';
   sender.pendingSenderId = null;
   sender.pendingChallenge = '';
+  clearMailSenderPendingSession();
   saveData(false);
 }
 
@@ -3169,6 +3234,7 @@ async function requestMailSenderVerification() {
     sender.pendingChallenge = result.challenge || '';
     sender.verified = false;
     sender.credential = '';
+    writeMailSenderPendingSession(sender);
     saveData(false);
     render();
     alert(result.message || `Un code de vérification a été envoyé à ${email}.`);
@@ -3184,6 +3250,7 @@ async function validateMailSenderOtp() {
   if (otp.length !== 6) return alert('Saisis le code à 6 chiffres reçu par e-mail.');
 
   const sender = getConfiguredMailSender();
+  restoreMailSenderPendingSession(sender);
   if (!sender.pendingMode) return alert("Commence par demander un code de vérification.");
 
   try {
@@ -3200,6 +3267,7 @@ async function validateMailSenderOtp() {
       sender.pendingMode = result.mode || 'brevo';
       sender.pendingSenderId = result.senderId || null;
       sender.pendingChallenge = '';
+      writeMailSenderPendingSession(sender);
       saveData(false);
       render();
       alert(result.message || 'Un nouveau code Brevo vient d’être envoyé. Saisis-le pour terminer la validation.');
@@ -3213,6 +3281,7 @@ async function validateMailSenderOtp() {
     sender.pendingMode = '';
     sender.pendingSenderId = null;
     sender.pendingChallenge = '';
+    clearMailSenderPendingSession();
     saveData(false);
     render();
     alert(`Adresse d'envoi validée : ${sender.email}`);
@@ -4809,10 +4878,10 @@ function renderSettings() {
                       <button type="button" class="secondary" onclick="requestMailSenderVerification()">Envoyer le code de vérification</button>
                       <div class="mail-otp-row">
                         <input id="mailSenderOtp" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres">
-                        <button type="button" class="primary" onclick="validateMailSenderOtp()" ${data.mail?.sender?.pendingMode ? '' : 'disabled'}>Valider</button>
+                        <button type="button" id="mailSenderValidateBtn" class="primary" onclick="validateMailSenderOtp()" ${hasPendingMailSenderVerification() ? '' : 'disabled'}>Valider</button>
                       </div>
                     </div>
-                    ${data.mail?.sender?.pendingMode ? `<div class="muted-small">Un code a été demandé pour <strong>${escapeHtml(data.mail.sender.email || '')}</strong>.</div>` : ''}
+                    ${hasPendingMailSenderVerification() ? `<div class="muted-small">Un code a été demandé pour <strong>${escapeHtml(data.mail.sender.email || readMailSenderPendingSession()?.email || '')}</strong>.</div>` : ''}
                   `}
                   <div class="field" style="margin-top:12px">
                     <label>Copie (Cc) par défaut <span class="muted-small">— facultatif</span></label>
@@ -5839,6 +5908,8 @@ Object.assign(window, {
   deleteSentMailItem,
   clearSentMailHistory
 });
+
+
 
 document.addEventListener('keydown', event => {
   if (event.key === 'Enter' && event.target?.id === 'newTarifCategoryInput') {
