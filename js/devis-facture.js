@@ -3151,6 +3151,72 @@ async function generateDocumentPdfBase64(docKey) {
   }
 }
 
+function openMailPreview(docKey, defaults) {
+  return new Promise(resolve => {
+    document.querySelector('.mail-preview-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'mail-preview-overlay';
+    overlay.innerHTML = `
+      <div class="mail-preview-modal" role="dialog" aria-modal="true" aria-labelledby="mail-preview-title">
+        <div class="mail-preview-head">
+          <h3 id="mail-preview-title">Aperçu avant envoi</h3>
+          <button type="button" class="mail-preview-close" aria-label="Fermer">×</button>
+        </div>
+        <div class="mail-preview-body">
+          <div class="mail-preview-field">
+            <label>À</label>
+            <input id="mail-preview-to" type="email" value="${escapeAttr(defaults.to || '')}">
+          </div>
+          <div class="mail-preview-field">
+            <label>Copie (Cc)</label>
+            <input id="mail-preview-cc" type="email" value="${escapeAttr(defaults.cc || '')}">
+          </div>
+          <div class="mail-preview-field">
+            <label>Objet</label>
+            <input id="mail-preview-subject" type="text" value="${escapeAttr(defaults.subject || '')}">
+          </div>
+          <div class="mail-preview-field">
+            <label>Message</label>
+            <textarea id="mail-preview-body">${escapeHtml(defaults.body || '')}</textarea>
+          </div>
+          <div class="mail-preview-field">
+            <label>Pièce jointe</label>
+            <div class="mail-preview-attachment">📎 <span>${escapeHtml(defaults.pdfName || 'document.pdf')}</span></div>
+          </div>
+        </div>
+        <div class="mail-preview-actions">
+          <button type="button" class="secondary" data-action="cancel">Annuler</button>
+          <button type="button" class="primary" data-action="send">Envoyer</button>
+        </div>
+      </div>`;
+
+    const finish = value => {
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.querySelector('.mail-preview-close').addEventListener('click', () => finish(null));
+    overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => finish(null));
+    overlay.addEventListener('click', event => {
+      if (event.target === overlay) finish(null);
+    });
+    overlay.querySelector('[data-action="send"]').addEventListener('click', () => {
+      const to = sanitizeEmail(overlay.querySelector('#mail-preview-to').value);
+      const cc = sanitizeEmail(overlay.querySelector('#mail-preview-cc').value);
+      const subject = overlay.querySelector('#mail-preview-subject').value.trim();
+      const body = overlay.querySelector('#mail-preview-body').value;
+      if (!to) return alert("Renseigne l'adresse e-mail du destinataire.");
+      if (!subject) return alert("Renseigne l'objet du message.");
+      if (!body.trim()) return alert('Le message est vide.');
+      finish({ to, cc, subject, body });
+    });
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('#mail-preview-subject')?.focus();
+  });
+}
+
 async function sendDocumentEmail(docKey) {
   const doc = data[docKey] || {};
   const email = sanitizeEmail(doc.clientEmail || '');
@@ -3173,8 +3239,18 @@ async function sendDocumentEmail(docKey) {
     : isReminder
       ? data.mail?.reminderBody
       : data.mail?.invoiceBody;
-  const subject = formatMailTemplate(subjectTemplate, docKey);
-  const body = formatMailTemplate(bodyTemplate, docKey);
+  const defaultSubject = formatMailTemplate(subjectTemplate, docKey);
+  const defaultBody = formatMailTemplate(bodyTemplate, docKey);
+  const pdfName = safePdfFileName(docKey, doc);
+
+  const preview = await openMailPreview(docKey, {
+    to: email,
+    cc: 'bastcompta@outlook.be',
+    subject: defaultSubject,
+    body: defaultBody,
+    pdfName
+  });
+  if (!preview) return;
 
   try {
     const firebaseToken = await requestBastComptaFirebaseToken();
@@ -3189,9 +3265,10 @@ async function sendDocumentEmail(docKey) {
         'Authorization': `Bearer ${firebaseToken}`
       },
       body: JSON.stringify({
-        to: email,
-        subject,
-        html: mailTextToHtml(body),
+        to: preview.to,
+        cc: preview.cc,
+        subject: preview.subject,
+        html: mailTextToHtml(preview.body),
         pdfBase64,
         pdfName: safePdfFileName(docKey, currentDoc)
       })
@@ -3204,7 +3281,7 @@ async function sendDocumentEmail(docKey) {
     }
 
     saveData(false);
-    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
+    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe${preview.cc ? ' et une copie envoyée à ' + preview.cc : ''}.`);
   } catch (error) {
     console.error('Envoi e-mail Brevo impossible :', error);
     alert(`Envoi impossible : ${error?.message || 'erreur inconnue'}`);

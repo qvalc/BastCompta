@@ -2051,3 +2051,75 @@ body.bast-embedded .page.active {
 .document-photo-viewer{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:54px 18px 20px;background:rgba(0,0,0,.9)}
 .document-photo-viewer img{max-width:100%;max-height:calc(100vh - 90px);object-fit:contain}
 .document-photo-viewer button{position:absolute;right:14px;top:14px;width:42px;height:42px;border:0;border-radius:50%;background:#fff;color:#111;font-size:18px;cursor:pointer}
+
+/* Aperçu e-mail avant envoi Brevo */
+.mail-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .48);
+  backdrop-filter: blur(2px);
+}
+.mail-preview-modal {
+  width: min(760px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .25);
+  border: 1px solid #e2e8f0;
+}
+.mail-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.mail-preview-head h3 { margin: 0; font-size: 20px; }
+.mail-preview-close {
+  border: 0;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+.mail-preview-body { padding: 20px 22px; display: grid; gap: 14px; }
+.mail-preview-field { display: grid; gap: 6px; }
+.mail-preview-field label { font-size: 13px; font-weight: 800; color: #475569; }
+.mail-preview-field input,
+.mail-preview-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font: inherit;
+  background: #fff;
+}
+.mail-preview-field textarea { min-height: 190px; resize: vertical; line-height: 1.5; }
+.mail-preview-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid #dbeafe;
+  background: #f8fbff;
+  border-radius: 10px;
+  color: #1e3a5f;
+  font-weight: 700;
+}
+.mail-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px 20px;
+  border-top: 1px solid #e2e8f0;
+}
+.mail-preview-actions button { min-width: 110px; }
