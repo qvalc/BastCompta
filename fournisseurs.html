@@ -12,12 +12,10 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <button class="back-link" type="button" onclick="returnToDevis()">← Devis & Facture</button>
         <h1>Fournisseurs</h1>
         <p>Fiches fournisseurs et articles de référence</p>
       </div>
       <div class="top-actions">
-        <span id="driveState" class="drive-state">Google Drive : non connecté</span>
         <button type="button" class="primary" onclick="addSupplier()">+ Ajouter un fournisseur</button>
       </div>
     </header>
@@ -34,7 +32,9 @@
       <section id="workspace" class="workspace"></section>
     </main>
   </div>
+  <input id="articleExcelInput" type="file" accept=".xlsx,.xls" hidden onchange="importArticlesExcel(this.files && this.files[0]); this.value=''">
   <div id="toast" class="toast"></div>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <script src="js/fournisseurs.js"></script>
 </body>
 </html>
