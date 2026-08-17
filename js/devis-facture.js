@@ -261,14 +261,7 @@ const defaultData = {
     recentEmails: [],
     sender: {
       name: '',
-      email: '',
-      senderId: null,
-      credential: '',
-      verified: false,
-      verifiedAt: '',
-      pendingMode: '',
-      pendingSenderId: null,
-      pendingChallenge: ''
+      email: ''
     },
     defaultCc: '',
     sentItems: [],
@@ -307,60 +300,6 @@ const pageDefs = [
   { key: 'peppol', label: 'Peppol / Doccle' },
   { key: 'settings', label: 'Paramètres' }
 ];
-
-const MAIL_SENDER_PENDING_SESSION_KEY = 'bastcompta_mail_sender_pending_v1';
-
-function readMailSenderPendingSession() {
-  try {
-    const raw = sessionStorage.getItem(MAIL_SENDER_PENDING_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.mode || !parsed.email || Number(parsed.expiresAt || 0) <= Date.now()) {
-      sessionStorage.removeItem(MAIL_SENDER_PENDING_SESSION_KEY);
-      return null;
-    }
-    return parsed;
-  } catch (_) {
-    return null;
-  }
-}
-
-function writeMailSenderPendingSession(sender, ttlMs = 30 * 60 * 1000) {
-  try {
-    sessionStorage.setItem(MAIL_SENDER_PENDING_SESSION_KEY, JSON.stringify({
-      mode: String(sender?.pendingMode || ''),
-      senderId: sender?.pendingSenderId ?? null,
-      challenge: String(sender?.pendingChallenge || ''),
-      name: String(sender?.name || ''),
-      email: sanitizeEmail(sender?.email || ''),
-      expiresAt: Date.now() + ttlMs
-    }));
-  } catch (_) {}
-}
-
-function clearMailSenderPendingSession() {
-  try { sessionStorage.removeItem(MAIL_SENDER_PENDING_SESSION_KEY); } catch (_) {}
-}
-
-function restoreMailSenderPendingSession(sender = null) {
-  const target = sender || getConfiguredMailSender();
-  const pending = readMailSenderPendingSession();
-  if (!pending) return null;
-  const currentEmail = sanitizeEmail(target?.email || '');
-  if (currentEmail && currentEmail !== sanitizeEmail(pending.email || '')) return null;
-  if (!target.name && pending.name) target.name = pending.name;
-  if (!target.email && pending.email) target.email = pending.email;
-  target.pendingMode = pending.mode;
-  target.pendingSenderId = pending.senderId ?? null;
-  target.pendingChallenge = pending.challenge || '';
-  return pending;
-}
-
-function hasPendingMailSenderVerification() {
-  const sender = getConfiguredMailSender();
-  if (sender.pendingMode) return true;
-  return !!restoreMailSenderPendingSession(sender);
-}
 
 let data = loadData();
 let activePage = 'quote';
@@ -1835,16 +1774,7 @@ async function loadSyncDataFromDriveIfAvailable() {
       data.clients = parsed.clients.map(normalizeClient).filter(client => client.name);
     }
     if (parsed.mail && typeof parsed.mail === 'object') {
-      const localSender = mergeDeep(structuredClone(defaultData.mail.sender), data.mail?.sender || {});
-      const pendingSession = readMailSenderPendingSession();
       data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
-
-      // L'état d'authentification/validation de l'expéditeur est local à l'utilisateur
-      // et ne doit jamais être écrasé par une ancienne copie Drive pendant un OTP.
-      if (pendingSession || localSender.verified || localSender.credential) {
-        data.mail.sender = localSender;
-        restoreMailSenderPendingSession(data.mail.sender);
-      }
     }
     if (parsed.tarifs && typeof parsed.tarifs === 'object') {
       ensureTarifsData();
@@ -3190,108 +3120,15 @@ function getConfiguredMailSender() {
   return data.mail.sender;
 }
 
-function resetMailSenderVerification(keepIdentity = true) {
-  clearMailSenderPendingSession();
-  const current = getConfiguredMailSender();
-  data.mail.sender = {
-    ...structuredClone(defaultData.mail.sender),
-    name: keepIdentity ? String(current.name || '') : '',
-    email: keepIdentity ? String(current.email || '') : ''
-  };
-  saveData(false);
-  render();
-}
-
 function updateMailSenderIdentity(field, value) {
   const sender = getConfiguredMailSender();
   const next = String(value || '').trim();
   if (String(sender[field] || '') === next) return;
   sender[field] = next;
-  sender.senderId = null;
-  sender.credential = '';
-  sender.verified = false;
-  sender.verifiedAt = '';
-  sender.pendingMode = '';
-  sender.pendingSenderId = null;
-  sender.pendingChallenge = '';
-  clearMailSenderPendingSession();
   saveData(false);
 }
 
-async function requestMailSenderVerification() {
-  const sender = getConfiguredMailSender();
-  const name = String(sender.name || data.company?.name || '').trim();
-  const email = sanitizeEmail(sender.email || data.company?.email || '');
-  if (!name) return alert("Renseigne d'abord le nom d'expéditeur.");
-  if (!email) return alert("Renseigne d'abord l'adresse e-mail d'expédition.");
-
-  sender.name = name;
-  sender.email = email;
-  try {
-    const result = await callBastComptaMailWorker('sender.request', { senderName: name, senderEmail: email });
-    sender.pendingMode = result.mode || 'brevo';
-    sender.pendingSenderId = result.senderId || null;
-    sender.pendingChallenge = result.challenge || '';
-    sender.verified = false;
-    sender.credential = '';
-    writeMailSenderPendingSession(sender);
-    saveData(false);
-    render();
-    alert(result.message || `Un code de vérification a été envoyé à ${email}.`);
-  } catch (error) {
-    console.error('Demande de vérification expéditeur impossible :', error);
-    alert(`Vérification impossible : ${error?.message || 'erreur inconnue'}`);
-  }
-}
-
-async function validateMailSenderOtp() {
-  const input = document.getElementById('mailSenderOtp');
-  const otp = String(input?.value || '').replace(/\D/g, '').slice(0, 6);
-  if (otp.length !== 6) return alert('Saisis le code à 6 chiffres reçu par e-mail.');
-
-  const sender = getConfiguredMailSender();
-  restoreMailSenderPendingSession(sender);
-  if (!sender.pendingMode) return alert("Commence par demander un code de vérification.");
-
-  try {
-    const result = await callBastComptaMailWorker('sender.verify', {
-      mode: sender.pendingMode,
-      senderId: sender.pendingSenderId,
-      challenge: sender.pendingChallenge,
-      senderName: sender.name,
-      senderEmail: sender.email,
-      otp
-    });
-
-    if (result.requiresSecondOtp) {
-      sender.pendingMode = result.mode || 'brevo';
-      sender.pendingSenderId = result.senderId || null;
-      sender.pendingChallenge = '';
-      writeMailSenderPendingSession(sender);
-      saveData(false);
-      render();
-      alert(result.message || 'Un nouveau code Brevo vient d’être envoyé. Saisis-le pour terminer la validation.');
-      return;
-    }
-
-    sender.senderId = result.senderId || sender.pendingSenderId;
-    sender.credential = result.senderCredential || '';
-    sender.verified = true;
-    sender.verifiedAt = new Date().toISOString();
-    sender.pendingMode = '';
-    sender.pendingSenderId = null;
-    sender.pendingChallenge = '';
-    clearMailSenderPendingSession();
-    saveData(false);
-    render();
-    alert(`Adresse d'envoi validée : ${sender.email}`);
-  } catch (error) {
-    console.error('Validation expéditeur impossible :', error);
-    alert(`Validation impossible : ${error?.message || 'code incorrect ou expiré'}`);
-  }
-}
-
-function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail }) {
+function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo }) {
   if (!Array.isArray(data.mail.sentItems)) data.mail.sentItems = [];
   const item = {
     id: `mail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -3305,7 +3142,8 @@ function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId
     body: body || '',
     pdfName: pdfName || '',
     messageId: messageId || '',
-    senderEmail: senderEmail || ''
+    senderEmail: senderEmail || '',
+    replyTo: replyTo || ''
   };
   data.mail.sentItems.unshift(item);
   data.mail.sentItems = data.mail.sentItems.slice(0, 500);
@@ -3508,8 +3346,10 @@ async function sendDocumentEmail(docKey) {
   }
 
   const sender = getConfiguredMailSender();
-  if (!sender.verified || !sender.credential || !sender.email) {
-    alert("Configure et valide d'abord ton adresse d'envoi dans Paramètres du module > E-mail d'envoi.");
+  const senderName = String(sender.name || data.company?.name || '').trim();
+  const replyTo = sanitizeEmail(sender.email || data.company?.email || '');
+  if (!senderName || !replyTo) {
+    alert("Configure d'abord le nom affiché et l'adresse de réponse dans Paramètres du module > E-mail d'envoi.");
     activePage = 'settings';
     render();
     return;
@@ -3547,7 +3387,8 @@ async function sendDocumentEmail(docKey) {
     const currentDoc = data[docKey] || doc;
     const finalPdfName = safePdfFileName(docKey, currentDoc);
     const result = await callBastComptaMailWorker('send', {
-      senderCredential: sender.credential,
+      senderName,
+      replyTo,
       to: preview.to,
       cc: preview.cc,
       subject: preview.subject,
@@ -3565,7 +3406,8 @@ async function sendDocumentEmail(docKey) {
       body: preview.body,
       pdfName: finalPdfName,
       messageId: result.messageId || '',
-      senderEmail: sender.email
+      senderEmail: result.senderEmail || 'documents@bast-amenagement.com',
+      replyTo
     });
     saveData(false);
     alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
@@ -4858,31 +4700,22 @@ function renderSettings() {
                   <div class="mail-sender-heading">
                     <div>
                       <strong>E-mail d'envoi</strong>
-                      <div class="muted-small">Chaque utilisateur valide sa propre adresse. Aucun compte Brevo n'est nécessaire.</div>
+                      <div class="muted-small">Les messages sont envoyés par BastCompta via le domaine authentifié bast-amenagement.com. Les réponses arrivent directement à l'adresse indiquée ci-dessous.</div>
                     </div>
-                    <span class="mail-sender-status ${data.mail?.sender?.verified ? 'verified' : 'pending'}">${data.mail?.sender?.verified ? '✓ Adresse validée' : 'À valider'}</span>
+                    <span class="mail-sender-status verified">✓ Prêt à envoyer</span>
                   </div>
                   <div class="field">
                     <label>Nom affiché chez le destinataire</label>
                     <input value="${escapeAttr(data.mail?.sender?.name || data.company.name || '')}" onchange="updateMailSenderIdentity('name', this.value)" placeholder="Ex. Bast Aménagement">
                   </div>
                   <div class="field">
-                    <label>Adresse d'expédition</label>
-                    <input type="email" value="${escapeAttr(data.mail?.sender?.email || data.company.email || '')}" onchange="updateMailSenderIdentity('email', this.value)" placeholder="facturation@entreprise.be">
+                    <label>Adresse de réponse (Reply-To)</label>
+                    <input type="email" value="${escapeAttr(data.mail?.sender?.email || data.company.email || '')}" onchange="updateMailSenderIdentity('email', this.value)" placeholder="votre-adresse@gmail.com">
+                    <div class="muted-small">Le client verra l'envoi via BastCompta, mais s'il clique sur « Répondre », sa réponse sera envoyée à cette adresse.</div>
                   </div>
-                  ${data.mail?.sender?.verified ? `
-                    <div class="verified-sender-box">Les messages partiront avec <strong>${escapeHtml(data.mail.sender.name || '')} &lt;${escapeHtml(data.mail.sender.email || '')}&gt;</strong>.</div>
-                    <button type="button" class="secondary" onclick="resetMailSenderVerification(true)">Changer / revalider l'adresse</button>
-                  ` : `
-                    <div class="mail-sender-actions">
-                      <button type="button" class="secondary" onclick="requestMailSenderVerification()">Envoyer le code de vérification</button>
-                      <div class="mail-otp-row">
-                        <input id="mailSenderOtp" inputmode="numeric" maxlength="6" placeholder="Code à 6 chiffres">
-                        <button type="button" id="mailSenderValidateBtn" class="primary" onclick="validateMailSenderOtp()" ${hasPendingMailSenderVerification() ? '' : 'disabled'}>Valider</button>
-                      </div>
-                    </div>
-                    ${hasPendingMailSenderVerification() ? `<div class="muted-small">Un code a été demandé pour <strong>${escapeHtml(data.mail.sender.email || readMailSenderPendingSession()?.email || '')}</strong>.</div>` : ''}
-                  `}
+                  <div class="verified-sender-box">
+                    Expéditeur technique : <strong>documents@bast-amenagement.com</strong>
+                  </div>
                   <div class="field" style="margin-top:12px">
                     <label>Copie (Cc) par défaut <span class="muted-small">— facultatif</span></label>
                     <input type="email" value="${escapeAttr(data.mail?.defaultCc || '')}" onchange="setField('mail.defaultCc', this.value)" placeholder="Laisser vide pour aucune copie automatique">
@@ -5902,9 +5735,6 @@ Object.assign(window, {
   rememberTarifCategoryGroupState,
   receiveTarifLineFromExternalModule,
   updateMailSenderIdentity,
-  requestMailSenderVerification,
-  validateMailSenderOtp,
-  resetMailSenderVerification,
   deleteSentMailItem,
   clearSentMailHistory
 });
