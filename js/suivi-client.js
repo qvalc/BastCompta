@@ -1,12 +1,12 @@
 if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Suivi client
 
-const STORAGE_KEY = 'bastcompta-chantiers-v1';
+const STORAGE_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
 const DRIVE_SYNC_FILE_NAME = 'bastcompta-chantiers-sync.json';
-const DEVIS_FACTURE_STORAGE_KEY = 'devis-facture-style-vrai-document';
+const DEVIS_FACTURE_STORAGE_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
 const CRM_DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
-const CRM_DELETED_CLIENTS_STORAGE_KEY = 'bastcompta-crm-deleted-clients-v1';
-const TERRAIN_DRAFTS_STORAGE_KEY = 'bastcompta-terrain-drafts-v1';
+const CRM_DELETED_CLIENTS_STORAGE_KEY = window.BastComptaStorageKeys?.deletedCrmClients || 'bastcompta-crm-deleted-clients-v1';
+const TERRAIN_DRAFTS_STORAGE_KEY = window.BastComptaStorageKeys?.terrainDrafts || 'bastcompta-terrain-drafts-v1';
 const TERRAIN_DRAFTS_DRIVE_FILE_NAME = 'bastcompta-terrain-drafts.json';
 
 let googleAccessToken = null;
@@ -92,121 +92,23 @@ function loadData() {
 }
 
 function normalizeData(source) {
-  const base = { version: 2, projects: [] };
-  const merged = Object.assign(base, source || {});
-  const normalized = Array.isArray(merged.projects) ? merged.projects.map(normalizeProject) : [];
-  merged.projects = mergeProjectsByClient(normalized);
-  return merged;
+  return BastProjectModel.normalizeData(source, { createId: () => uid('client'), now: () => new Date().toISOString() });
 }
 
 function clientGlobalKey(project) {
-  const clientId = String(project?.clientId || '').trim();
-  const clientRef = String(project?.clientRef || '').trim();
-  const clientName = String(project?.clientName || project?.title || '').trim();
-  if (clientId) return 'id:' + clientId;
-  if (clientRef) return 'ref:' + normalizeLinkKey(clientRef);
-  return 'project:' + (project.id || crypto.randomUUID());
+  return BastProjectModel.clientKey(project, () => crypto.randomUUID());
 }
 
 function dedupeMoneyList(list) {
-  const byKey = new Map();
-
-  (Array.isArray(list) ? list : []).forEach(item => {
-    const type = String(item.docKey || item.type || '').trim();
-    const ref = normalizeLinkKey(item.ref || item.documentNumber || item.invoiceNumber || '');
-
-    let key = '';
-
-    if (type && ref && ['quote', 'invoice', 'reminder'].includes(type)) {
-      key = `${type}:${ref}`;
-    } else if (ref && String(item.description || '').toLowerCase().includes('facture')) {
-      key = `invoice:${ref}`;
-    } else {
-      key = String(
-        item.documentUid ||
-        item.fileId ||
-        item.driveFileId ||
-        item.id ||
-        ''
-      ).trim();
-    }
-
-    if (!key) return;
-
-    byKey.set(
-      key,
-      Object.assign(
-        {},
-        byKey.get(key) || {},
-        item,
-        {
-          documentUid: key
-        }
-      )
-    );
-  });
-
-  return Array.from(byKey.values())
-    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  return BastProjectModel.dedupeMoneyList(list);
 }
 
 function mergeProjectsByClient(projects) {
-  const map = new Map();
-  projects.forEach(project => {
-    const key = clientGlobalKey(project);
-    if (!key || key === 'name:') return;
-    if (!map.has(key)) {
-      map.set(key, project);
-      return;
-    }
-    const target = map.get(key);
-    target.title = target.clientName || target.title || project.clientName || project.title || '';
-    target.clientId = target.clientId || project.clientId || '';
-    target.clientName = target.clientName || project.clientName || project.title || '';
-    target.clientRef = target.clientRef || project.clientRef || '';
-    target.address = target.address || project.address || '';
-    target.description = [target.description, project.description].filter(Boolean).join(target.description && project.description ? '\n' : '');
-    target.startDate = [target.startDate, project.startDate].filter(Boolean).sort()[0] || '';
-    target.endDate = target.endDate || project.endDate || '';
-    target.createdAt = [target.createdAt, project.createdAt].filter(Boolean).sort()[0] || new Date().toISOString();
-    target.updatedAt = [target.updatedAt, project.updatedAt].filter(Boolean).sort().pop() || new Date().toISOString();
-    target.linkedQuotes = dedupeMoneyList([...(target.linkedQuotes || []), ...(project.linkedQuotes || [])]);
-    target.linkedInvoices = dedupeMoneyList([...(target.linkedInvoices || []), ...(project.linkedInvoices || [])]);
-    target.linkedReminders = dedupeMoneyList([...(target.linkedReminders || []), ...(project.linkedReminders || [])]);
-    target.costs = dedupeMoneyList([...(target.costs || []), ...(project.costs || [])]);
-    target.documents = dedupeMoneyList([...(target.documents || []), ...(project.documents || [])]);
-    target.tasks = [...(target.tasks || []), ...(project.tasks || [])];
-    target.notes = [...(target.notes || []), ...(project.notes || [])];
-    target.timeline = [...(target.timeline || []), ...(project.timeline || [])].slice(0, 120);
-  });
-  return Array.from(map.values());
+  return BastProjectModel.merge(projects, { createId: () => crypto.randomUUID(), now: () => new Date().toISOString() });
 }
 
 function normalizeProject(project) {
-  const clientName = project.clientName || project.title || '';
-  return {
-    id: project.id || uid('client'),
-    title: clientName,
-    clientId: project.clientId || '',
-    clientName,
-    clientRef: project.clientRef || '',
-    address: project.address || '',
-    description: project.description || '',
-    status: project.status || 'planned',
-    startDate: project.startDate || '',
-    endDate: project.endDate || '',
-    createdAt: project.createdAt || new Date().toISOString(),
-    updatedAt: project.updatedAt || new Date().toISOString(),
-    quoteAmount: Number(project.quoteAmount) || 0,
-    linkedQuotes: dedupeMoneyList(project.linkedQuotes),
-    linkedInvoices: dedupeMoneyList(project.linkedInvoices),
-    linkedReminders: dedupeMoneyList(project.linkedReminders),
-    costs: dedupeMoneyList(project.costs),
-    documents: Array.isArray(project.documents) ? project.documents : [],
-    tasks: Array.isArray(project.tasks) ? project.tasks : [],
-    notes: Array.isArray(project.notes) ? project.notes : [],
-    timeline: Array.isArray(project.timeline) ? project.timeline : []
-  };
+  return BastProjectModel.normalize(project, { createId: () => uid('client'), now: () => new Date().toISOString() });
 }
 
 
@@ -773,88 +675,35 @@ function addTimeline(project, text) {
 }
 
 function projectMoneyValue(item) {
-  // Montant affiché dans les tableaux : total client HTVA (main d’œuvre/prestation + fournitures).
-  return Number(item?.clientHtva ?? item?.totalClientHtva ?? item?.amount ?? item?.htva ?? 0) || 0;
+  return BastProjectFinance.moneyValue(item);
 }
 
 function projectWorkValue(item) {
-  // Partie prestation/main d’œuvre : c’est la marge brute avant coûts manuels éventuels.
-  return Number(item?.workHtva ?? item?.htva ?? item?.amount ?? 0) || 0;
+  return BastProjectFinance.workValue(item);
 }
 
 function projectSupplyValue(item) {
-  // Coût réel des fournitures : priorité au prix de revient, fallback ancien = prix facturé des fournitures.
-  return Number(item?.suppliesCost ?? item?.suppliesCostHtva ?? item?.costHtva ?? item?.suppliesHtva ?? 0) || 0;
+  return BastProjectFinance.supplyCost(item);
 }
 
 function projectSupplySaleValue(item) {
-  // Montant facturé au client pour les fournitures.
-  return Number(item?.suppliesSaleHtva ?? item?.suppliesHtva ?? 0) || 0;
+  return BastProjectFinance.supplySale(item);
 }
 
 function extractItemYear(item) {
-  const candidates = [
-    item?.date,
-    item?.addedAt,
-    item?.modifiedTime,
-    item?.createdAt,
-    item?.updatedAt
-  ];
-
-  for (const value of candidates) {
-    const text = String(value || '').trim();
-    if (!text) continue;
-
-    const isoMatch = text.match(/^(\d{4})[-/]/);
-    if (isoMatch) return isoMatch[1];
-
-    const localMatch = text.match(/(?:^|\D)(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})(?:\D|$)/);
-    if (localMatch) return localMatch[3];
-  }
-
-  return '';
+  return BastProjectFinance.itemYear(item);
 }
 
 function itemMatchesSummaryYear(item, year = selectedSummaryYear) {
-  return year === 'all' || extractItemYear(item) === String(year);
+  return BastProjectFinance.matchesYear(item, year);
 }
 
 function projectTotals(project, year = 'all') {
-  // Suivi client : les devis ne pilotent plus le calcul.
-  // CA facturé = factures complètes HTVA (prestations + fournitures facturées).
-  const linkedInvoices = (project.linkedInvoices || []).filter(item => itemMatchesSummaryYear(item, year));
-  const manualCostItems = (project.costs || []).filter(item => itemMatchesSummaryYear(item, year));
-  const invoices = sum(linkedInvoices.map(projectMoneyValue));
-
-  // Coûts = prix de revient réel des fournitures + coûts manuels éventuels.
-  const manualCosts = sum(manualCostItems.map(projectMoneyValue));
-  const invoiceSupplyCosts = sum(linkedInvoices.map(projectSupplyValue));
-  const costs = manualCosts + invoiceSupplyCosts;
-
-  // Marge réelle = CA facturé - prix de revient - coûts manuels.
-  // Si aucun prix de revient n'est saisi, l'ancien comportement est conservé (coût = prix facturé des fournitures).
-  const invoiceWorkTotal = sum(linkedInvoices.map(projectWorkValue));
-  const invoiceSupplySales = sum(linkedInvoices.map(projectSupplySaleValue));
-  const margin = invoices - costs;
-  const marginRate = invoices > 0 ? (margin / invoices) * 100 : 0;
-
-  return {
-    invoices,
-    costs,
-    margin,
-    marginRate,
-    invoiceWorkTotal,
-    invoiceSupplySales,
-    manualCosts,
-    invoiceSupplyCosts,
-    quoteAmount: 0,
-    estimatedMargin: margin,
-    remaining: 0
-  };
+  return BastProjectFinance.totals(project, year);
 }
 
 function sum(values) {
-  return values.reduce((total, value) => total + (Number(value) || 0), 0);
+  return BastProjectFinance.sum(values);
 }
 
 function render() {
@@ -3189,60 +3038,6 @@ async function deleteCrmDocumentFromCache(type, ref) {
   renderCrmDocumentLinkModal();
   renderMain();
   notify('Document supprimé de Google Drive.');
-}
-
-function openInvoiceJsonImport() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'application/json';
-  input.onchange = importInvoiceJsonToCurrentClient;
-  input.click();
-}
-
-async function importInvoiceJsonToCurrentClient(event) {
-  const project = getProject();
-  const file = event.target.files?.[0];
-  if (!project || !file) return;
-
-  try {
-    const parsed = JSON.parse(await file.text());
-    const doc = parsed?.invoice;
-
-    if (!doc || !doc.documentNumber) {
-      notify("Ce fichier n'est pas une facture JSON valide.");
-      return;
-    }
-
-    const entry = buildCrmDocEntry('invoice', doc, 'fichier PC', { name: file.name });
-    if (!entry) {
-      notify("Facture impossible à lire.");
-      return;
-    }
-
-    entry.id = entry.id || `invoice-${entry.ref}-${Date.now()}`;
-    entry.documentUid = entry.fileId || entry.uniqueKey || entry.id;
-    entry.rawDocument = doc;
-
-    if (!Array.isArray(project.linkedInvoices)) project.linkedInvoices = [];
-
-    project.linkedInvoices = project.linkedInvoices.filter(item =>
-      String(item.documentUid || item.fileId || item.id || '').trim() !== String(entry.documentUid || '').trim()
-    );
-
-    project.linkedInvoices.push(entry);
-    project.linkedInvoices = dedupeMoneyList(project.linkedInvoices);
-
-    project.updatedAt = new Date().toISOString();
-    addTimeline(project, `Facture importée : ${entry.ref}`);
-
-    await saveData();
-    renderMain();
-
-    notify(`Facture ${entry.ref} ajoutée au client.`);
-  } catch (error) {
-    console.error(error);
-    notify("Import impossible : fichier JSON invalide.");
-  }
 }
 
 function openInvoiceJsonImport() {

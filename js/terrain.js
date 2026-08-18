@@ -19,16 +19,16 @@ const firebaseConfig = {
   appId: '1:724620573737:web:b44e0d3f8b1cbf382b3038'
 };
 
-const STORAGE_KEY = 'devis-facture-style-vrai-document';
-const DRAFTS_KEY = 'bastcompta-terrain-drafts-v1';
-const FAVORITES_KEY = 'bastcompta-terrain-favorites-v1';
-const CHANTIERS_KEY = 'bastcompta-chantiers-v1';
+const STORAGE_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
+const DRAFTS_KEY = window.BastComptaStorageKeys?.terrainDrafts || 'bastcompta-terrain-drafts-v1';
+const FAVORITES_KEY = window.BastComptaStorageKeys?.terrainFavorites || 'bastcompta-terrain-favorites-v1';
+const CHANTIERS_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
 const CRM_DRIVE_FILE = 'bastcompta-crm-sync.json';
 const CHANTIERS_DRIVE_FILE = 'bastcompta-chantiers-sync.json';
 const DRAFTS_DRIVE_FILE = 'bastcompta-terrain-drafts.json';
 const GOOGLE_CLIENT_ID = '724620573737-7o7bc9rn9r97r8fhqsfvlcl9dtaa7d7c.apps.googleusercontent.com';
 const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
-const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
+const GOOGLE_WAS_CONNECTED_KEY = window.BastComptaStorageKeys?.googleWasConnected || 'bastcompta_google_was_connected';
 const app = initializeApp(firebaseConfig, 'bastcompta-terrain');
 const auth = getAuth(app);
 const db = getFirestore(app);

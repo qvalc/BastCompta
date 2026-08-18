@@ -13,10 +13,10 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
     }
   }
 
-  const SETTINGS_KEY = 'bastcompta-impots-belgique-v1';
-  const COMPTA_KEY = 'comptabilite-local-v1';
-  const DEVIS_KEY = 'devis-facture-style-vrai-document';
-  const CHANTIERS_KEY = 'bastcompta-chantiers-v1';
+  const SETTINGS_KEY = window.BastComptaStorageKeys?.taxes || 'bastcompta-impots-belgique-v1';
+  const COMPTA_KEY = window.BastComptaStorageKeys?.accounting || 'comptabilite-local-v1';
+  const DEVIS_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
+  const CHANTIERS_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
 
   const defaultSettings = {
     incomeYear: new Date().getFullYear() - 1,
@@ -196,59 +196,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
   }
 
   function computeAmortization(amount, date, durationMonths, year) {
-    amount = toNumber(amount);
-    durationMonths = Math.max(1, parseInt(durationMonths || 60, 10));
-
-    const start = String(date || '').slice(0, 10);
-    const purchaseDate = new Date(start + 'T00:00:00');
-
-    if (!start || isNaN(purchaseDate)) {
-      return { amortYear: 0, amortTotal: 0, netValue: amount };
-    }
-
-    const purchaseYear = purchaseDate.getFullYear();
-    const purchaseMonth = purchaseDate.getMonth() + 1;
-
-    const firstAmortYear = purchaseMonth === 12 ? purchaseYear + 1 : purchaseYear;
-    const firstAmortMonth = purchaseMonth === 12 ? 1 : purchaseMonth + 1;
-
-    if (year < firstAmortYear) {
-      return { amortYear: 0, amortTotal: 0, netValue: amount };
-    }
-
-    const monthly = amount / durationMonths;
-
-    const monthsUntilEndOfYear =
-      (year - firstAmortYear) * 12 + (12 - firstAmortMonth + 1);
-
-    const amortizedMonthsTotal = Math.max(
-      0,
-      Math.min(durationMonths, monthsUntilEndOfYear)
-    );
-
-    const amortTotal = round2(monthly * amortizedMonthsTotal);
-
-    let monthsInYear = 0;
-
-    if (year === firstAmortYear) {
-      monthsInYear = 12 - firstAmortMonth + 1;
-    } else {
-      const monthsBeforeThisYear =
-        (year - firstAmortYear) * 12 - (firstAmortMonth - 1);
-
-      const remainingMonths = Math.max(0, durationMonths - monthsBeforeThisYear);
-      monthsInYear = Math.min(12, remainingMonths);
-    }
-
-    monthsInYear = Math.max(0, Math.min(durationMonths, monthsInYear));
-
-    const amortYear = round2(monthly * monthsInYear);
-
-    return {
-      amortYear,
-      amortTotal,
-      netValue: round2(Math.max(0, amount - amortTotal))
-    };
+    return BastTaxCalculations.amortization(amount, date, durationMonths, year);
   }
 
   function categoryAmount(rows, matcher) {
@@ -324,37 +272,19 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
     const assetsAmort = amortAssets.reduce((sum, row) => sum + row.amortYear, 0);
     const socialDetected = detectSocialContributions(compta);
 
-    const estimatedSocial = (() => {
-      const threshold = toNumber(compta.settings?.socialExemptionThreshold || 1881.76);
-      const rate = toNumber(compta.settings?.socialContributionRate || 20.5);
-      const feeRate = toNumber(compta.settings?.socialContributionFeeRate || 3.5);
-      const baseProfit = salesNet - purchasesNet - lossesTotal - yearlyAmort;
-      if (baseProfit <= threshold) return 0;
-      const contribution = baseProfit * rate / 100;
-      return round2(contribution + contribution * feeRate / 100);
-    })();
+    const estimatedSocial = BastTaxCalculations.estimatedSocialContribution(
+      salesNet - purchasesNet - lossesTotal - yearlyAmort,
+      { threshold: compta.settings?.socialExemptionThreshold, rate: compta.settings?.socialContributionRate,
+        feeRate: compta.settings?.socialContributionFeeRate }
+    );
 
     const socialContributions = toNumber(settings.socialContributionsManual) || socialDetected || (settings.useEstimatedSocialContributions ? estimatedSocial : 0);
     const extraManualCosts = toNumber(settings.homeOfficeCosts) + toNumber(settings.otherManualCosts) + toNumber(settings.spouseHelperRemuneration);
-    const professionalShare = Math.max(0, Math.min(100, toNumber(settings.privateProfessionalShare || 100))) / 100;
-    const rawCosts = purchasesNet + lossesTotal + yearlyAmort + kmFiscal + extraManualCosts;
-    const fiscalCosts = round2(rawCosts * professionalShare);
     const socialExemptionThreshold = toNumber(compta.settings?.socialExemptionThreshold || 1881.76);
-
-    const profitBeforeSocial = round2(
-      salesNet
-      - fiscalCosts
-      - toNumber(settings.plci)
-      - toNumber(settings.priorLosses)
-    );
-
-    const exemptedSocial = profitBeforeSocial <= socialExemptionThreshold ? socialContributions : 0;
-
-    const taxableProfit = round2(
-      profitBeforeSocial
-      - socialContributions
-      + exemptedSocial
-    );
+    const fiscal = BastTaxCalculations.fiscalResult({ salesNet, purchasesNet, lossesTotal, yearlyAmort, kmFiscal,
+      extraManualCosts, professionalShare: settings.privateProfessionalShare, plci: settings.plci,
+      priorLosses: settings.priorLosses, socialContributions, socialExemptionThreshold });
+    const { rawCosts, fiscalCosts, profitBeforeSocial, exemptedSocial, taxableProfit } = fiscal;
     const netVat = round2(salesVat - purchasesVat - toNumber(compta.settings?.vatCarryover || 0));
 
     return {

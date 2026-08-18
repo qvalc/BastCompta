@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import '../js/modules/personnel/calculations.js';
+const personnel = globalThis.BastPersonnelCalculations;
+assert.equal(personnel.daysInclusive('2026-08-18', '2026-08-18'), 1);
+assert.equal(personnel.daysInclusive('2026-08-18', '2026-08-20'), 3);
+assert.equal(personnel.salaryCost({ gross: 3000, employerCharges: 900, mealVouchers: 100, benefits: 50, reimbursements: 25 }), 4075);
+assert.equal(personnel.bonusCost({ amount: 500, employerCharges: 150 }), 650);
+const worker = { active: true, leaves: [{ type: 'legal', status: 'approved', startDate: '2026-08-18', endDate: '2026-08-20' }] };
+assert.equal(personnel.usedLegalLeave(worker, '2026'), 3);
+assert.equal(personnel.currentState(worker, '2026-08-19'), 'leave');
+assert.equal(personnel.currentState({ active: true, absences: [{ type: 'illness', startDate: '2026-08-18', endDate: '' }] }, '2026-08-19'), 'illness');
+assert.equal(personnel.currentState({ active: false }, '2026-08-19'), 'inactive');
+console.log('Calculs Personnel valides.');

@@ -13,14 +13,16 @@
   const META_STORE = 'meta';
   const RESTORE_FLAG = 'bastcompta_indexeddb_restore_done';
 
-  const IMPORTANT_KEYS = [
+  const IMPORTANT_KEYS = window.BastComptaStorageKeys?.important?.slice() || [
     'devis-facture-style-vrai-document',
-    'devis-facture-style-vrai-document-last-save',
     'comptabilite-local-v1',
     'bastcompta-chantiers-v1',
-    'bastcompta-chantiers-v1-last-save',
-    'bastcompta-crm-deleted-clients-v1',
-    'bastcompta-google-was-connected'
+    'bastcompta-personnel-v1',
+    'bastcompta-fournisseurs-v1',
+    'bastcompta-impots-belgique-v1',
+    'bastcompta-terrain-drafts-v1',
+    'bastcompta-terrain-favorites-v1',
+    'bastcompta_google_was_connected'
   ];
 
   let dbPromise = null;

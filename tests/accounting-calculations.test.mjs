@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import '../js/modules/accounting/calculations.js';
+const calc = globalThis.BastAccountingCalculations;
+assert.equal(calc.netFromTvac(121, 21), 100);
+assert.equal(calc.vatFromTvac(121, 21), 21);
+assert.equal(calc.tvacFromHtva(100, 6), 106);
+assert.equal(calc.signedSalesTvac({ tvac: 121, documentType: 'credit_note' }), -121);
+assert.equal(calc.salesNet({ tvac: 121, rate: 21 }), 100);
+assert.equal(calc.salesVat({ tvac: 121, rate: 21 }, true), 0);
+assert.equal(calc.purchaseProfessionalCost({ htva: 100, rate: 21 }, false), 121);
+const amort = calc.amortization(1200, '2026-01-15', 12, 2026);
+assert.equal(amort.monthlyAmort, 100); assert.equal(amort.amortYear, 1100); assert.equal(amort.netValue, 100);
+assert.deepEqual(calc.amortization(1200, '', 12, 2026), { amortYear: 0, amortTotal: 0, netValue: 1200, monthlyAmort: 100 });
+console.log('Calculs comptables valides.');

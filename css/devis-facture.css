@@ -10,12 +10,7 @@
     --danger: #b91c1c;
 }
 
-* {
-    box-sizing: border-box;
-}
-
 body {
-    margin: 0;
     font-family: Arial, Helvetica, sans-serif;
     background: var(--bg);
     color: var(--ink);

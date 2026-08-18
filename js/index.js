@@ -36,7 +36,7 @@ const GOOGLE_API_KEY = 'AIzaSyC88moDvAWg7LFeJAgUSxXJV4nhAigSOKU';
 const DRIVE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email';
 
-const GOOGLE_WAS_CONNECTED_KEY = 'bastcompta_google_was_connected';
+const GOOGLE_WAS_CONNECTED_KEY = window.BastComptaStorageKeys?.googleWasConnected || 'bastcompta_google_was_connected';
 const TOKEN_EXPIRY_SAFETY_MS = 60 * 1000;
 
 let googleTokenClient = null;
@@ -1243,12 +1243,12 @@ window.openInvoicePrintPreviewFromAccounting = openInvoicePrintPreviewFromAccoun
 
 
 const BAST_BACKUP_VERSION = 7;
-const LOCAL_DEVIS_KEY = 'devis-facture-style-vrai-document';
-const LOCAL_COMPTA_KEY = 'comptabilite-local-v1';
-const LOCAL_CHANTIERS_KEY = 'bastcompta-chantiers-v1';
-const LOCAL_PERSONNEL_KEY = 'bastcompta-personnel-v1';
-const LOCAL_FOURNISSEURS_KEY = 'bastcompta-fournisseurs-v1';
-const LOCAL_IMPOTS_KEY = 'bastcompta-impots-belgique-v1';
+const LOCAL_DEVIS_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
+const LOCAL_COMPTA_KEY = window.BastComptaStorageKeys?.accounting || 'comptabilite-local-v1';
+const LOCAL_CHANTIERS_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
+const LOCAL_PERSONNEL_KEY = window.BastComptaStorageKeys?.personnel || 'bastcompta-personnel-v1';
+const LOCAL_FOURNISSEURS_KEY = window.BastComptaStorageKeys?.suppliers || 'bastcompta-fournisseurs-v1';
+const LOCAL_IMPOTS_KEY = window.BastComptaStorageKeys?.taxes || 'bastcompta-impots-belgique-v1';
 const LOCAL_TARIFS_KEY = 'bastcompta_tarifs_v7_vierge_sans_fiche';
 const LOCAL_TARIFS_CATEGORIES_KEY = 'bastcompta_tarifs_categories_v3_vierge_sans_fiche';
 

@@ -2,11 +2,16 @@
 <html lang="fr">
 
 <head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/modules/taxes/calculations.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
   <script src="js/storage.js"></script>
-  <script src="js/impots-access.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Impôts IPP</title>
+  <link rel="stylesheet" href="css/base.css?v=1">
   <link rel="stylesheet" href="css/impots.css?v=2">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="css/action-icons.css?v=1">

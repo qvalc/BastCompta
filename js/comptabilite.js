@@ -1,7 +1,7 @@
 if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Comptabilité
 
-const STORAGE_KEY = 'comptabilite-local-v1';
+const STORAGE_KEY = window.BastComptaStorageKeys?.accounting || 'comptabilite-local-v1';
 const DRIVE_SYNC_FILE_NAME = 'bastcompta-comptabilite-sync.json';
 
 let googleAccessToken = null;
@@ -107,35 +107,7 @@ function localDriveQueryMatch(file = {}, q = '') {
 }
 
 async function listDriveFilesDirect(params = {}) {
-  if (!googleAccessToken) throw new Error('Google Drive non connecté.');
-
-  const files = [];
-  let pageToken = '';
-
-  do {
-    const searchParams = new URLSearchParams();
-    searchParams.set('spaces', params.spaces || 'appDataFolder');
-    searchParams.set('pageSize', String(params.pageSize || 100));
-    searchParams.set('fields', params.fields || 'nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime,trashed)');
-    if (params.orderBy) searchParams.set('orderBy', params.orderBy);
-    if (params.q) searchParams.set('q', params.q);
-    if (pageToken) searchParams.set('pageToken', pageToken);
-
-    const response = await fetch('https://www.googleapis.com/drive/v3/files?' + searchParams.toString(), {
-      headers: { Authorization: `Bearer ${googleAccessToken}` }
-    });
-
-    if (!response.ok) {
-      const error = new Error(await response.text());
-      error.status = response.status;
-      throw error;
-    }
-
-    const payload = await response.json();
-    files.push(...(payload.files || []));
-    pageToken = payload.nextPageToken || '';
-  } while (pageToken);
-
+  const files = await BastComptaDriveClient.listFiles(googleAccessToken, params);
   return { result: { files } };
 }
 
@@ -250,7 +222,7 @@ function getVatRegimeLabel() {
 }
 
 function purchaseVatAmount(row) {
-  return round2(rowHtvaToVat(row?.htva, row?.rate));
+  return BastAccountingCalculations.purchaseVat(row);
 }
 
 function isPurchaseVatRecoverable(row) {
@@ -259,9 +231,7 @@ function isPurchaseVatRecoverable(row) {
 }
 
 function purchaseProfessionalCost(row) {
-  const htva = toNumber(row?.htva);
-  const vat = purchaseVatAmount(row);
-  return round2(htva + (isPurchaseVatRecoverable(row) ? 0 : vat));
+  return BastAccountingCalculations.purchaseProfessionalCost(row, isPurchaseVatRecoverable(row));
 }
 
 function applyVatRegimeRules() {
@@ -1770,49 +1740,44 @@ function toNumber(value) {
 }
 
 function rowNetFromTvac(tvac, rate) {
-  return toNumber(tvac) / (1 + toNumber(rate) / 100);
+  return BastAccountingCalculations.netFromTvac(tvac, rate);
 }
 
 function rowVatFromTvac(tvac, rate) {
-  return toNumber(tvac) - rowNetFromTvac(tvac, rate);
+  return BastAccountingCalculations.vatFromTvac(tvac, rate);
 }
 
 
 function isCreditNoteSalesRow(row) {
-  return String(row?.documentType || '').toLowerCase() === 'credit_note'
-    || String(row?.documentStatus || '').toLowerCase() === 'credit_note'
-    || /note\s+de\s+cr[eé]dit/i.test(String(row?.description || ''));
+  return BastAccountingCalculations.isCreditNote(row);
 }
 
 function salesRowTvac(row) {
-  const value = toNumber(row?.tvac);
-  return isCreditNoteSalesRow(row) ? -Math.abs(value) : value;
+  return BastAccountingCalculations.signedSalesTvac(row);
 }
 
 function salesRowNet(row) {
-  if (isVatExempt()) return salesRowTvac(row);
-  return rowNetFromTvac(salesRowTvac(row), row?.rate);
+  return BastAccountingCalculations.salesNet(row, isVatExempt());
 }
 
 function salesRowVat(row) {
-  if (isVatExempt()) return 0;
-  return rowVatFromTvac(salesRowTvac(row), row?.rate);
+  return BastAccountingCalculations.salesVat(row, isVatExempt());
 }
 
 function rowHtvaToVat(htva, rate) {
-  return toNumber(htva) * (toNumber(rate) / 100);
+  return BastAccountingCalculations.vatFromHtva(htva, rate);
 }
 
 function rowHtvaToTvac(htva, rate) {
-  return toNumber(htva) + rowHtvaToVat(htva, rate);
+  return BastAccountingCalculations.tvacFromHtva(htva, rate);
 }
 
 function round2(value) {
-  return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
+  return BastAccountingCalculations.round2(value);
 }
 
 
-const CHANTIERS_STORAGE_KEY = 'bastcompta-chantiers-v1';
+const CHANTIERS_STORAGE_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
 const CHANTIERS_DRIVE_SYNC_FILE_NAME = 'bastcompta-chantiers-sync.json';
 
 function chantierSlug(value) {
@@ -2175,151 +2140,34 @@ function purchaseVatAllocated(index) {
 }
 
 function computeAmortization(amount, startDate, durationMonths, currentYear) {
-  const safeAmount = toNumber(amount);
-  const safeDuration = Math.max(1, parseInt(durationMonths || 0, 10) || 1);
-  const monthlyAmort = safeAmount / safeDuration;
-  let amortYear = 0;
-  let amortTotal = 0;
-
-  if (!startDate) {
-    return {
-      amortYear: 0,
-      amortTotal: 0,
-      netValue: safeAmount,
-      monthlyAmort
-    };
-  }
-
-  const d = new Date(startDate + 'T00:00:00');
-  if (isNaN(d)) {
-    return {
-      amortYear: 0,
-      amortTotal: 0,
-      netValue: safeAmount,
-      monthlyAmort
-    };
-  }
-
-  const purchaseYear = d.getFullYear();
-  const purchaseMonth = d.getMonth() + 1;
-
-  const firstDeductionYear = purchaseMonth === 12 ? purchaseYear + 1 : purchaseYear;
-  const firstDeductionMonth = purchaseMonth === 12 ? 1 : purchaseMonth + 1;
-
-  if (currentYear >= firstDeductionYear) {
-    const monthsFromStartToEndOfCurrentYear =
-      (currentYear - firstDeductionYear) * 12 + (12 - firstDeductionMonth + 1);
-
-    const totalMonthsUsed = Math.max(
-      0,
-      Math.min(safeDuration, monthsFromStartToEndOfCurrentYear)
-    );
-
-    amortTotal = Math.min(safeAmount, monthlyAmort * totalMonthsUsed);
-
-    if (currentYear === firstDeductionYear) {
-      amortYear = Math.min(
-        safeAmount,
-        monthlyAmort * Math.min(safeDuration, 12 - firstDeductionMonth + 1)
-      );
-    } else {
-      const monthsBeforeCurrentYear = Math.max(
-        0,
-        Math.min(
-          safeDuration,
-          (currentYear - firstDeductionYear - 1) * 12 + (12 - firstDeductionMonth + 1)
-        )
-      );
-      const remainingAtStart = Math.max(0, safeDuration - monthsBeforeCurrentYear);
-      amortYear = Math.min(safeAmount, monthlyAmort * Math.min(12, remainingAtStart));
-    }
-  }
-
-  return {
-    amortYear,
-    amortTotal,
-    netValue: Math.max(0, safeAmount - amortTotal),
-    monthlyAmort
-  };
+  return BastAccountingCalculations.amortization(amount, startDate, durationMonths, currentYear);
 }
 
 
 function formatDateLocal(dateObj) {
-  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return BastVatPeriods.dateLocal(dateObj);
 }
 
 function getQuarterBounds(year, quarter) {
-  const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
-  const y = parseInt(year || new Date().getFullYear(), 10) || new Date().getFullYear();
-  const startMonth = (q - 1) * 3;
-  const start = new Date(y, startMonth, 1);
-  const end = new Date(y, startMonth + 3, 0);
-  return {
-    start: formatDateLocal(start),
-    end: formatDateLocal(end)
-  };
+  return BastVatPeriods.bounds(year, quarter);
 }
 
 function nextBusinessDay(dateObj) {
-  const d = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
-  while (d.getDay() === 0 || d.getDay() === 6) {
-    d.setDate(d.getDate() + 1);
-  }
-  return d;
+  return BastVatPeriods.nextBusinessDay(dateObj);
 }
 
 function defaultQuarterDueDate(year, quarter) {
-  const y = parseInt(year || new Date().getFullYear(), 10) || new Date().getFullYear();
-  const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
-  const targetMonth = q * 3;
-  const base = new Date(y, targetMonth, 25);
-  return formatDateLocal(nextBusinessDay(base));
+  return BastVatPeriods.dueDate(year, quarter);
 }
 
 function quarterLabel(year, quarter) {
-  return `T${quarter || 1} ${year || ''}`.trim();
+  return BastVatPeriods.label(year, quarter);
 }
 
 function vatDeclarationTemplate(year = null, quarter = 1) {
   const currentYear = parseInt(year || data.company.period, 10) || new Date().getFullYear();
-  const q = Math.min(4, Math.max(1, parseInt(quarter || 1, 10) || 1));
-  const bounds = getQuarterBounds(currentYear, q);
-  return {
-    id: `vat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    regime: 'quarterly',
-    year: currentYear,
-    quarter: q,
-    dueDate: defaultQuarterDueDate(currentYear, q),
-    startDate: bounds.start,
-    endDate: bounds.end,
-    filed: false,
-    filedDate: '',
-    paid: false,
-    paidDate: '',
-    paymentAmount: 0,
-    reimbursementRequested: false,
-    closed: false,
-    notes: '',
-    manualBoxes: {
-      '44': 0,
-      '46': 0,
-      '47': 0,
-      '48': 0,
-      '49': 0,
-      '55': 0,
-      '56': 0,
-      '57': 0,
-      '61': 0,
-      '62': 0,
-      '63': 0,
-      '83': 0,
-      '91': 0
-    }
-  };
+  return BastVatPeriods.template(currentYear, quarter,
+    () => `vat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
 }
 
 function ensureDefaultVatQuarters(year) {
@@ -2338,21 +2186,7 @@ function ensureVatStructures() {
   if (!Array.isArray(data.vat.declarations)) data.vat.declarations = [];
   ensureDefaultVatQuarters();
   data.vat.declarations.forEach(dec => {
-    if (!dec.manualBoxes || typeof dec.manualBoxes !== 'object') {
-      dec.manualBoxes = {};
-    }
-    ['44', '46', '47', '48', '49', '55', '56', '57', '61', '62', '63', '83', '91'].forEach(code => {
-      if (typeof dec.manualBoxes[code] === 'undefined') dec.manualBoxes[code] = 0;
-    });
-    if (typeof dec.closed === 'undefined') dec.closed = false;
-    if (typeof dec.filed === 'undefined') dec.filed = false;
-    if (typeof dec.paid === 'undefined') dec.paid = false;
-    if (typeof dec.paymentAmount === 'undefined') dec.paymentAmount = 0;
-    if (typeof dec.reimbursementRequested === 'undefined') dec.reimbursementRequested = false;
-    const bounds = getQuarterBounds(dec.year, dec.quarter);
-    dec.startDate = bounds.start;
-    dec.endDate = bounds.end;
-    if (!dec.dueDate) dec.dueDate = defaultQuarterDueDate(dec.year, dec.quarter);
+    BastVatPeriods.ensureDeclaration(dec);
   });
 }
 
@@ -2505,80 +2339,14 @@ function computeVatDeclaration(dec, previousCredit = 0) {
     isDateInRange(row.date, startDate, endDate)
   );
 
-  const baseByRate = { '01': 0, '02': 0, '03': 0 };
-  const vatByRate = { '54': 0 };
-
-  salesRows.forEach(row => {
-    const rate = round2(row.rate);
-    const base = round2(salesRowNet(row));
-    const vat = round2(salesRowVat(row));
-    if (rate === 6) baseByRate['01'] += base;
-    else if (rate === 12) baseByRate['02'] += base;
-    else if (rate === 21) baseByRate['03'] += base;
-    vatByRate['54'] += vat;
-  });
-
-  const purchases81 = purchaseRows.reduce((sum, row) => sum + (row.category === 'marchandise' ? toNumber(row.htva) : 0), 0);
-  const purchases82 = purchaseRows.reduce((sum, row) => sum + ((row.category || 'frais_generaux') !== 'marchandise' ? toNumber(row.htva) : 0), 0);
   const deductibleVat = data.purchases
     .map((row, i) => ({ row, i }))
     .filter(({ row }) => isDateInRange(row.date, startDate, endDate) && row.deductible)
     .reduce((sum, { i }) => sum + purchaseVatDisplay(i), 0);
 
-  const investmentsVat = investmentRows.reduce((sum, row) => {
-    return sum + round2(rowHtvaToVat(
-      toNumber(row.amount),
-      toNumber(row.rate || 21)
-    ));
-  }, 0);
-
-  const investmentsBase = investmentRows.reduce((sum, row) => {
-    return sum + toNumber(row.amount);
-  }, 0);
-
-  const boxes = {
-    '01': round2(baseByRate['01']),
-    '02': round2(baseByRate['02']),
-    '03': round2(baseByRate['03']),
-    '44': round2(dec.manualBoxes?.['44']),
-    '46': round2(dec.manualBoxes?.['46']),
-    '47': round2(dec.manualBoxes?.['47']),
-    '48': round2(dec.manualBoxes?.['48']),
-    '49': round2(dec.manualBoxes?.['49']),
-    '54': round2(vatByRate['54']),
-    '55': round2(dec.manualBoxes?.['55']),
-    '56': round2(dec.manualBoxes?.['56']),
-    '57': round2(dec.manualBoxes?.['57']),
-    '59': round2(deductibleVat + investmentsVat),
-    '61': round2(dec.manualBoxes?.['61']),
-    '62': round2(dec.manualBoxes?.['62']),
-    '63': round2(dec.manualBoxes?.['63']),
-    '71': 0,
-    '72': 0,
-    '81': round2(purchases81),
-    '82': round2(purchases82),
-    '83': round2(investmentsBase + toNumber(dec.manualBoxes?.['83'])),
-    '91': round2(dec.manualBoxes?.['91'])
-  };
-
-  const taxDue = boxes['54'] + boxes['55'] + boxes['56'] + boxes['57'] + boxes['61'];
-  const deductibleTotal = boxes['59'] + boxes['62'] + boxes['63'] + previousCredit;
-  const net = round2(taxDue - deductibleTotal);
-  boxes['71'] = net > 0 ? net : 0;
-  boxes['72'] = net < 0 ? Math.abs(net) : 0;
-
-  return {
-    startDate,
-    endDate,
-    previousCredit: round2(previousCredit),
-    boxes,
-    salesCount: salesRows.length,
-    purchaseCount: purchaseRows.length,
-    salesVat: round2(vatByRate['54']),
-    deductibleVat: round2(deductibleVat + investmentsVat),
-    dueAmount: boxes['71'],
-    creditAmount: boxes['72']
-  };
+  return { startDate, endDate, ...BastVatDeclaration.compute({ declaration: dec, sales: salesRows,
+    purchases: purchaseRows, investments: investmentRows, previousCredit,
+    deductiblePurchaseVat: deductibleVat, vatExempt: isVatExempt() }) };
 }
 
 function getVatSituationText(dec, computed, outstanding) {
@@ -2604,29 +2372,7 @@ function getVatSituationText(dec, computed, outstanding) {
 function computeVatLedger() {
   ensureVatStructures();
   sortVatDeclarations();
-  let carryCredit = toNumber(data.settings.vatCarryover);
-  const rows = data.vat.declarations.map(dec => {
-    const computed = computeVatDeclaration(dec, carryCredit);
-    carryCredit = computed.creditAmount;
-    const paymentAmount = round2(dec.paymentAmount);
-    const outstanding = computed.dueAmount > 0 ? round2(Math.max(0, computed.dueAmount - paymentAmount)) : 0;
-    return {
-      declaration: dec,
-      computed,
-      outstanding
-    };
-  });
-
-  const unfiled = rows.filter(row => !row.declaration.filed);
-  const filedUnpaid = rows.filter(row => row.declaration.filed && row.outstanding > 0.009);
-
-  return {
-    rows,
-    totalDueOpen: round2(rows.reduce((sum, row) => sum + row.outstanding, 0)),
-    totalUnfiledDue: round2(unfiled.reduce((sum, row) => sum + row.computed.dueAmount, 0)),
-    totalUnfiledCredit: round2(unfiled.reduce((sum, row) => sum + row.computed.creditAmount, 0)),
-    totalFiledUnpaid: round2(filedUnpaid.reduce((sum, row) => sum + row.outstanding, 0))
-  };
+  return BastVatDeclaration.ledger(data.vat.declarations, data.settings.vatCarryover, computeVatDeclaration);
 }
 
 function totals() {
@@ -2755,44 +2501,10 @@ function totals() {
   // Compte exploitant : les mouvements privés n'affectent jamais le compte de résultat.
   // Un apport/remboursement augmente les capitaux propres ; un prélèvement privé les diminue.
   const ownerAccountCarryover = toNumber(data.settings.ownerAccountCarryover);
-  const privateMovementsNet = data.privateMovements.reduce((sum, row) => {
-    const amount = Math.abs(toNumber(row.amount));
-    const type = row.type || 'withdrawal';
-    return sum + (['withdrawal', 'regularization'].includes(type) ? -amount : amount);
-  }, 0);
-  const ownerAccountBalance = round2(ownerAccountCarryover + privateMovementsNet);
-
   const carryover = toNumber(data.settings.vatCarryover);
 
   // Les cotisations sociales ne sont pas reprises dans les charges du compte de résultat.
   // Elles sont traitées uniquement dans le bloc de correction/exonération.
-  const totalCharges = purchasesNet + yearlyAmort + otherTaxesTotal + financialChargesTotal + exceptionalChargesTotal;
-  const estimatedProfit = salesNet - totalCharges;
-
-  const socialExemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
-  const socialContributionRate = toNumber(data.settings.socialContributionRate || 20.5);
-  const socialContributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
-  const isExemptSocial = estimatedProfit <= socialExemptionThreshold;
-
-  // Cotisations nettes positives : logique existante inchangée.
-  // Si les remboursements dépassent les paiements, l'excédent devient
-  // un autre produit professionnel à réintégrer.
-  const deductibleSocialContributions = Math.max(0, socialContributionsTotal);
-  const excessSocialRefund = Math.max(0, -socialContributionsTotal);
-
-  const socialContributionRecovered = isExemptSocial
-    ? deductibleSocialContributions
-    : 0;
-
-  const socialBaseContribution = isExemptSocial ? 0 : (estimatedProfit * socialContributionRate / 100);
-  const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * socialContributionFeeRate / 100);
-  const socialContributionDue = socialBaseContribution + socialFeeContribution;
-
-  // Le résultat de l'exercice reste le résultat du compte de résultat.
-  // Les informations de cotisations/remboursements sont affichées à titre informatif
-  // et ne modifient pas le résultat de l'exercice courant.
-  const taxableEstimatedProfit = estimatedProfit;
-
   const netVat = salesVat - purchasesVat - carryover;
 
   // Le bilan doit reprendre la situation réellement ouverte du suivi TVA,
@@ -2812,25 +2524,15 @@ function totals() {
 
   // Conservé comme solde net pour les usages internes/compatibilité, mais
   // l'actif et le passif utilisent séparément la créance et la dette ouvertes.
-  const realVat = round2(openVatDue - openVatCredit);
-
-  const netFixedAssets = assetsGross - totalAmortized;
-
-  const liquidities =
-    toNumber(data.settings.bankBalance) +
-    toNumber(data.settings.cashBalance);
-
-  const receivableVat = openVatCredit;
-  const payableVat = openVatDue;
-  const resultRetained = estimatedProfit;
-
-  const assetsSide = netFixedAssets + stockValue + receivableVat + liquidities;
-  const liabilitiesSide =
-    toNumber(data.settings.capitalStart) +
-    toNumber(data.settings.retainedEarnings) +
-    ownerAccountBalance +
-    resultRetained +
-    payableVat;
+  const statement = BastFinancialStatements.summarize({ salesNet, purchasesNet, yearlyAmort, otherTaxesTotal,
+    financialChargesTotal, exceptionalChargesTotal, socialContributionsTotal, assetsGross, totalAmortized,
+    stockValue, privateMovements: data.privateMovements, ownerAccountCarryover,
+    socialExemptionThreshold: data.settings.socialExemptionThreshold,
+    socialContributionRate: data.settings.socialContributionRate,
+    socialContributionFeeRate: data.settings.socialContributionFeeRate,
+    bankBalance: data.settings.bankBalance, cashBalance: data.settings.cashBalance,
+    capitalStart: data.settings.capitalStart, retainedEarnings: data.settings.retainedEarnings,
+    openVatCredit, openVatDue });
 
   return {
     salesNet,
@@ -2852,23 +2554,9 @@ function totals() {
     exceptionalChargesTotal,
     kmTotal,
     ownerAccountCarryover,
-    privateMovementsNet,
-    ownerAccountBalance,
-    totalCharges,
-    estimatedProfit,
-    deductibleSocialContributions,
-    excessSocialRefund,
-    socialContributionRecovered,
-    socialContributionDue,
-    taxableEstimatedProfit,
+    ...statement,
     netVat,
-    realVat,
-    netFixedAssets,
-    liquidities,
-    receivableVat,
-    payableVat,
-    assetsSide,
-    liabilitiesSide
+    realVat: statement.realVat
   };
 }
 

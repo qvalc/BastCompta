@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import '../js/modules/clients/crm-model.js';
+import '../js/modules/clients/project-links.js';
+const links = globalThis.BastProjectLinks;
+const projects = [{ id: 'p1', clientId: 'c1' }, { id: 'p2', clientRef: '42' }, { id: 'p3', clientName: 'Dupont' }];
+assert.equal(links.findProject(projects, { clientId: 'c1' }).id, 'p1');
+assert.equal(links.findProject(projects, { clientNumber: '42' }).id, 'p2');
+assert.equal(links.findProject(projects, { clientName: 'Dupont' }).id, 'p3');
+const project = {}; links.ensureCollections(project); assert.deepEqual(project.linkedInvoices, []);
+const docs = []; links.upsertMoneyItem(docs, { documentUid: 'd1', ref: 'F-1', amount: 10 }); links.upsertMoneyItem(docs, { documentUid: 'd1', amount: 20 });
+assert.equal(docs.length, 1); assert.equal(docs[0].amount, 20);
+assert.equal(links.addTimelineEvent(project, 'Facture liée', { createId: () => 'e1', now: () => 'now' }), true);
+assert.equal(links.addTimelineEvent(project, 'Facture liée'), false); assert.equal(project.timeline.length, 1);
+console.log('Liaisons documents–chantiers valides.');

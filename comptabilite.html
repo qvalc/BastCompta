@@ -2,11 +2,20 @@
 <html lang="fr">
 
 <head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/drive-client.js"></script>
+  <script src="js/modules/accounting/calculations.js"></script>
+  <script src="js/modules/accounting/vat-periods.js"></script>
+  <script src="js/modules/accounting/vat-declaration.js"></script>
+  <script src="js/modules/accounting/financial-statements.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
   <script src="js/storage.js"></script>
-  <script src="js/comptabilite-access.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Comptabilité</title>
+  <link rel="stylesheet" href="css/base.css?v=1">
   <link rel="stylesheet" href="css/comptabilite.css?v=2">
   <script src="https://apis.google.com/js/api.js"></script>
 

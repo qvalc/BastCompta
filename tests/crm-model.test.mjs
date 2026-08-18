@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import '../js/modules/clients/crm-model.js';
+const crm = globalThis.BastCrmModel;
+const options = { createId: () => 'client-1', now: () => '2026-08-18T00:00:00.000Z' };
+const client = crm.normalize({ name: '  Dupont ', email: 'INFO@EXAMPLE.BE; ', clientNumber: '12', favorite: 1 }, options);
+assert.equal(client.id, 'client-1'); assert.equal(client.name, 'Dupont'); assert.equal(client.email, 'INFO@EXAMPLE.BE');
+assert.equal(crm.trackingKey({ clientNumber: ' CL-12 ' }), 'ref:cl-12');
+assert.equal(crm.matchIdentity({ id: 'abc' }, { clientId: 'abc' }), true);
+assert.equal(crm.matchIdentity({ clientNumber: '12' }, { clientRef: '12' }), true);
+assert.equal(crm.label(client), 'Dupont — INFO@EXAMPLE.BE — N° 12');
+const sorted = crm.sort([{ name: 'B', clientNumber: '2' }, { name: 'A', favorite: true }, { name: 'C', clientNumber: '10' }], options);
+assert.deepEqual(sorted.map(item => item.name), ['A', 'B', 'C']);
+console.log('Modèle CRM valide.');

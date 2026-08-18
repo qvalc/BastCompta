@@ -1,6 +1,6 @@
 if (new URLSearchParams(window.location.search).get('embedded') === '1') document.body.classList.add('bast-embedded');
 
-const STORAGE_KEY = 'bastcompta-personnel-v1';
+const STORAGE_KEY = window.BastComptaStorageKeys?.personnel || 'bastcompta-personnel-v1';
 const DRIVE_SYNC_FILE_NAME = 'bastcompta-personnel-sync.json';
 let googleAccessToken = null;
 let selectedWorkerId = '';
@@ -20,17 +20,9 @@ const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
 
 function blankData(){ return { version: 1, updatedAt: new Date().toISOString(), workers: [] }; }
 function normalizeWorker(w={}){
-  return {
-    id:w.id||uid('worker'), firstName:w.firstName||'', lastName:w.lastName||'', type:w.type||'worker', active:w.active!==false,
-    birthDate:w.birthDate||'', nationalNumber:w.nationalNumber||'', address:w.address||'', phone:w.phone||'', email:w.email||'', emergencyContact:w.emergencyContact||'',
-    functionTitle:w.functionTitle||'', department:w.department||'', jointCommittee:w.jointCommittee||'', contractType:w.contractType||'CDI', startDate:w.startDate||'', endDate:w.endDate||'',
-    workRegime:w.workRegime||'Temps plein', weeklyHours:num(w.weeklyHours)||38, wageType:w.wageType||'monthly', baseWage:num(w.baseWage), annualLeaveDays:num(w.annualLeaveDays)||20,
-    iban:w.iban||'', notes:w.notes||'',
-    salaries:Array.isArray(w.salaries)?w.salaries:[], bonuses:Array.isArray(w.bonuses)?w.bonuses:[], leaves:Array.isArray(w.leaves)?w.leaves:[], absences:Array.isArray(w.absences)?w.absences:[],
-    timeEntries:Array.isArray(w.timeEntries)?w.timeEntries:[], documents:Array.isArray(w.documents)?w.documents:[], trainings:Array.isArray(w.trainings)?w.trainings:[], equipment:Array.isArray(w.equipment)?w.equipment:[], history:Array.isArray(w.history)?w.history:[]
-  };
+  return BastWorkerModel.normalize(w,()=>uid('worker'));
 }
-function normalizeData(source){ const base=blankData(); if(source&&typeof source==='object') Object.assign(base,source); base.workers=Array.isArray(base.workers)?base.workers.map(normalizeWorker):[]; return base; }
+function normalizeData(source){ return BastWorkerModel.normalizeData(source,{createId:()=>uid('worker'),now:()=>new Date().toISOString()}); }
 function loadData(){ try{return normalizeData(JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'));}catch{return blankData();} }
 function saveLocal(detail='Modification du personnel'){
   data.updatedAt=new Date().toISOString(); localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
@@ -39,13 +31,13 @@ function saveLocal(detail='Modification du personnel'){
 }
 function workerName(w){ return `${w.firstName||''} ${w.lastName||''}`.trim() || 'Sans nom'; }
 function getWorker(){ return data.workers.find(w=>w.id===selectedWorkerId)||null; }
-function recordYear(item){ return String(item.date||item.startDate||item.month||'').slice(0,4); }
+function recordYear(item){ return BastPersonnelCalculations.recordYear(item); }
 function inSelectedYear(item){ return selectedSummaryYear==='all' || recordYear(item)===selectedSummaryYear; }
-function daysInclusive(start,end){ if(!start)return 0; const a=new Date(start+'T00:00:00'), b=new Date((end||start)+'T00:00:00'); return Math.max(1,Math.round((b-a)/86400000)+1); }
-function salaryCost(s){ return num(s.gross)+num(s.employerCharges)+num(s.mealVouchers)+num(s.benefits)+num(s.reimbursements); }
-function bonusCost(b){ return num(b.amount)+num(b.employerCharges); }
-function isCurrentAbsence(a){ const t=today(); return a.startDate<=t && (!a.endDate || a.endDate>=t); }
-function usedLegalLeave(w, year=selectedSummaryYear){ return w.leaves.filter(l=>(year==='all'||recordYear(l)===year)&&l.type==='legal'&&l.status!=='cancelled').reduce((sum,l)=>sum+(num(l.days)||daysInclusive(l.startDate,l.endDate)),0); }
+function daysInclusive(start,end){ return BastPersonnelCalculations.daysInclusive(start,end); }
+function salaryCost(s){ return BastPersonnelCalculations.salaryCost(s); }
+function bonusCost(b){ return BastPersonnelCalculations.bonusCost(b); }
+function isCurrentAbsence(a){ return BastPersonnelCalculations.isCurrentAbsence(a,today()); }
+function usedLegalLeave(w, year=selectedSummaryYear){ return BastPersonnelCalculations.usedLegalLeave(w,year); }
 
 function notify(message){ const t=document.getElementById('toast'); t.textContent=message; t.classList.add('show'); clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove('show'),2600); }
 function setDriveState(connected){ const el=document.getElementById('driveState'); if(!el)return; el.textContent=`Google Drive : ${connected?'connecté':'non connecté'}`; el.classList.toggle('connected',connected); }
@@ -59,15 +51,11 @@ function buildYearOptions(){
 }
 function setSummaryYear(value){ selectedSummaryYear=value; renderSummary(); renderCurrentView(); }
 
-function isCurrentLeave(l){ const t=today(); return l.status!=='cancelled' && l.status!=='requested' && l.startDate<=t && (!l.endDate || l.endDate>=t); }
+function isCurrentLeave(l){ return BastPersonnelCalculations.isCurrentLeave(l,today()); }
 function currentLeave(w){ return (w.leaves||[]).find(isCurrentLeave)||null; }
 function currentAbsence(w){ return (w.absences||[]).find(isCurrentAbsence)||null; }
 function currentPersonnelState(w){
-  if(!w.active) return 'inactive';
-  const a=currentAbsence(w);
-  if(a) return a.type==='illness'?'illness':'other';
-  if(currentLeave(w)) return 'leave';
-  return 'active';
+  return BastPersonnelCalculations.currentState(w,today());
 }
 function indicatorLabel(state){ return ({total:'Tout le personnel',active:'Actifs',leave:'En congé',illness:'En maladie',other:'Autres absences'}[state]||'Travailleurs'); }
 function setIndicatorFilter(filter){

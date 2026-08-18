@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import '../js/modules/suppliers/supplier-model.js';
+const model = globalThis.BastSupplierModel;
+const article = model.normalizeArticle({ name: 'Pierre', grossPrice: '100,5', discountPct: 10, salePrice: 140 }, () => 'a1');
+assert.equal(article.id, 'a1'); assert.equal(article.grossPrice, 100.5); assert.equal(article.vatRate, 21);
+assert.equal(model.netPrice(article), 90.45); assert.equal(model.margin(article), 49.55);
+const supplier = model.normalizeSupplier({ name: 'Fourni', articles: [article] }, { createId: () => 's1', createArticleId: () => 'a2' });
+assert.equal(supplier.id, 's1'); assert.equal(supplier.articles.length, 1);
+assert.equal(model.normalizeData(null, { now: () => 'now' }).suppliers.length, 0);
+console.log('Modèle Fournisseurs valide.');

@@ -1,7 +1,7 @@
 if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Devis & Facture
 
-const STORAGE_KEY = 'devis-facture-style-vrai-document';
+const STORAGE_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
 const DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
 
 let googleAccessToken = null;
@@ -99,35 +99,7 @@ function localDriveQueryMatch(file = {}, q = '') {
 }
 
 async function listDriveFilesDirect(params = {}) {
-  if (!googleAccessToken) throw new Error('Google Drive non connecté.');
-
-  const files = [];
-  let pageToken = '';
-
-  do {
-    const searchParams = new URLSearchParams();
-    searchParams.set('spaces', params.spaces || 'appDataFolder');
-    searchParams.set('pageSize', String(params.pageSize || 100));
-    searchParams.set('fields', params.fields || 'nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime,trashed)');
-    if (params.orderBy) searchParams.set('orderBy', params.orderBy);
-    if (params.q) searchParams.set('q', params.q);
-    if (pageToken) searchParams.set('pageToken', pageToken);
-
-    const response = await fetch('https://www.googleapis.com/drive/v3/files?' + searchParams.toString(), {
-      headers: { Authorization: `Bearer ${googleAccessToken}` }
-    });
-
-    if (!response.ok) {
-      const error = new Error(await response.text());
-      error.status = response.status;
-      throw error;
-    }
-
-    const payload = await response.json();
-    files.push(...(payload.files || []));
-    pageToken = payload.nextPageToken || '';
-  } while (pageToken);
-
+  const files = await BastComptaDriveClient.listFiles(googleAccessToken, params);
   return { result: { files } };
 }
 
@@ -875,70 +847,42 @@ function setDocumentLineField(docKey, section, index, field, value) {
 }
 
 function lineBase(row) {
-  return toNumber(row.qty) * toNumber(row.unitPrice);
+  return BastDocumentCalculations.lineBase(row);
 }
 
 function lineDiscountAmount(row) {
-  return lineBase(row) * (toNumber(row.discount) / 100);
+  return BastDocumentCalculations.lineDiscountAmount(row);
 }
 
 function lineNet(row) {
-  return lineBase(row) - lineDiscountAmount(row);
+  return BastDocumentCalculations.lineNet(row);
 }
 
 function lineVat(row) {
-  return lineNet(row) * (toNumber(row.vatRate) / 100);
+  return BastDocumentCalculations.lineVat(row);
 }
 
 function lineTvac(row) {
-  return lineNet(row) + lineVat(row);
+  return BastDocumentCalculations.lineTvac(row);
 }
 
 function lineCost(row) {
-  // Prix de revient interne : utilisé uniquement pour les fournitures et masqué à l'impression/PDF.
-  const costPrice = Number(row?.costPrice ?? row?.purchasePrice ?? row?.cost ?? row?.unitPrice ?? 0) || 0;
-  return toNumber(row.qty) * costPrice;
+  return BastDocumentCalculations.lineCost(row);
 }
 
 function lineSupplyMargin(row) {
-  return lineNet(row) - lineCost(row);
+  return BastDocumentCalculations.lineSupplyMargin(row);
 }
 
 function totalsFor(docKey) {
-  const doc = data[docKey];
-  const mainLines = Array.isArray(doc.lines) ? doc.lines : [];
-  const suppliesLines = doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [];
-  const allLines = [...mainLines, ...suppliesLines];
-
-  const workHtva = mainLines.reduce((sum, row) => sum + lineNet(row), 0);
-  const workVat = mainLines.reduce((sum, row) => sum + lineVat(row), 0);
-  const suppliesSaleHtva = suppliesLines.reduce((sum, row) => sum + lineNet(row), 0);
-  const suppliesVat = suppliesLines.reduce((sum, row) => sum + lineVat(row), 0);
-  const suppliesCostHtva = suppliesLines.reduce((sum, row) => sum + lineCost(row), 0);
-  const htva = allLines.reduce((sum, row) => sum + lineNet(row), 0);
-  const vat = allLines.reduce((sum, row) => sum + lineVat(row), 0);
-  const tvac = htva + vat;
-  return {
-    htva, vat, tvac,
-    workHtva, workVat, workTvac: workHtva + workVat,
-    suppliesSaleHtva,
-    suppliesHtva: suppliesSaleHtva,
-    suppliesVat,
-    suppliesTvac: suppliesSaleHtva + suppliesVat,
-    suppliesCostHtva
-  };
+  return BastDocumentCalculations.totalsForDocument(data[docKey]);
 }
 
-const CHANTIERS_STORAGE_KEY = 'bastcompta-chantiers-v1';
+const CHANTIERS_STORAGE_KEY = window.BastComptaStorageKeys?.clients || 'bastcompta-chantiers-v1';
 const CHANTIERS_DRIVE_SYNC_FILE_NAME = 'bastcompta-chantiers-sync.json';
 
 function chantierSlug(value) {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'chantier';
+  return BastCrmModel.slug(value) || 'chantier';
 }
 
 function loadChantiersLocalData() {
@@ -965,12 +909,7 @@ function saveChantiersLocalData(chantiersData) {
 }
 
 function getClientTrackingKey(doc) {
-  const clientId = String(doc.clientId || '').trim();
-  const clientRef = String(doc.clientNumber || doc.clientRef || '').trim();
-  const clientName = String(doc.clientName || '').trim();
-  if (clientId) return 'id:' + clientId;
-  if (clientRef) return 'ref:' + chantierSlug(clientRef);
-  return 'name:' + chantierSlug(clientName);
+  return BastCrmModel.trackingKey(doc);
 }
 
 function normalizeClientTrackingTitle(doc) {
@@ -983,14 +922,9 @@ function findOrCreateChantierProject(chantiersData, doc) {
 
   const clientId = String(doc.clientId || '').trim();
   const clientRef = String(doc.clientNumber || '').trim();
-  const clientKey = getClientTrackingKey(doc);
   const fallbackClientSlug = chantierSlug(clientName || clientRef || clientId);
 
-  let project = (chantiersData.projects || []).find(item => {
-    if (clientId && String(item.clientId || '') === clientId) return true;
-    if (clientRef && String(item.clientRef || '') === clientRef) return true;
-    return getClientTrackingKey(item) === clientKey;
-  });
+  let project = BastProjectLinks.findProject(chantiersData.projects || [], doc, getClientTrackingKey);
 
   if (!project && doc.chantierId) {
     project = (chantiersData.projects || []).find(item => String(item.id || '') === String(doc.chantierId));
@@ -1027,14 +961,7 @@ function findOrCreateChantierProject(chantiersData, doc) {
     project.clientName = project.clientName || clientName;
     project.clientRef = project.clientRef || clientRef;
     project.address = project.address || doc.address || '';
-    if (!Array.isArray(project.linkedQuotes)) project.linkedQuotes = [];
-    if (!Array.isArray(project.linkedInvoices)) project.linkedInvoices = [];
-    if (!Array.isArray(project.linkedReminders)) project.linkedReminders = [];
-    if (!Array.isArray(project.costs)) project.costs = [];
-    if (!Array.isArray(project.documents)) project.documents = [];
-    if (!Array.isArray(project.tasks)) project.tasks = [];
-    if (!Array.isArray(project.notes)) project.notes = [];
-    if (!Array.isArray(project.timeline)) project.timeline = [];
+    BastProjectLinks.ensureCollections(project);
   }
 
   doc.chantierId = project.id;
@@ -1042,30 +969,15 @@ function findOrCreateChantierProject(chantiersData, doc) {
 }
 
 function upsertProjectMoneyItem(list, payload) {
-  const stableKey = String(payload.documentUid || payload.id || '').trim();
-  const refKey = String(payload.ref || '').trim();
-  let item = list.find(entry => stableKey && String(entry.documentUid || entry.id || '').trim() === stableKey);
-  if (!item && refKey) {
-    item = list.find(entry => String(entry.ref || '').trim() === refKey);
-  }
-  if (!item) {
-    item = { id: payload.id || stableKey || `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}` };
-    list.push(item);
-  }
-  Object.assign(item, payload, { documentUid: stableKey || payload.documentUid || payload.id || '' });
+  return BastProjectLinks.upsertMoneyItem(list, payload,
+    () => `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
 }
 
 function addChantierTimeline(project, text) {
-  if (!Array.isArray(project.timeline)) project.timeline = [];
-  const existingRecent = project.timeline.find(event => event.text === text);
-  if (!existingRecent) {
-    project.timeline.unshift({
-      id: `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-      date: new Date().toISOString(),
-      text
-    });
-  }
-  project.timeline = project.timeline.slice(0, 100);
+  BastProjectLinks.addTimelineEvent(project, text, {
+    createId: () => `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    now: () => new Date().toISOString()
+  });
 }
 
 function syncDocumentToChantiers(docKey) {
@@ -1156,19 +1068,6 @@ async function saveChantiersSyncToDrive(showErrorAlert = false) {
     const files = existing.result.files || [];
     const isUpdate = files.length > 0;
 
-    if (isUpdate) {
-      const ok = confirm(
-        `${fileName} existe déjà sur Google Drive.\n\n` +
-        `Si vous continuez, l'ancien document sera remplacé.\n\n` +
-        `Voulez-vous vraiment remplacer ce fichier ?`
-      );
-
-      if (!ok) {
-        if (showAlert) alert("Export annulé : ce numéro existe déjà.");
-        return null;
-      }
-    }
-
     const metadata = isUpdate
       ? { name: CHANTIERS_DRIVE_SYNC_FILE_NAME }
       : { name: CHANTIERS_DRIVE_SYNC_FILE_NAME, parents: ['appDataFolder'] };
@@ -1210,34 +1109,18 @@ function roundMoney(value) {
   return Math.round((toNumber(value) + Number.EPSILON) * 100) / 100;
 }
 
-const DOCUMENT_NUMBER_CONFIG = {
-  quote: { prefix: 'D', label: 'devis' },
-  invoice: { prefix: 'F', label: 'facture' },
-  reminder: { prefix: 'RF', label: 'rappel' },
-  credit_note: { prefix: 'NC', label: 'note de crédit' }
-};
+const DOCUMENT_NUMBER_CONFIG = BastDocumentNumbering.config;
 
 function getCurrentDocumentYear() {
   return String(new Date().getFullYear());
 }
 
 function formatDocumentNumber(kind, year, sequence) {
-  const config = DOCUMENT_NUMBER_CONFIG[kind] || DOCUMENT_NUMBER_CONFIG.quote;
-  return `${config.prefix}-${year}-${String(sequence || 1).padStart(3, '0')}`;
+  return BastDocumentNumbering.format(kind, year, sequence);
 }
 
 function parseBusinessDocumentNumber(value) {
-  const text = String(value || '').trim().toUpperCase();
-  const match = text.match(/\b(RF|NC|D|F)-(\d{4})-(\d{1,})\b/);
-  if (!match) return null;
-
-  const prefixToKind = { D: 'quote', F: 'invoice', RF: 'reminder', NC: 'credit_note' };
-  return {
-    kind: prefixToKind[match[1]] || '',
-    prefix: match[1],
-    year: match[2],
-    sequence: parseInt(match[3], 10) || 0
-  };
+  return BastDocumentNumbering.parse(value);
 }
 
 function addDocumentNumberCandidate(candidates, value, source = '') {
@@ -1588,48 +1471,19 @@ Communication : ${data.communication.formatted || '+++...+++'}`;
 }
 
 function normalizeClientNumber(value) {
-  let v = String(value || '').replace(/\D/g, '');
-
-  if (!v) return '';
-
-  // Si déjà sur 3 chiffres → on garde
-  if (v.length === 3) return v;
-
-  // Si 1 ou 2 chiffres → on ajoute "1" devant
-  if (v.length <= 2) {
-    return ('1' + v).slice(0, 3);
-  }
-
-  return v.slice(0, 3);
+  return BastDocumentCalculations.normalizeClientNumber(value);
 }
 
 function normalizeYear(value) {
-  return String(value || '').replace(/\D/g, '').slice(0, 4);
+  return BastDocumentCalculations.normalizeYear(value);
 }
 
 function normalizeInvoiceNumber(value) {
-  return String(value || '').replace(/\D/g, '').slice(0, 2);
+  return BastDocumentCalculations.normalizeInvoiceNumber(value);
 }
 
 function computeStructuredCommunication(clientNumber, invoiceYear, invoiceNumber) {
-  const c = normalizeClientNumber(clientNumber);
-  const y = normalizeYear(invoiceYear);
-  const i = normalizeInvoiceNumber(invoiceNumber);
-
-  if (!c || !y || !i || y.length !== 4) {
-    return { base: '', control: '', formatted: '+++...+++' };
-  }
-
-  const base = `${c}${y}${i}`;
-  const mod = Number(base) % 97;
-  const control = mod === 0 ? 97 : mod;
-  const controlPadded = String(control).padStart(2, '0');
-
-  return {
-    base,
-    control: controlPadded,
-    formatted: `+++${c}/${y}/${i}${controlPadded}+++`
-  };
+  return BastDocumentCalculations.structuredCommunication(clientNumber, invoiceYear, invoiceNumber);
 }
 
 function syncCommunicationFromInvoice(shouldRender = true) {
@@ -1860,62 +1714,20 @@ async function downloadHiddenCrmSyncFromDrive() {
 
 
 function createEmptyClient() {
-  return {
-    id: `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: '',
-    email: '',
-    address: '',
-    clientNumber: '',
-    vat: '',
-    phone: '',
-    contact: '',
-    notes: '',
-    favorite: false,
-    createdAt: new Date().toISOString()
-  };
+  return BastCrmModel.empty(() => `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
 }
 
 function normalizeClient(client = {}) {
-  const base = createEmptyClient();
-  return {
-    ...base,
-    ...client,
-    name: String(client.name || '').trim(),
-    email: sanitizeEmail(client.email || ''),
-    address: String(client.address || '').trim(),
-    clientNumber: String(client.clientNumber || '').trim(),
-    vat: String(client.vat || '').trim(),
-    phone: String(client.phone || '').trim(),
-    contact: String(client.contact || '').trim(),
-    notes: String(client.notes || '').trim(),
-    favorite: !!client.favorite,
-    createdAt: client.createdAt || base.createdAt,
-    id: client.id || base.id
-  };
+  return BastCrmModel.normalize(client, { createId: () => `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
 }
 
 function getClients() {
   const clients = Array.isArray(data.clients) ? data.clients : [];
-  return clients
-    .map(normalizeClient)
-    .sort((a, b) => {
-      if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
-
-      const aNum = String(a.clientNumber || '999999');
-      const bNum = String(b.clientNumber || '999999');
-
-      const byNumber = aNum.localeCompare(bNum, 'fr', { numeric: true, sensitivity: 'base' });
-      if (byNumber !== 0) return byNumber;
-
-      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-    });
+  return BastCrmModel.sort(clients, { createId: () => `client-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
 }
 
 function clientLabel(client) {
-  const parts = [client.name || 'Client sans nom'];
-  if (client.email) parts.push(client.email);
-  if (client.clientNumber) parts.push(`N° ${client.clientNumber}`);
-  return parts.join(' — ');
+  return BastCrmModel.label(client);
 }
 
 function saveClientRecord(client, shouldAlert = true) {
@@ -3013,7 +2825,7 @@ function renderCRM() {
 }
 
 function sanitizeEmail(email) {
-  return String(email || '').trim().replace(/[;,\s]+$/g, '');
+  return BastCrmModel.sanitizeEmail(email);
 }
 
 function rememberClientEmail(email) {
@@ -3716,46 +3528,31 @@ function printInvoiceFromPeppol() {
 }
 
 function peppolTrim(value) {
-  return String(value ?? '').trim();
+  return BastPeppol.trim(value);
 }
 
 function peppolAmount(value) {
-  return Number(value || 0).toFixed(2);
+  return BastPeppol.amount(value);
 }
 
 function xmlEscape(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  return BastPeppol.escapeXml(value);
 }
 
 function normalizeVatNumber(value) {
-  return peppolTrim(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return BastDocumentCalculations.normalizeVatNumber(value);
 }
 
 function getBelgianEnterpriseNumber(value) {
-  const normalized = normalizeVatNumber(value);
-  const digits = normalized.replace(/\D/g, '');
-  return digits.length === 10 ? digits : '';
+  return BastDocumentCalculations.belgianEnterpriseNumber(value);
 }
 
 function isValidBelgianEnterpriseNumber(value) {
-  const number = getBelgianEnterpriseNumber(value);
-  if (!number) return false;
-
-  const base = Number(number.slice(0, 8));
-  const check = Number(number.slice(8));
-  const expected = 97 - (base % 97);
-
-  return check === expected;
+  return BastDocumentCalculations.isValidBelgianEnterpriseNumber(value);
 }
 
 function getVatCountry(vatNumber) {
-  const normalized = normalizeVatNumber(vatNumber);
-  return /^[A-Z]{2}/.test(normalized) ? normalized.slice(0, 2) : 'BE';
+  return BastPeppol.country(vatNumber);
 }
 
 function isBelgianVat(value) {
@@ -3904,19 +3701,8 @@ function buildPeppolXml() {
   const paymentTerms = peppolTrim(invoice.notes) || peppolTrim(company.conditions) || 'Paiement à l’échéance indiquée.';
   const currency = 'EUR';
 
-  const vatByRate = new Map();
-  lines.forEach(row => {
-    const rate = toNumber(row.vatRate);
-    const base = lineNet(row);
-    const tax = lineVat(row);
-    const current = vatByRate.get(rate) || { base: 0, tax: 0 };
-    current.base += base;
-    current.tax += tax;
-    vatByRate.set(rate, current);
-  });
-
-  const taxSubtotals = [...vatByRate.entries()].map(([rate, item]) => {
-    const category = rate === 0 ? 'Z' : 'S';
+  const taxSubtotals = BastPeppol.groupVat(lines).map(item => {
+    const { rate, category } = item;
     return `
       <cac:TaxSubtotal>
         <cbc:TaxableAmount currencyID="${currency}">${peppolAmount(item.base)}</cbc:TaxableAmount>
@@ -3932,9 +3718,9 @@ function buildPeppolXml() {
   const invoiceLines = lines.map((row, index) => {
     const qty = toNumber(row.qty) || 1;
     const rate = toNumber(row.vatRate);
-    const category = rate === 0 ? 'Z' : 'S';
+    const category = BastPeppol.taxCategory(rate);
     const description = peppolTrim(row.description) || `Ligne ${index + 1}`;
-    const unitCode = peppolTrim(row.unit).toLowerCase().includes('h') ? 'HUR' : 'C62';
+    const unitCode = BastPeppol.unitCode(row.unit);
     return `
   <cac:InvoiceLine>
     <cbc:ID>${index + 1}</cbc:ID>
@@ -4790,14 +4576,6 @@ let tarifCategoryDrawerOpen = false;
 let tarifOpenCategoryGroups = new Set();
 let lastTarifAddClickAt = 0;
 
-function ensureTarifsData() {
-  if (!data.tarifs || typeof data.tarifs !== 'object' || Array.isArray(data.tarifs)) {
-    data.tarifs = { categories: [], items: [] };
-  }
-  if (!Array.isArray(data.tarifs.categories)) data.tarifs.categories = [];
-  if (!Array.isArray(data.tarifs.items)) data.tarifs.items = [];
-  data.tarifs.items = data.tarifs.items.map(normalizeTarifItem);
-}
 
 function saveTarifsData() {
   ensureTarifsData();
@@ -4846,18 +4624,9 @@ function emptyTarifComponent() {
   return { nom: '', unite: '', quantite: '', prixUnitaire: '' };
 }
 
-function normalizeTarifItem(item = {}) {
-  const base = Object.assign(emptyTarifItem(), item || {});
-  base.id = item.id || base.id;
-  if (!Array.isArray(base.composants)) base.composants = [];
-  base.composants = base.composants.map(c => Object.assign(emptyTarifComponent(), c || {}));
-  delete base.favorite;
-  delete base.cout;
-  return base;
-}
 
 function normalizeTarifText(value) {
-  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(',', '.');
+  return BastTariffsModel.normalizeText(value);
 }
 
 function tarifNumber(value) {
@@ -4866,13 +4635,7 @@ function tarifNumber(value) {
 }
 
 function cleanTarifCategories(list) {
-  const seen = new Set();
-  return (list || []).map(c => String(c || '').trim()).filter(c => {
-    const key = normalizeTarifText(c);
-    if (!c || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return BastTariffsModel.uniqueNames(list);
 }
 
 function getTarifCategories() {
@@ -4901,10 +4664,6 @@ function getSelectedTarif() {
   return index >= 0 ? data.tarifs.items[index] : null;
 }
 
-function tarifSearchableText(tarif) {
-  const components = (tarif.composants || []).map(c => [c.nom, c.unite, c.quantite, c.prixUnitaire].join(' ')).join(' ');
-  return normalizeTarifText([tarif.poste, tarif.categorie, tarif.mesure, tarif.prix, tarif.tva, tarif.tags, tarif.remarque, tarif.historique, components].join(' '));
-}
 
 function getFilteredTarifs() {
   ensureTarifsData();
@@ -4951,95 +4710,8 @@ function renderTarifActionMenu(items = []) {
   `;
 }
 
-function renderTarifPostList() {
-  ensureTarifsData();
-  if (!data.tarifs.items.length) return '<p class="tarifs-muted">Aucun poste.</p>';
 
-  const groups = new Map();
-  data.tarifs.items.forEach(t => {
-    const label = String(t.categorie || '').trim() || 'Sans catégorie';
-    const key = getTarifGroupKey(label);
-    if (!groups.has(key)) {
-      groups.set(key, { key, label, items: [] });
-    }
-    groups.get(key).items.push(t);
-  });
 
-  const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-    if (a.label === 'Sans catégorie') return 1;
-    if (b.label === 'Sans catégorie') return -1;
-    return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
-  });
-
-  return sortedGroups.map(group => {
-    group.items.sort((a, b) => String(a.poste || '').localeCompare(String(b.poste || ''), 'fr', { sensitivity: 'base' }));
-    const shouldOpen = tarifOpenCategoryGroups.has(group.key);
-    return `
-      <details class="tarif-category-group" ${shouldOpen ? 'open' : ''} ontoggle="rememberTarifCategoryGroupState('${escapeHtml(group.key)}', this.open)" data-category-name="${escapeHtml(group.label === 'Sans catégorie' ? '' : group.label)}">
-        <summary class="tarif-category-dropzone" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInCategory(event, '${escapeHtml(group.label === 'Sans catégorie' ? '' : group.label)}')">
-          <span>${escapeHtml(group.label)}</span>
-          <span class="tarif-category-count">${group.items.length}</span>
-        </summary>
-        <div class="tarif-category-items">
-          ${group.items.map(t => `
-            <div class="tarif-post-row ${t.id === selectedTarifId ? 'active' : ''}" draggable="true" ondragstart="startTarifPostDrag(event, '${escapeHtml(t.id)}')" ondragend="endTarifPostDrag(event)" data-tarif-id="${escapeHtml(t.id)}" data-category-key="${escapeHtml(group.key)}">
-              <button type="button" class="tarif-post-open" onclick="selectTarifPost('${escapeHtml(t.id)}')">${escapeHtml(t.poste || 'Poste sans nom')}</button>
-              ${renderTarifActionMenu([
-      { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
-      { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
-      { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
-      { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
-      { separator: true },
-      { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
-    ])}
-            </div>
-          `).join('')}
-        </div>
-      </details>
-    `;
-  }).join('');
-}
-
-function renderManagedTarifCategories() {
-  ensureTarifsData();
-  data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
-  if (!data.tarifs.categories.length) return '<p class="tarifs-muted">Aucune catégorie.</p>';
-  return data.tarifs.categories.map(c => `
-    <div class="tarif-category-row tarif-category-dropzone" data-category-name="${escapeHtml(c)}" ondragover="handleTarifDragOver(event)" ondragleave="handleTarifDragLeave(event)" ondrop="dropTarifPostInCategory(event, '${escapeHtml(c)}')">
-      <span>${escapeHtml(c)}</span>
-      ${renderTarifActionMenu([
-    { label: 'Renommer', action: `renameTarifCategory('${escapeHtml(c)}')` },
-    { label: 'Convertir en poste', action: `convertTarifCategoryToPost('${escapeHtml(c)}')` },
-    { separator: true },
-    { label: 'Supprimer', action: `deleteTarifCategory('${escapeHtml(c)}')`, danger: true }
-  ])}
-    </div>
-  `).join('');
-}
-
-function renderTarifSearchResults() {
-  const hasSearch = tarifSearchTerm.trim() || (tarifCategoryFilter && tarifCategoryFilter !== 'Toutes');
-  if (!hasSearch) return '';
-  const rows = getFilteredTarifs();
-  if (!rows.length) return '<div class="tarifs-empty small">Aucun poste trouvé.</div>';
-  return `<div class="tarif-results">${rows.slice(0, 30).map(t => `
-    <div class="tarif-result-item">
-      <div>
-        <strong>${escapeHtml(t.poste || 'Poste sans nom')}</strong>
-        <span>${escapeHtml(t.categorie || 'Sans catégorie')} · ${money(tarifNumber(t.prix))} HTVA / ${escapeHtml(t.mesure || 'unité')}</span>
-      </div>
-      <button type="button" onclick="selectTarifPost('${escapeHtml(t.id)}')">Ouvrir</button>
-      ${renderTarifActionMenu([
-    { label: 'Renommer', action: `renameTarifPost('${escapeHtml(t.id)}')` },
-    { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(t.id)}')` },
-    { label: 'Copier', action: `duplicateTarifPostById('${escapeHtml(t.id)}')` },
-    { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(t.id)}')` },
-    { separator: true },
-    { label: 'Supprimer', action: `deleteTarifPost('${escapeHtml(t.id)}')`, danger: true }
-  ])}
-    </div>
-  `).join('')}</div>`;
-}
 
 
 function updateTarifSearch(value) {
@@ -5073,76 +4745,6 @@ function renderTarifComponents(tarif) {
   `).join('');
 }
 
-function renderTarifEditor() {
-  const tarif = getSelectedTarif();
-  if (!tarif) {
-    return '<div class="tarifs-empty"><strong>Aucun poste sélectionné</strong><br>Recherche un poste, sélectionne-le, ou crée un nouveau poste dans le volet de gauche.</div>';
-  }
-  const cost = tarifTotalCost(tarif);
-  const price = tarifNumber(tarif.prix);
-  const margin = price - cost;
-  const marginPct = price > 0 ? (margin / price) * 100 : 0;
-  return `
-    <article class="tarif-card">
-      <div class="tarif-card-head">
-        <div>
-          <input id="tarifPosteNameInput" class="tarif-title-input" value="${escapeHtml(tarif.poste)}" oninput="updateTarifField('poste', this.value)" placeholder="Nom du poste / prestation" autocomplete="off">
-          <div class="tarif-meta-line">
-            <span>${escapeHtml(tarif.categorie || 'Sans catégorie')}</span>
-            <span>${money(price)} HTVA / ${escapeHtml(tarif.mesure || 'unité')}</span>
-            <span>Coût ${money(cost)}</span>
-            <span class="${marginPct >= 35 ? 'good' : marginPct >= 15 ? 'low' : 'bad'}">Marge ${money(margin)} (${num(marginPct, 1)} %)</span>
-          </div>
-        </div>
-        <div class="tarif-card-actions no-print">
-          <button type="button" class="tarif-add-quote" onclick="addTarifToDocument('quote')">Ajouter au devis</button>
-          <button type="button" class="tarif-add-invoice" onclick="addTarifToDocument('invoice')">Ajouter à la facture</button>
-          ${renderTarifActionMenu([
-    { label: 'Renommer', action: `renameTarifPost('${escapeHtml(tarif.id)}')` },
-    { label: 'Déplacer', action: `openMoveTarifPost('${escapeHtml(tarif.id)}')` },
-    { label: 'Copier la fiche', action: `duplicateTarifPostById('${escapeHtml(tarif.id)}')` },
-    { label: 'Convertir en catégorie', action: `convertTarifPostToCategory('${escapeHtml(tarif.id)}')` },
-    { separator: true },
-    { label: 'Supprimer la fiche', action: `deleteTarifPost('${escapeHtml(tarif.id)}')`, danger: true }
-  ])}
-        </div>
-      </div>
-      <div class="tarif-grid">
-        <div><label>Catégorie</label><input value="${escapeHtml(tarif.categorie)}" list="tarifsCategoriesList" oninput="updateTarifField('categorie', this.value)" placeholder="Nettoyage, Maçonnerie..."></div>
-        <div><label>Unité / mesure</label><input value="${escapeHtml(tarif.mesure)}" oninput="updateTarifField('mesure', this.value)" placeholder="m², ml, h, forfait..."></div>
-        <div><label>Prix HTVA</label><input value="${escapeHtml(tarif.prix)}" oninput="updateTarifField('prix', this.value)" inputmode="decimal" placeholder="2.80"></div>
-        <div><label>TVA %</label><input value="${escapeHtml(tarif.tva)}" oninput="updateTarifField('tva', this.value)" inputmode="decimal" placeholder="21"></div>
-        <div><label>Prix TVAC</label><input value="${escapeHtml(money(price * (1 + tarifNumber(tarif.tva) / 100)))}" readonly></div>
-        <div><label>Coût composants</label><input value="${escapeHtml(money(cost))}" readonly></div>
-        <div><label>Marge €</label><input value="${escapeHtml(money(margin))}" readonly></div>
-        <div><label>Marge %</label><input value="${escapeHtml(num(marginPct, 1) + ' %')}" readonly></div>
-      </div>
-      <div class="tarif-grid two">
-        <div><label>Mots-clés</label><input value="${escapeHtml(tarif.tags)}" oninput="updateTarifField('tags', this.value)" placeholder="bloc, ciment, karcher..."></div>
-        <div><label>Remarque</label><textarea oninput="updateTarifField('remarque', this.value)" placeholder="Remarque interne...">${escapeHtml(tarif.remarque)}</textarea></div>
-      </div>
-      <details class="tarif-details" open>
-        <summary>Détail coût de revient / composants</summary>
-        <div class="tarif-table-wrap">
-          <table class="tarif-components-table">
-            <thead><tr><th>Élément</th><th>Unité</th><th>Quantité</th><th>Prix unitaire</th><th>Total</th><th class="no-print">Action</th></tr></thead>
-            <tbody>${renderTarifComponents(tarif)}</tbody>
-          </table>
-        </div>
-        <div class="tarif-component-actions no-print"><button type="button" onclick="addTarifComponent()">+ Ajouter un composant</button></div>
-      </details>
-      <details class="tarif-details">
-        <summary>Prix multiples et historique</summary>
-        <div class="tarif-grid">
-          <div><label>Prix simple</label><input value="${escapeHtml(tarif.prixSimple)}" oninput="updateTarifField('prixSimple', this.value)" inputmode="decimal"></div>
-          <div><label>Prix moyen</label><input value="${escapeHtml(tarif.prixMoyen)}" oninput="updateTarifField('prixMoyen', this.value)" inputmode="decimal"></div>
-          <div><label>Prix difficile</label><input value="${escapeHtml(tarif.prixDifficile)}" oninput="updateTarifField('prixDifficile', this.value)" inputmode="decimal"></div>
-          <div><label>Historique des prix</label><textarea oninput="updateTarifField('historique', this.value)" placeholder="2026 : 2.80 €">${escapeHtml(tarif.historique)}</textarea></div>
-        </div>
-      </details>
-    </article>
-  `;
-}
 
 
 function ensureTarifsV2Styles() {
@@ -5285,47 +4887,7 @@ function deleteTarifPost(id) {
   render();
 }
 
-function updateTarifField(field, value) {
-  const tarif = getSelectedTarif();
-  if (!tarif) return;
-  notifyPortalBusinessChange('Tarif modifié');
-  tarif[field] = value;
-  saveTarifsData();
 
-  if (field === 'categorie') {
-    const postList = document.querySelector('.tarifs-post-list');
-    if (postList) postList.innerHTML = renderTarifPostList();
-    refreshTarifSearchResults();
-    return;
-  }
-
-  refreshTarifNavigation();
-}
-
-function refreshTarifNavigation() {
-  const tarif = getSelectedTarif();
-  if (!tarif) return;
-
-  document.querySelectorAll('.tarif-post-row').forEach(row => {
-    const button = row.querySelector('.tarif-post-open');
-    if (!button) return;
-    const onClick = button.getAttribute('onclick') || '';
-    if (onClick.includes("'" + tarif.id + "'") || onClick.includes('"' + tarif.id + '"')) {
-      button.textContent = tarif.poste || 'Poste sans nom';
-    }
-  });
-
-  document.querySelectorAll('.tarif-result-item').forEach(item => {
-    const button = item.querySelector('[onclick*="selectTarifPost"]');
-    if (!button) return;
-    const onClick = button.getAttribute('onclick') || '';
-    if (!onClick.includes(tarif.id)) return;
-    const title = item.querySelector('strong');
-    const meta = item.querySelector('span');
-    if (title) title.textContent = tarif.poste || 'Poste sans nom';
-    if (meta) meta.textContent = `${tarif.categorie || 'Sans catégorie'} · ${money(tarifNumber(tarif.prix))} HTVA / ${tarif.mesure || 'unité'}`;
-  });
-}
 
 function addTarifComponent() {
   const tarif = getSelectedTarif();
@@ -5459,31 +5021,7 @@ function renameTarifCategory(name) {
   });
 }
 
-function moveTarifPostToCategory(id, category) {
-  ensureTarifsData();
-  const tarif = data.tarifs.items.find(item => item.id === id);
-  if (!tarif) return;
-  tarif.categorie = category === '__NONE__' ? '' : category;
-  if (category && category !== '__NONE__' && !data.tarifs.categories.some(c => normalizeTarifText(c) === normalizeTarifText(category))) {
-    data.tarifs.categories.push(category);
-    data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
-  }
-  tarifOpenCategoryGroups.add(getTarifGroupKey(tarif.categorie));
-  notifyPortalBusinessChange('Poste tarifaire déplacé');
-  saveTarifsData(); render();
-}
 
-function openMoveTarifPost(id) {
-  ensureTarifsData();
-  const tarif = data.tarifs.items.find(item => item.id === id);
-  if (!tarif) return;
-  const options = [{ value: '__NONE__', label: 'Sans catégorie' }, ...getTarifCategories().map(c => ({ value: c, label: c }))];
-  openTarifModal({
-    title: 'Déplacer le poste', label: 'Catégorie de destination', type: 'select',
-    value: tarif.categorie || '__NONE__', options, confirmLabel: 'Déplacer',
-    onConfirm: value => moveTarifPostToCategory(id, value)
-  });
-}
 
 function startTarifPostDrag(event, id) {
   event.dataTransfer.effectAllowed = 'move';
@@ -6024,35 +5562,13 @@ function decodeTarifArg(value) {
   try { return decodeURIComponent(String(value || '')); } catch { return String(value || ''); }
 }
 function cleanTarifSubcategories(list) {
-  const seen = new Set();
-  return (Array.isArray(list) ? list : []).map(entry => {
-    if (typeof entry === 'string') return { parent: '', name: String(entry || '').trim() };
-    return { parent: String(entry?.parent || '').trim(), name: String(entry?.name || '').trim() };
-  }).filter(entry => {
-    const key = normalizeTarifText(entry.parent) + '::' + normalizeTarifText(entry.name);
-    if (!entry.parent || !entry.name || seen.has(key)) return false;
-    seen.add(key); return true;
-  });
+  return BastTariffsModel.normalizeSubcategories(list);
 }
 function ensureTarifsData() {
-  if (!data.tarifs || typeof data.tarifs !== 'object' || Array.isArray(data.tarifs)) {
-    data.tarifs = { categories: [], subcategories: [], items: [] };
-  }
-  if (!Array.isArray(data.tarifs.categories)) data.tarifs.categories = [];
-  if (!Array.isArray(data.tarifs.subcategories)) data.tarifs.subcategories = [];
-  if (!Array.isArray(data.tarifs.items)) data.tarifs.items = [];
-  data.tarifs.categories = cleanTarifCategories(data.tarifs.categories);
-  data.tarifs.subcategories = cleanTarifSubcategories(data.tarifs.subcategories);
-  data.tarifs.items = data.tarifs.items.map(normalizeTarifItem);
+  data.tarifs = BastTariffsModel.normalizeLibrary(data.tarifs, makeTarifId);
 }
 function normalizeTarifItem(item = {}) {
-  const base = Object.assign(emptyTarifItem(), item || {});
-  base.id = item.id || base.id;
-  base.sousCategorie = String(item.sousCategorie || item.souscategorie || '').trim();
-  if (!Array.isArray(base.composants)) base.composants = [];
-  base.composants = base.composants.map(c => Object.assign(emptyTarifComponent(), c || {}));
-  delete base.favorite; delete base.cout; delete base.souscategorie;
-  return base;
+  return BastTariffsModel.normalizeItem(item, makeTarifId);
 }
 function getTarifSubcategories(parent = '') {
   ensureTarifsData();
@@ -6064,8 +5580,7 @@ function tarifSubcategoryExists(parent, name) {
   return getTarifSubcategories(parent).some(s => normalizeTarifText(s.name) === normalizeTarifText(name));
 }
 function tarifSearchableText(tarif) {
-  const components = (tarif.composants || []).map(c => [c.nom, c.unite, c.quantite, c.prixUnitaire].join(' ')).join(' ');
-  return normalizeTarifText([tarif.poste, tarif.categorie, tarif.sousCategorie, tarif.mesure, tarif.prix, tarif.tva, tarif.tags, tarif.remarque, tarif.historique, components].join(' '));
+  return BastTariffsModel.searchableText(tarif);
 }
 function getTarifPathLabel(tarif) {
   return [tarif.categorie || 'Sans catégorie', tarif.sousCategorie || ''].filter(Boolean).join(' › ');
