@@ -1,0 +1,107 @@
+/* BastCompta — actions uniformisées en icônes circulaires */
+.bast-action-icon {
+  --bast-action-bg-1:#3b82f6;
+  --bast-action-bg-2:#2563eb;
+  position:relative !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:0 0 46px !important;
+  width:46px !important;
+  min-width:46px !important;
+  max-width:46px !important;
+  height:46px !important;
+  min-height:46px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  border-radius:50% !important;
+  background:linear-gradient(145deg,var(--bast-action-bg-1),var(--bast-action-bg-2)) !important;
+  color:#fff !important;
+  box-shadow:0 6px 16px rgba(15,23,42,.14) !important;
+  cursor:pointer;
+  line-height:1 !important;
+  font-size:0 !important;
+  text-decoration:none !important;
+  overflow:visible !important;
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease !important;
+  vertical-align:middle;
+}
+.bast-action-icon:hover:not(:disabled){
+  transform:translateY(-2px) scale(1.04) !important;
+  filter:brightness(1.03);
+  box-shadow:0 9px 20px rgba(15,23,42,.18) !important;
+}
+.bast-action-icon:active:not(:disabled){transform:translateY(0) scale(.98) !important}
+.bast-action-icon:focus-visible{outline:3px solid rgba(59,130,246,.25) !important;outline-offset:3px !important}
+.bast-action-icon:disabled{opacity:.42 !important;cursor:not-allowed !important;filter:grayscale(.15)}
+.bast-action-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.bast-action-icon .bast-icon-solid{fill:currentColor;stroke:none}
+.bast-action-icon input[type="file"]{position:absolute !important;inset:0 !important;width:100% !important;height:100% !important;opacity:0 !important;cursor:pointer !important}
+
+/* Infobulle identique à la barre Devis/Factures */
+.bast-action-icon::after{
+  content:attr(data-tooltip);
+  position:absolute;
+  left:50%;
+  top:calc(100% + 10px);
+  transform:translate(-50%,-4px);
+  z-index:10000;
+  padding:7px 9px;
+  border-radius:7px;
+  background:#1f2937;
+  color:#fff;
+  font-family:inherit;
+  font-size:12px;
+  font-weight:650;
+  line-height:1.2;
+  white-space:nowrap;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .14s ease,transform .14s ease,visibility .14s ease;
+}
+.bast-action-icon::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:calc(100% + 5px);
+  transform:translateX(-50%);
+  z-index:10001;
+  border-left:5px solid transparent;
+  border-right:5px solid transparent;
+  border-bottom:5px solid #1f2937;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .14s ease,visibility .14s ease;
+}
+.bast-action-icon:hover::after,.bast-action-icon:focus-visible::after,.bast-action-icon:hover::before,.bast-action-icon:focus-visible::before{opacity:1;visibility:visible}
+.bast-action-icon:hover::after,.bast-action-icon:focus-visible::after{transform:translate(-50%,0)}
+
+/* Couleurs par famille d'action */
+.bast-action-add,.bast-action-save,.bast-action-check{--bast-action-bg-1:#22c55e;--bast-action-bg-2:#16a34a}
+.bast-action-send{--bast-action-bg-1:#fb923c;--bast-action-bg-2:#f97316}
+.bast-action-print{--bast-action-bg-1:#22b8cf;--bast-action-bg-2:#0891b2}
+.bast-action-export,.bast-action-download{--bast-action-bg-1:#facc15;--bast-action-bg-2:#eab308}
+.bast-action-import,.bast-action-upload,.bast-action-drive{--bast-action-bg-1:#14b8a6;--bast-action-bg-2:#0891b2}
+.bast-action-delete,.bast-action-clear{--bast-action-bg-1:#fb7185;--bast-action-bg-2:#ef4444}
+.bast-action-edit,.bast-action-refresh,.bast-action-view,.bast-action-open,.bast-action-search{--bast-action-bg-1:#3b82f6;--bast-action-bg-2:#2563eb}
+.bast-action-settings,.bast-action-copy,.bast-action-accounting,.bast-action-xml{--bast-action-bg-1:#8b5cf6;--bast-action-bg-2:#6d28d9}
+.bast-action-file,.bast-action-link,.bast-action-generic{--bast-action-bg-1:#64748b;--bast-action-bg-2:#475569}
+
+/* Les zones d'actions gardent une mise en page légère et régulière. */
+.toolbar-actions,.topbar .actions,.topbar .top-actions,.article-toolbar,.profile-actions,.workspace-head .actions,.section-head,.section-title-row,.global-head,.panel-head-row{
+  gap:10px !important;
+}
+.bast-flattened-actions{display:flex !important;align-items:center !important;gap:10px !important;flex-wrap:wrap !important}
+
+@media (max-width:700px){
+  .bast-action-icon{flex-basis:42px !important;width:42px !important;min-width:42px !important;max-width:42px !important;height:42px !important;min-height:42px !important}
+  .bast-action-icon svg{width:21px;height:21px}
+  .bast-action-icon::before,.bast-action-icon::after{display:none}
+}
+
+@media print{
+  .bast-action-icon{display:none !important}
+}
