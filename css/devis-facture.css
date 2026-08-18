@@ -2386,3 +2386,20 @@ button.small { padding:6px 8px; font-size:12px; }
         display: none;
     }
 }
+
+/* Actions directes : impression, export, note de crédit et nouveau document */
+.toolbar .toolbar-action-icon.action-print {
+    background: linear-gradient(145deg, #22b8cf, #0891b2);
+}
+
+.toolbar .toolbar-action-icon.action-json {
+    background: linear-gradient(145deg, #facc15, #eab308);
+}
+
+.toolbar .toolbar-action-icon.action-credit {
+    background: linear-gradient(145deg, #a78bfa, #7c3aed);
+}
+
+.toolbar .toolbar-action-icon.action-new {
+    background: linear-gradient(145deg, #fb7185, #ef4444);
+}

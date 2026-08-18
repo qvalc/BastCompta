@@ -4447,30 +4447,22 @@ function renderDocumentPage(docKey) {
                 </button>
               </div>
               <div class="toolbar-group primary icon-action-group">
-                <div class="split-button toolbar-menu icon-split-button" data-menu-root>
-                  <button class="toolbar-action-icon action-send has-tooltip split-button-main" type="button" data-tooltip="${emailLabel}" aria-label="${emailLabel}" onclick="sendDocumentEmail('${docKey}')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-7.4 18-4.2-7.2L3 10.5z"/><path d="M9.4 13.8 21 3"/></svg>
-                  </button>
-                  <button class="toolbar-action-chevron has-tooltip" type="button" data-tooltip="Options d’envoi" aria-label="Options d’envoi" onclick="toggleToolbarMenu(event, 'send-menu-${docKey}')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
-                  </button>
-                  <div class="menu-panel" id="send-menu-${docKey}">
-                    <button type="button" onclick="sendDocumentEmail('${docKey}'); closeToolbarMenus();">${emailLabel}</button>
-                    <button type="button" onclick="printCurrentPage(); closeToolbarMenus();">Imprimer ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
-                    <button type="button" onclick="exportDataLocal(); closeToolbarMenus();">Exporter en JSON</button>
-                  </div>
-                </div>
-              </div>
-              <div class="toolbar-group more icon-action-group">
-                <div class="toolbar-menu" data-menu-root>
-                  <button class="toolbar-action-icon action-more has-tooltip" type="button" data-tooltip="Plus d’actions" aria-label="Plus d’actions" onclick="toggleToolbarMenu(event, 'more-menu-${docKey}')">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
-                  </button>
-                  <div class="menu-panel" id="more-menu-${docKey}">
-                    ${docKey === 'invoice' ? `<button type="button" onclick="createCreditNoteFromInvoice(); closeToolbarMenus();">Créer une note de crédit</button>` : ''}
-<button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Nouveau document</button>
-                  </div>
-                </div>
+                <button class="toolbar-action-icon action-send has-tooltip" type="button" data-tooltip="${emailLabel}" aria-label="${emailLabel}" onclick="sendDocumentEmail('${docKey}')">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-7.4 18-4.2-7.2L3 10.5z"/><path d="M9.4 13.8 21 3"/></svg>
+                </button>
+                <button class="toolbar-action-icon action-print has-tooltip" type="button" data-tooltip="Imprimer ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}" aria-label="Imprimer ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}" onclick="printCurrentPage()">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M18 12h.01"/></svg>
+                </button>
+                <button class="toolbar-action-icon action-json has-tooltip" type="button" data-tooltip="Exporter en JSON" aria-label="Exporter en JSON" onclick="exportDataLocal()">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2v5H8"/><path d="M13 13h3v2h-3v3h3"/></svg>
+                </button>
+                ${docKey === 'invoice' ? `
+                <button class="toolbar-action-icon action-credit has-tooltip" type="button" data-tooltip="Créer une note de crédit" aria-label="Créer une note de crédit" onclick="createCreditNoteFromInvoice()">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 14h8"/><path d="M12 10v8"/><path d="M16.5 18.5 19 21l3-3"/></svg>
+                </button>` : ''}
+                <button class="toolbar-action-icon action-new has-tooltip" type="button" data-tooltip="Nouveau document" aria-label="Nouveau document" onclick="resetDocumentLocal('${docKey}')">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/></svg>
+                </button>
               </div>
             </div>
           </div>
