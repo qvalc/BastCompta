@@ -4429,16 +4429,31 @@ function renderDocumentPage(docKey) {
               <div class="toolbar-title">Actions ${docLabel.toLowerCase()}</div>
               <div class="toolbar-subtitle">${docSubtitle}</div>
             </div>
-            <div class="toolbar-actions">
-              <div class="toolbar-group secondary">
-                ${docKey === 'invoice' ? `<button onclick="copyQuoteToInvoice()">Reprendre le devis</button><button class="primary" onclick="sendInvoiceToAccountingFromIframe()">Envoyer en comptabilité</button>` : ''}
-                ${docKey === 'reminder' ? `<button onclick="copyInvoiceToReminder()">Reprendre la facture</button>` : ''}
-                <button onclick="saveCurrentClientFromDoc('${docKey}')">Enregistrer le client</button>
+            <div class="toolbar-actions icon-toolbar">
+              <div class="toolbar-group secondary icon-action-group">
+                ${docKey === 'invoice' ? `
+                  <button class="toolbar-action-icon action-edit has-tooltip" type="button" data-tooltip="Reprendre le devis" aria-label="Reprendre le devis" onclick="copyQuoteToInvoice()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M13.5 13.5 17 10a1.4 1.4 0 0 1 2 2l-3.5 3.5L13 16z"/><path d="m13 16-.5 2.5L15 18z"/></svg>
+                  </button>
+                  <button class="toolbar-action-icon action-accounting has-tooltip" type="button" data-tooltip="Envoyer en comptabilité" aria-label="Envoyer en comptabilité" onclick="sendInvoiceToAccountingFromIframe()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2.5" width="16" height="19" rx="2.5"/><path d="M7.5 6.5h9"/><path d="M8 11h1"/><path d="M12 11h1"/><path d="M16 11h1"/><path d="M8 15h1"/><path d="M12 15h1"/><path d="M16 15h1"/><path d="M8 18.5h1"/><path d="M12 18.5h5"/></svg>
+                  </button>` : ''}
+                ${docKey === 'reminder' ? `
+                  <button class="toolbar-action-icon action-edit has-tooltip" type="button" data-tooltip="Reprendre la facture" aria-label="Reprendre la facture" onclick="copyInvoiceToReminder()">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M13.5 13.5 17 10a1.4 1.4 0 0 1 2 2l-3.5 3.5L13 16z"/><path d="m13 16-.5 2.5L15 18z"/></svg>
+                  </button>` : ''}
+                <button class="toolbar-action-icon action-client has-tooltip" type="button" data-tooltip="Enregistrer le client" aria-label="Enregistrer le client" onclick="saveCurrentClientFromDoc('${docKey}')">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 19c.7-3.5 3-5.5 6.5-5.5 2.1 0 3.8.7 4.9 2"/><circle cx="18" cy="18" r="4"/><path d="m16.4 18 1.1 1.1 2.2-2.4"/></svg>
+                </button>
               </div>
-              <div class="toolbar-group primary">
-                <div class="split-button toolbar-menu" data-menu-root>
-                  <button class="primary split-button-main" onclick="sendDocumentEmail('${docKey}')">${emailLabel}</button>
-                  <button class="primary split-button-toggle" type="button" onclick="toggleToolbarMenu(event, 'send-menu-${docKey}')">▼</button>
+              <div class="toolbar-group primary icon-action-group">
+                <div class="split-button toolbar-menu icon-split-button" data-menu-root>
+                  <button class="toolbar-action-icon action-send has-tooltip split-button-main" type="button" data-tooltip="${emailLabel}" aria-label="${emailLabel}" onclick="sendDocumentEmail('${docKey}')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 3-7.4 18-4.2-7.2L3 10.5z"/><path d="M9.4 13.8 21 3"/></svg>
+                  </button>
+                  <button class="toolbar-action-chevron has-tooltip" type="button" data-tooltip="Options d’envoi" aria-label="Options d’envoi" onclick="toggleToolbarMenu(event, 'send-menu-${docKey}')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+                  </button>
                   <div class="menu-panel" id="send-menu-${docKey}">
                     <button type="button" onclick="sendDocumentEmail('${docKey}'); closeToolbarMenus();">${emailLabel}</button>
                     <button type="button" onclick="printCurrentPage(); closeToolbarMenus();">Imprimer ${isQuote ? 'le devis' : (isReminder ? 'le rappel' : 'la facture')}</button>
@@ -4446,9 +4461,11 @@ function renderDocumentPage(docKey) {
                   </div>
                 </div>
               </div>
-              <div class="toolbar-group more">
+              <div class="toolbar-group more icon-action-group">
                 <div class="toolbar-menu" data-menu-root>
-                  <button class="button-icon" type="button" title="Plus d’actions" onclick="toggleToolbarMenu(event, 'more-menu-${docKey}')">⋯</button>
+                  <button class="toolbar-action-icon action-more has-tooltip" type="button" data-tooltip="Plus d’actions" aria-label="Plus d’actions" onclick="toggleToolbarMenu(event, 'more-menu-${docKey}')">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+                  </button>
                   <div class="menu-panel" id="more-menu-${docKey}">
                     ${docKey === 'invoice' ? `<button type="button" onclick="createCreditNoteFromInvoice(); closeToolbarMenus();">Créer une note de crédit</button>` : ''}
 <button type="button" onclick="resetDocumentLocal('${docKey}'); closeToolbarMenus();" class="danger-ghost">Nouveau document</button>
