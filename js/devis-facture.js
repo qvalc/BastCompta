@@ -4088,147 +4088,85 @@ function removeLogo() {
 function renderSettings() {
   return `
         <section class="page ${activePage === 'settings' ? 'active' : ''}" data-page="settings">
-          <div class="sheet">
-            <div class="toolbar no-print">
-              <div class="hint">Paramètres société utilisés pour devis, facture et rappel</div>
+          <div class="sheet settings-page-shell">
+            <header class="settings-page-head no-print">
+              <div>
+                <span class="settings-eyebrow">Configuration</span>
+                <h2>Paramètres du module</h2>
+                <p>Informations utilisées automatiquement dans vos devis, factures, rappels et e-mails.</p>
+              </div>
+              <span class="settings-save-state"><span aria-hidden="true">✓</span> Enregistrement automatique</span>
+            </header>
+
+            <div class="settings-backup-note no-print">
+              <span class="settings-note-icon" aria-hidden="true">i</span>
+              <div><strong>Sauvegardes centralisées</strong><span>Les sauvegardes et restaurations complètes se font depuis l’onglet <strong>Sauvegarde</strong> du portail BastCompta.</span></div>
             </div>
 
-            <div class="simple-box no-print" style="margin-bottom:16px; line-height:1.7;">
-              <strong>Sauvegarde complète</strong><br>
-              Les sauvegardes et restaurations complètes se font maintenant depuis l’onglet <strong>Sauvegarde</strong> du portail BastCompta.
-            </div>
-
-            <div class="settings-grid">
-              <div class="stack">
-                <div class="field">
-                  <label>Logo</label>
-                  <label class="file-label" style="display:inline-block;">Importer un logo
-                    <input type="file" accept="image/*" onchange="handleLogoUpload(event)">
-                  </label>
-                  ${data.company.logo ? `
-                    <div style="margin-top:10px;">
-                      <img src="${escapeAttr(data.company.logo)}" alt="Aperçu logo" class="company-logo">
+            <div class="settings-sections">
+              <section class="settings-panel settings-company-panel">
+                <div class="settings-panel-head"><div><h3>Identité de l’entreprise</h3><p>Coordonnées affichées sur vos documents commerciaux.</p></div></div>
+                <div class="settings-company-layout">
+                  <div class="settings-logo-card">
+                    <span class="settings-logo-label">Logo</span>
+                    <div class="settings-logo-preview ${data.company.logo ? 'has-logo' : ''}">
+                      ${data.company.logo
+      ? `<img src="${escapeAttr(data.company.logo)}" alt="Logo actuel de l’entreprise">`
+      : `<div class="settings-logo-placeholder"><strong>${escapeHtml((data.company.name || 'Entreprise').slice(0, 2).toUpperCase())}</strong><span>Aucun logo</span></div>`}
+                      <div class="settings-logo-actions no-print">
+                        <label class="settings-logo-action settings-logo-replace" data-bast-iconified="1" title="${data.company.logo ? 'Remplacer le logo' : 'Ajouter un logo'}" aria-label="${data.company.logo ? 'Remplacer le logo' : 'Ajouter un logo'}">
+                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 14v5h14v-5"/></svg>
+                          <input type="file" accept="image/*" onchange="handleLogoUpload(event)">
+                        </label>
+                        ${data.company.logo ? `<button type="button" class="settings-logo-action settings-logo-delete" data-bast-iconified="1" title="Supprimer le logo" aria-label="Supprimer le logo" onclick="removeLogo()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m18 7-1 13H7L6 7"/><path d="M10 11v5M14 11v5"/></svg></button>` : ''}
+                      </div>
                     </div>
-                    <div style="margin-top:8px;">
-                      <button type="button" class="danger" onclick="removeLogo()">Supprimer le logo</button>
-                    </div>
-                  ` : ''}
-                </div>
-
-                <div class="field">
-                  <label>Nom de la société</label>
-                  <input value="${escapeAttr(data.company.name)}" onchange="setField('company.name', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>Adresse</label>
-                  <input value="${escapeAttr(data.company.address)}" onchange="setField('company.address', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>Code postal / Ville</label>
-                  <input value="${escapeAttr(data.company.city)}" onchange="setField('company.city', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>Téléphone</label>
-                  <input value="${escapeAttr(data.company.phone)}" onchange="setField('company.phone', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>Email</label>
-                  <input value="${escapeAttr(data.company.email)}" onchange="setField('company.email', this.value)">
-                </div>
-              </div>
-
-              <div class="stack">
-                <div class="field">
-                  <label>Site web</label>
-                  <input value="${escapeAttr(data.company.website)}" onchange="setField('company.website', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>TVA</label>
-                  <input value="${escapeAttr(data.company.vat)}" onchange="setField('company.vat', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>IBAN</label>
-                  <input value="${escapeAttr(data.company.iban)}" onchange="setField('company.iban', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>BIC</label>
-                  <input value="${escapeAttr(data.company.bic)}" onchange="setField('company.bic', this.value)">
-                </div>
-
-                <div class="mail-sender-settings">
-                  <div class="mail-sender-heading">
-                    <div>
-                      <strong>E-mail d'envoi</strong>
-                      <div class="muted-small">Les messages sont envoyés par BastCompta via le domaine authentifié bast-amenagement.com. Les réponses arrivent directement à l'adresse indiquée ci-dessous.</div>
-                    </div>
-                    <span class="mail-sender-status verified">✓ Prêt à envoyer</span>
+                    <span class="settings-logo-help">PNG ou JPG recommandé</span>
                   </div>
-                  <div class="field">
-                    <label>Nom affiché chez le destinataire</label>
-                    <input value="${escapeAttr(data.mail?.sender?.name || data.company.name || '')}" onchange="updateMailSenderIdentity('name', this.value)" placeholder="Ex. Bast Aménagement">
-                  </div>
-                  <div class="field">
-                    <label>Adresse de réponse (Reply-To)</label>
-                    <input type="email" value="${escapeAttr(data.mail?.sender?.email || data.company.email || '')}" onchange="updateMailSenderIdentity('email', this.value)" placeholder="votre-adresse@gmail.com">
-                    <div class="muted-small">Le client verra l'envoi via BastCompta, mais s'il clique sur « Répondre », sa réponse sera envoyée à cette adresse.</div>
-                  </div>
-                  <div class="verified-sender-box">
-                    Expéditeur technique : <strong>documents@bast-amenagement.com</strong>
-                  </div>
-                  <div class="field" style="margin-top:12px">
-                    <label>Copie (Cc) par défaut <span class="muted-small">— facultatif</span></label>
-                    <input type="email" value="${escapeAttr(data.mail?.defaultCc || '')}" onchange="setField('mail.defaultCc', this.value)" placeholder="Laisser vide pour aucune copie automatique">
+                  <div class="settings-fields-grid">
+                    <div class="field settings-field-wide"><label>Nom de la société</label><input value="${escapeAttr(data.company.name)}" onchange="setField('company.name', this.value)"></div>
+                    <div class="field settings-field-wide"><label>Adresse</label><input value="${escapeAttr(data.company.address)}" onchange="setField('company.address', this.value)"></div>
+                    <div class="field"><label>Code postal / Ville</label><input value="${escapeAttr(data.company.city)}" onchange="setField('company.city', this.value)"></div>
+                    <div class="field"><label>Téléphone</label><input value="${escapeAttr(data.company.phone)}" onchange="setField('company.phone', this.value)"></div>
+                    <div class="field"><label>E-mail</label><input type="email" value="${escapeAttr(data.company.email)}" onchange="setField('company.email', this.value)"></div>
+                    <div class="field"><label>Site web</label><input value="${escapeAttr(data.company.website)}" onchange="setField('company.website', this.value)"></div>
                   </div>
                 </div>
+              </section>
 
-                <div class="field">
-                  <label>Objet email devis</label>
-                  <input value="${escapeAttr(data.mail.quoteSubject || '')}" onchange="setField('mail.quoteSubject', this.value)">
+              <section class="settings-panel">
+                <div class="settings-panel-head"><div><h3>Facturation et paiement</h3><p>Mentions légales et coordonnées bancaires reprises sur les documents.</p></div></div>
+                <div class="settings-fields-grid settings-finance-grid">
+                  <div class="field"><label>Numéro de TVA</label><input value="${escapeAttr(data.company.vat)}" onchange="setField('company.vat', this.value)"></div>
+                  <div class="field"><label>IBAN</label><input value="${escapeAttr(data.company.iban)}" onchange="setField('company.iban', this.value)"></div>
+                  <div class="field"><label>BIC</label><input value="${escapeAttr(data.company.bic)}" onchange="setField('company.bic', this.value)"></div>
                 </div>
+              </section>
 
-                <div class="field">
-                  <label>Message email devis</label>
-                  <textarea oninput="autoResize(this); data.mail.quoteBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.quoteBody || '')}</textarea>
+              <section class="settings-panel">
+                <div class="settings-panel-head"><div><h3>Expéditeur des e-mails</h3><p>Identité visible par vos clients lorsqu’ils reçoivent un document.</p></div><span class="mail-sender-status verified">✓ Prêt à envoyer</span></div>
+                <div class="settings-email-grid">
+                  <div class="field"><label>Nom affiché chez le destinataire</label><input value="${escapeAttr(data.mail?.sender?.name || data.company.name || '')}" onchange="updateMailSenderIdentity('name', this.value)" placeholder="Ex. Bast Aménagement"></div>
+                  <div class="field"><label>Adresse de réponse (Reply-To)</label><input type="email" value="${escapeAttr(data.mail?.sender?.email || data.company.email || '')}" onchange="updateMailSenderIdentity('email', this.value)" placeholder="votre-adresse@gmail.com"><div class="muted-small">Les réponses de vos clients arriveront à cette adresse.</div></div>
+                  <div class="field"><label>Copie (Cc) par défaut <span class="muted-small">— facultatif</span></label><input type="email" value="${escapeAttr(data.mail?.defaultCc || '')}" onchange="setField('mail.defaultCc', this.value)" placeholder="Aucune copie automatique"></div>
+                  <div class="verified-sender-box">Expéditeur technique authentifié : <strong>documents@bast-amenagement.com</strong></div>
                 </div>
+              </section>
 
-                <div class="field">
-                  <label>Objet email facture</label>
-                  <input value="${escapeAttr(data.mail.invoiceSubject || '')}" onchange="setField('mail.invoiceSubject', this.value)">
+              <section class="settings-panel">
+                <div class="settings-panel-head"><div><h3>Modèles de messages</h3><p>Textes proposés automatiquement lors de l’envoi d’un document.</p></div></div>
+                <div class="settings-template-grid">
+                  <article class="settings-template-card"><h4>Devis</h4><div class="field"><label>Objet</label><input value="${escapeAttr(data.mail.quoteSubject || '')}" onchange="setField('mail.quoteSubject', this.value)"></div><div class="field"><label>Message</label><textarea oninput="autoResize(this); data.mail.quoteBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.quoteBody || '')}</textarea></div></article>
+                  <article class="settings-template-card"><h4>Facture</h4><div class="field"><label>Objet</label><input value="${escapeAttr(data.mail.invoiceSubject || '')}" onchange="setField('mail.invoiceSubject', this.value)"></div><div class="field"><label>Message</label><textarea oninput="autoResize(this); data.mail.invoiceBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.invoiceBody || '')}</textarea></div></article>
+                  <article class="settings-template-card"><h4>Rappel</h4><div class="field"><label>Objet</label><input value="${escapeAttr(data.mail.reminderSubject || '')}" onchange="setField('mail.reminderSubject', this.value)"></div><div class="field"><label>Message</label><textarea oninput="autoResize(this); data.mail.reminderBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.reminderBody || '')}</textarea></div></article>
                 </div>
+                <div class="settings-variable-list"><strong>Variables disponibles</strong><span>{clientName}</span><span>{clientEmail}</span><span>{documentNumber}</span><span>{companyName}</span><span>{totalHTVA}</span><span>{totalTVA}</span><span>{totalTTC}</span><span>{date}</span><span>{dueDate}</span><span>{validity}</span></div>
+              </section>
 
-                <div class="field">
-                  <label>Message email facture</label>
-                  <textarea oninput="autoResize(this); data.mail.invoiceBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.invoiceBody || '')}</textarea>
-                </div>
-
-                <div class="field">
-                  <label>Objet email rappel</label>
-                  <input value="${escapeAttr(data.mail.reminderSubject || '')}" onchange="setField('mail.reminderSubject', this.value)">
-                </div>
-
-                <div class="field">
-                  <label>Message email rappel</label>
-                  <textarea oninput="autoResize(this); data.mail.reminderBody=this.value" onchange="saveBusinessData('Paramètres email modifiés')">${escapeHtml(data.mail.reminderBody || '')}</textarea>
-                </div>
-
-                <div class="field">
-                  <label>Conditions</label>
-                  <textarea oninput="autoResize(this); data.company.conditions=this.value" onchange="saveBusinessData('Conditions modifiées')">${escapeHtml(data.company.conditions || '')}</textarea>
-                </div>
-
-                <div class="simple-box" style="line-height:1.7;">
-                  Variables disponibles :<br>
-                  {clientName} · {clientEmail} · {documentNumber} · {companyName}<br>
-                  {totalHTVA} · {totalTVA} · {totalTTC} · {date} · {dueDate} · {validity}
-                </div>
-              </div>
+              <section class="settings-panel">
+                <div class="settings-panel-head"><div><h3>Conditions générales</h3><p>Texte ajouté aux documents lorsque les conditions sont affichées.</p></div></div>
+                <div class="field"><textarea class="settings-conditions" oninput="autoResize(this); data.company.conditions=this.value" onchange="saveBusinessData('Conditions modifiées')">${escapeHtml(data.company.conditions || '')}</textarea></div>
+              </section>
             </div>
           </div>
         </section>
