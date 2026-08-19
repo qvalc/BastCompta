@@ -142,7 +142,92 @@
         const width = wrapper.getBoundingClientRect().width;
         if (wrapper.matches('.global-table-wrap') || width >= window.innerWidth * .55) wrapper.classList.add('bast-page-table');
       }
+      if (!isEditable && !isDocument && headers.length > 0) enhanceTableNavigation(table,wrapper,headers);
     });
+    root.querySelectorAll('table[data-bast-table-tools="1"]').forEach(table=>refreshTableNavigation(table));
+  }
+
+  function comparableValue(text){
+    const value=(text || '').replace(/\s+/g,' ').trim();
+    const date=value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (date) return Number(date[3]+date[2].padStart(2,'0')+date[1].padStart(2,'0'));
+    const numeric=value.replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3}(?:\D|$))/g,'').replace(',','.');
+    if (numeric && /^-?\d+(?:\.\d+)?$/.test(numeric)) return Number(numeric);
+    return value.toLocaleLowerCase('fr');
+  }
+
+  function applyTableSearch(table){
+    const toolbar=document.querySelector('[data-bast-table-toolbar="'+table.dataset.bastTableId+'"]');
+    if (!toolbar) return;
+    const query=(toolbar.querySelector('input')?.value || '').trim().toLocaleLowerCase('fr');
+    let visible=0;
+    Array.from(table.tBodies).forEach(body=>Array.from(body.rows).forEach(row=>{
+      const match=!query || row.textContent.replace(/\s+/g,' ').toLocaleLowerCase('fr').includes(query);
+      row.hidden=!match;
+      if (match) visible++;
+    }));
+    const count=toolbar.querySelector('.bast-table-count');
+    if (count) count.textContent=visible+' résultat'+(visible===1?'':'s');
+  }
+
+  function sortTable(table,index,direction){
+    Array.from(table.tBodies).forEach(body=>{
+      const rows=Array.from(body.rows);
+      rows.sort((a,b)=>{
+        const left=comparableValue(a.cells[index]?.textContent);
+        const right=comparableValue(b.cells[index]?.textContent);
+        const result=typeof left==='number' && typeof right==='number'
+          ? left-right
+          : String(left).localeCompare(String(right),'fr',{numeric:true,sensitivity:'base'});
+        return direction==='asc'?result:-result;
+      });
+      rows.forEach(row=>body.appendChild(row));
+    });
+    table.querySelectorAll('thead th').forEach((th,column)=>{
+      th.setAttribute('aria-sort',column===index?(direction==='asc'?'ascending':'descending'):'none');
+      th.classList.toggle('bast-sort-active',column===index);
+      th.dataset.bastSortDirection=column===index?direction:'';
+    });
+    applyTableSearch(table);
+  }
+
+  let tableSequence=0;
+  function enhanceTableNavigation(table,wrapper,headers){
+    if (table.dataset.bastTableTools==='1') return;
+    table.dataset.bastTableTools='1';
+    table.dataset.bastTableId='bast-table-'+(++tableSequence);
+    table.querySelectorAll('thead th').forEach((th,index)=>{
+      if (!headers[index] || /action/i.test(headers[index])) return;
+      th.classList.add('bast-sortable');
+      th.tabIndex=0;
+      th.setAttribute('role','columnheader');
+      th.setAttribute('aria-sort','none');
+      th.title='Trier par '+headers[index];
+      const activate=()=>{
+        const direction=th.dataset.bastSortDirection==='asc'?'desc':'asc';
+        sortTable(table,index,direction);
+      };
+      th.addEventListener('click',activate);
+      th.addEventListener('keydown',event=>{
+        if (event.key==='Enter' || event.key===' ') { event.preventDefault(); activate(); }
+      });
+    });
+    if (!wrapper || wrapper.closest('.modal,.modal-backdrop,.sheet')) return;
+    const toolbar=document.createElement('div');
+    toolbar.className='bast-table-toolbar';
+    toolbar.dataset.bastTableToolbar=table.dataset.bastTableId;
+    toolbar.hidden=true;
+    toolbar.innerHTML='<label><span class="bast-visually-hidden">Rechercher dans le tableau</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input type="search" placeholder="Rechercher dans cette liste…" autocomplete="off"></label><span class="bast-table-count" aria-live="polite"></span>';
+    wrapper.parentNode.insertBefore(toolbar,wrapper);
+    toolbar.querySelector('input').addEventListener('input',()=>applyTableSearch(table));
+  }
+
+  function refreshTableNavigation(table){
+    const toolbar=document.querySelector('[data-bast-table-toolbar="'+table.dataset.bastTableId+'"]');
+    if (!toolbar) return;
+    const rowCount=Array.from(table.tBodies).reduce((total,body)=>total+body.rows.length,0);
+    toolbar.hidden=rowCount<5;
+    if (!toolbar.hidden) applyTableSearch(table);
   }
 
   function sizePageTables(){

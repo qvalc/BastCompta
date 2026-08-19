@@ -114,6 +114,20 @@
   scrollbar-width:thin;
 }
 
+.bast-visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.bast-table-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px}
+.bast-table-toolbar[hidden]{display:none!important}
+.bast-table-toolbar label{position:relative;display:block;width:min(360px,100%)}
+.bast-table-toolbar svg{position:absolute;left:13px;top:50%;width:18px;height:18px;transform:translateY(-50%);fill:none;stroke:#64748b;stroke-width:2;pointer-events:none}
+.bast-table-toolbar input{width:100%;min-height:42px;padding:9px 13px 9px 40px;border:1px solid #d6e0ec;border-radius:12px;background:#fff;color:#10233f;outline:none}
+.bast-table-toolbar input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.16)}
+.bast-table-count{flex:0 0 auto;color:#64748b;font-size:12px;font-weight:700}
+th.bast-sortable{position:sticky;cursor:pointer;padding-right:27px!important;user-select:none}
+th.bast-sortable::after{content:'↕';position:absolute;right:9px;color:#94a3b8;font-size:13px;font-weight:700}
+th.bast-sortable.bast-sort-active::after{content:'↑';color:#2563eb}
+th.bast-sortable.bast-sort-active[data-bast-sort-direction="desc"]::after{content:'↓'}
+th.bast-sortable:focus-visible{outline:2px solid #2563eb;outline-offset:-3px}
+
 @media screen and (min-width:761px) and (min-height:600px){
   .bast-page-table{
     min-height:var(--bast-table-page-height,320px);
@@ -140,6 +154,8 @@
   .bast-action-icon{flex-basis:42px !important;width:42px !important;min-width:42px !important;max-width:42px !important;height:42px !important;min-height:42px !important}
   .bast-action-icon svg{width:21px;height:21px}
   .bast-action-icon::before,.bast-action-icon::after{display:none}
+  .bast-table-toolbar{align-items:stretch;flex-direction:column}
+  .bast-table-count{padding-left:2px}
 }
 
 @media (hover:none){
