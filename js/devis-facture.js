@@ -3335,24 +3335,7 @@ function getInvoiceLinesForPeppol() {
 }
 
 function getPeppolChecks() {
-  const invoice = data.invoice || {};
-  const totals = totalsFor('invoice');
-  const lines = getInvoiceLinesForPeppol();
-  const checks = [
-    { ok: !!peppolTrim(invoice.documentNumber), label: 'Numéro de facture renseigné' },
-    { ok: !!peppolTrim(invoice.date), label: 'Date de facture renseignée' },
-    { ok: !!peppolTrim(invoice.dueDate), label: 'Date d’échéance renseignée' },
-    { ok: !!peppolTrim(invoice.clientName), label: 'Nom du client renseigné' },
-    { ok: !!peppolTrim(invoice.address), label: 'Adresse client renseignée' },
-    { ok: isValidBelgianEnterpriseNumber(invoice.clientVat), label: 'N° d’entreprise Peppol client belge valide (10 chiffres)' },
-    { ok: !!peppolTrim(invoice.clientEmail), label: 'Email client renseigné' },
-    { ok: !!peppolTrim(data.company.name), label: 'Nom de votre société renseigné' },
-    { ok: isValidBelgianEnterpriseNumber(data.company.vat), label: 'N° d’entreprise Peppol vendeur belge valide (10 chiffres)' },
-    { ok: !!peppolTrim(data.company.iban), label: 'IBAN renseigné' },
-    { ok: lines.length > 0, label: 'Au moins une ligne de facture présente' },
-    { ok: totals.tvac > 0, label: 'Montant total supérieur à 0 €' }
-  ];
-  return checks;
+  return BastPeppol.validationChecks({ invoice: data.invoice, company: data.company });
 }
 
 function renderPeppolChecklist() {
@@ -3365,11 +3348,7 @@ function renderPeppolChecklist() {
 }
 
 function getPeppolReadiness() {
-  const checks = getPeppolChecks();
-  const missing = checks.filter(item => !item.ok);
-  if (!missing.length) return { level: 'ready', title: 'Facture prête', text: 'Tous les contrôles principaux sont validés.' };
-  if (missing.length <= 3) return { level: 'warning', title: 'Presque prête', text: `${missing.length} point(s) à corriger avant un envoi propre.` };
-  return { level: 'danger', title: 'Facture incomplète', text: `${missing.length} point(s) manquant(s) ou incomplets.` };
+  return BastPeppol.readiness(getPeppolChecks());
 }
 
 function getPeppolHistory() {
@@ -3430,142 +3409,11 @@ function copyInvoiceEmailText() {
 }
 
 function buildPeppolXml() {
-  const prepared = BastPeppol.prepareInvoiceData({
+  return BastPeppol.buildInvoiceXml({
     invoice: data.invoice,
     company: data.company,
     communication: data.communication
   });
-  const {
-    invoice, company, totals, lines, supplierVat, customerVat,
-    supplierCountry, customerCountry, supplierEndpoint, customerEndpoint,
-    issueDate, dueDate, invoiceNumber, paymentReference, paymentTerms, currency
-  } = prepared;
-
-  if (!isValidBelgianEnterpriseNumber(supplierEndpoint)) {
-    throw new Error(
-      'Le numéro d’entreprise Peppol du vendeur est invalide. Indiquez un numéro BCE belge valide de 10 chiffres.'
-    );
-  }
-
-  if (!isValidBelgianEnterpriseNumber(customerEndpoint)) {
-    throw new Error(
-      'Le numéro d’entreprise Peppol du client est invalide. Indiquez un numéro BCE belge valide de 10 chiffres.'
-    );
-  }
-
-  const taxSubtotals = prepared.vatGroups.map(item => {
-    const { rate, category } = item;
-    return `
-      <cac:TaxSubtotal>
-        <cbc:TaxableAmount currencyID="${currency}">${peppolAmount(item.base)}</cbc:TaxableAmount>
-        <cbc:TaxAmount currencyID="${currency}">${peppolAmount(item.tax)}</cbc:TaxAmount>
-        <cac:TaxCategory>
-          <cbc:ID>${category}</cbc:ID>
-          <cbc:Percent>${peppolAmount(rate)}</cbc:Percent>
-          <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-        </cac:TaxCategory>
-      </cac:TaxSubtotal>`;
-  }).join('');
-
-  const invoiceLines = lines.map((row, index) => {
-    const qty = toNumber(row.qty) || 1;
-    const rate = toNumber(row.vatRate);
-    const category = BastPeppol.taxCategory(rate);
-    const description = peppolTrim(row.description) || `Ligne ${index + 1}`;
-    const unitCode = BastPeppol.unitCode(row.unit);
-    return `
-  <cac:InvoiceLine>
-    <cbc:ID>${index + 1}</cbc:ID>
-    <cbc:InvoicedQuantity unitCode="${unitCode}">${peppolAmount(qty)}</cbc:InvoicedQuantity>
-    <cbc:LineExtensionAmount currencyID="${currency}">${peppolAmount(lineNet(row))}</cbc:LineExtensionAmount>
-    <cac:Item>
-      <cbc:Name>${xmlEscape(description)}</cbc:Name>
-      <cac:ClassifiedTaxCategory>
-        <cbc:ID>${category}</cbc:ID>
-        <cbc:Percent>${peppolAmount(rate)}</cbc:Percent>
-        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-      </cac:ClassifiedTaxCategory>
-    </cac:Item>
-    <cac:Price>
-      <cbc:PriceAmount currencyID="${currency}">${peppolAmount(toNumber(row.unitPrice))}</cbc:PriceAmount>
-    </cac:Price>
-  </cac:InvoiceLine>`;
-  }).join('');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
-  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
-  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
-  <cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2017:poacc:billing:3.0</cbc:CustomizationID>
-  <cbc:ProfileID>urn:fdc:peppol.eu:2017:poacc:billing:01:1.0</cbc:ProfileID>
-  <cbc:ID>${xmlEscape(invoiceNumber)}</cbc:ID>
-  <cbc:IssueDate>${xmlEscape(issueDate)}</cbc:IssueDate>
-  <cbc:DueDate>${xmlEscape(dueDate)}</cbc:DueDate>
-  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
-  <cbc:DocumentCurrencyCode>${currency}</cbc:DocumentCurrencyCode>
-  <cbc:BuyerReference>${xmlEscape(invoice.clientNumber || invoice.clientName || 'Client')}</cbc:BuyerReference>
-
-  <cac:AccountingSupplierParty>
-    <cac:Party>
-      <cbc:EndpointID schemeID="0208">${xmlEscape(supplierEndpoint)}</cbc:EndpointID>
-      <cac:PartyName><cbc:Name>${xmlEscape(company.name)}</cbc:Name></cac:PartyName>
-      <cac:PostalAddress>
-        <cbc:StreetName>${xmlEscape(company.address)}</cbc:StreetName>
-        <cbc:CityName>${xmlEscape(company.city)}</cbc:CityName>
-        <cac:Country><cbc:IdentificationCode>${xmlEscape(supplierCountry)}</cbc:IdentificationCode></cac:Country>
-      </cac:PostalAddress>
-      <cac:PartyTaxScheme>
-        <cbc:CompanyID>${xmlEscape(supplierVat)}</cbc:CompanyID>
-        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-      </cac:PartyTaxScheme>
-      <cac:PartyLegalEntity><cbc:RegistrationName>${xmlEscape(company.name)}</cbc:RegistrationName></cac:PartyLegalEntity>
-      <cac:Contact>
-        <cbc:ElectronicMail>${xmlEscape(company.email)}</cbc:ElectronicMail>
-        <cbc:Telephone>${xmlEscape(company.phone)}</cbc:Telephone>
-      </cac:Contact>
-    </cac:Party>
-  </cac:AccountingSupplierParty>
-
-  <cac:AccountingCustomerParty>
-    <cac:Party>
-      <cbc:EndpointID schemeID="0208">${xmlEscape(customerEndpoint)}</cbc:EndpointID>
-      <cac:PartyName><cbc:Name>${xmlEscape(invoice.clientName)}</cbc:Name></cac:PartyName>
-      <cac:PostalAddress>
-        <cbc:StreetName>${xmlEscape(invoice.address)}</cbc:StreetName>
-        <cac:Country><cbc:IdentificationCode>${xmlEscape(customerCountry)}</cbc:IdentificationCode></cac:Country>
-      </cac:PostalAddress>
-      ${customerVat ? `<cac:PartyTaxScheme>
-        <cbc:CompanyID>${xmlEscape(customerVat)}</cbc:CompanyID>
-        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
-      </cac:PartyTaxScheme>` : ''}
-      <cac:PartyLegalEntity><cbc:RegistrationName>${xmlEscape(invoice.clientName)}</cbc:RegistrationName></cac:PartyLegalEntity>
-      <cac:Contact><cbc:ElectronicMail>${xmlEscape(invoice.clientEmail)}</cbc:ElectronicMail></cac:Contact>
-    </cac:Party>
-  </cac:AccountingCustomerParty>
-
-  <cac:PaymentMeans>
-    <cbc:PaymentMeansCode>30</cbc:PaymentMeansCode>
-    <cbc:PaymentID>${xmlEscape(paymentReference)}</cbc:PaymentID>
-    <cac:PayeeFinancialAccount>
-      <cbc:ID>${xmlEscape(company.iban)}</cbc:ID>
-      ${peppolTrim(company.bic) ? `<cac:FinancialInstitutionBranch><cbc:ID>${xmlEscape(company.bic)}</cbc:ID></cac:FinancialInstitutionBranch>` : ''}
-    </cac:PayeeFinancialAccount>
-  </cac:PaymentMeans>
-
-  <cac:PaymentTerms><cbc:Note>${xmlEscape(paymentTerms)}</cbc:Note></cac:PaymentTerms>
-
-  <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="${currency}">${peppolAmount(totals.vat)}</cbc:TaxAmount>${taxSubtotals}
-  </cac:TaxTotal>
-
-  <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="${currency}">${peppolAmount(totals.htva)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="${currency}">${peppolAmount(totals.htva)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="${currency}">${peppolAmount(totals.tvac)}</cbc:TaxInclusiveAmount>
-    <cbc:PayableAmount currencyID="${currency}">${peppolAmount(totals.tvac)}</cbc:PayableAmount>
-  </cac:LegalMonetaryTotal>
-${invoiceLines}
-</Invoice>`;
 }
 
 function downloadPeppolXmlForCurrentInvoice() {

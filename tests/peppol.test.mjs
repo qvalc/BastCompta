@@ -58,4 +58,80 @@ assert.equal(fallback.invoiceNumber, 'FACTURE-SANS-NUMERO');
 assert.equal(fallback.issueDate, '2026-01-01');
 assert.equal(fallback.dueDate, '2026-01-01');
 assert.equal(fallback.paymentReference, 'FACTURE-SANS-NUMERO');
+
+const validInvoice = {
+  documentNumber: 'F-2026-020',
+  date: '2026-08-19',
+  dueDate: '2026-09-18',
+  clientName: 'Client test',
+  address: 'Rue du Test 1',
+  clientVat: 'BE 0123.456.749',
+  clientEmail: 'client@example.com',
+  lines: [{ description: 'Travaux', qty: 1, unitPrice: 100, vatRate: 21 }]
+};
+const validCompany = {
+  name: 'Bast Aménagement',
+  vat: 'BE 0123.456.749',
+  iban: 'BE00000000000000'
+};
+const readyChecks = peppol.validationChecks({ invoice: validInvoice, company: validCompany });
+assert.equal(readyChecks.length, 12);
+assert.equal(readyChecks.every(item => item.ok), true);
+assert.deepEqual(peppol.readiness(readyChecks), {
+  level: 'ready',
+  title: 'Facture prête',
+  text: 'Tous les contrôles principaux sont validés.'
+});
+
+const warningChecks = peppol.validationChecks({
+  invoice: { ...validInvoice, clientEmail: '' },
+  company: { ...validCompany, iban: '' }
+});
+assert.deepEqual(peppol.readiness(warningChecks), {
+  level: 'warning',
+  title: 'Presque prête',
+  text: '2 point(s) à corriger avant un envoi propre.'
+});
+const dangerChecks = peppol.validationChecks({ invoice: {}, company: {} });
+assert.equal(peppol.readiness(dangerChecks).level, 'danger');
+
+const xml = peppol.buildInvoiceXml({
+  invoice: {
+    ...validInvoice,
+    clientNumber: '123',
+    clientName: 'Client & Associés',
+    notes: 'Paiement <rapide>',
+    lines: [
+      { description: 'Travaux & entretien', qty: 1, unit: 'heure', unitPrice: 100, vatRate: 21 },
+      { description: 'Fourniture', qty: 2, unit: 'pièce', unitPrice: 25, vatRate: 6 }
+    ]
+  },
+  company: {
+    ...validCompany,
+    address: 'Rue du Test 1',
+    city: 'Liège',
+    email: 'contact@example.com',
+    phone: '0400000000',
+    bic: 'TESTBEBB'
+  },
+  communication: { formatted: '+++123/2026/2001+++' }
+});
+assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+assert.match(xml, /<cbc:ID>F-2026-020<\/cbc:ID>/);
+assert.match(xml, /<cbc:Name>Client &amp; Associés<\/cbc:Name>/);
+assert.match(xml, /<cbc:Note>Paiement &lt;rapide&gt;<\/cbc:Note>/);
+assert.match(xml, /<cbc:PaymentID>\+\+\+123\/2026\/2001\+\+\+<\/cbc:PaymentID>/);
+assert.match(xml, /<cbc:TaxAmount currencyID="EUR">24\.00<\/cbc:TaxAmount>/);
+assert.equal((xml.match(/<cac:InvoiceLine>/g) || []).length, 2);
+assert.equal((xml.match(/<cac:TaxSubtotal>/g) || []).length, 2);
+assert.match(xml, /unitCode="HUR"/);
+assert.match(xml, /unitCode="C62"/);
+assert.throws(() => peppol.buildInvoiceXml({
+  invoice: validInvoice,
+  company: { ...validCompany, vat: 'BE0000000000' }
+}), /vendeur est invalide/);
+assert.throws(() => peppol.buildInvoiceXml({
+  invoice: { ...validInvoice, clientVat: 'BE0000000000' },
+  company: validCompany
+}), /client est invalide/);
 console.log('Règles Peppol valides.');
