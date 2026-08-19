@@ -76,5 +76,30 @@
     return `<div class="report-kv">${items.map(([label, value]) => `<div class="report-kv-row"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>`;
   }
 
-  global.BastAccountingReportTemplate = Object.freeze({ styles, date, table, keyValues });
+  function documentStart({ title, companyName, period, generatedAt, purchaseCount = 0, salesCount = 0, metrics = [] } = {}) {
+    return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>${styles}</style></head><body>
+      <div class="print-toolbar"><button onclick="window.print()">Imprimer / Enregistrer en PDF</button><button class="secondary" onclick="window.close()">Fermer</button></div>
+      <div class="report"><div class="report-header"><div><h1>Comptabilité – ${companyName}</h1><div class="report-subtitle">Export complet de tous les onglets, optimisé pour une impression propre en A4 paysage.</div></div>
+      <div class="report-meta"><div><strong>Période :</strong> ${period}</div><div><strong>Date d’export :</strong> ${generatedAt}</div><div><strong>Lignes achats :</strong> ${purchaseCount}</div><div><strong>Lignes ventes :</strong> ${salesCount}</div></div></div>
+      <div class="metrics">${metrics.map(([label, value]) => `<div class="metric"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>`;
+  }
+
+  const documentEnd = () => '<div class="footer-note">Export généré depuis l’application locale Bast Aménagement.</div></div></body></html>';
+  const section = (title, content) => `<section class="section"><h2 class="section-title">${title}</h2>${content}</section>`;
+  const panel = (content, soft = false) => `<div class="panel${soft ? ' soft' : ''}"><div class="panel-body">${content}</div></div>`;
+  const grid = content => `<div class="section-grid">${content}</div>`;
+  function tableSection(title, headers, rows, options = {}, footerItems = []) {
+    const footer = footerItems.length ? `<div style="margin-top:12px;">${keyValues(footerItems)}</div>` : '';
+    return section(title, table(headers, rows, options) + footer);
+  }
+  function keyValueGridSection(title, leftItems, rightItems, options = {}) {
+    return section(title, grid(panel(keyValues(leftItems), !!options.soft) + panel(keyValues(rightItems), !!options.soft)));
+  }
+  function resultSection(rows = [], informationItems = []) {
+    const resultRows = rows.map(row => `<div class="row${row.total ? ' total' : ''}"><div>${row.label}</div><div>${row.value}</div></div>`).join('');
+    return section('Compte de résultat', `<div class="totals-grid"><div class="result-card">${resultRows}</div>${panel(keyValues(informationItems), true)}</div>`);
+  }
+
+  global.BastAccountingReportTemplate = Object.freeze({ styles, date, table, keyValues, documentStart, documentEnd,
+    section, panel, grid, tableSection, keyValueGridSection, resultSection });
 })(globalThis);

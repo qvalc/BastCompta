@@ -1077,36 +1077,11 @@ async function initDriveClientOnly() {
 }
 
 function getDriveFileName() {
-  const period = String(data.company.period || '').trim();
-  const company = String(data.company.name || '').trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-
-  if (period && company) return `comptabilite-${company}-${period}.json`;
-  if (period) return `comptabilite-${period}.json`;
-  if (company) return `comptabilite-${company}.json`;
-  return 'comptabilite-export.json';
+  return BastAccountingExercise.fileName(data);
 }
 
 function getDriveFileNameFromData(sourceData) {
-  const safeData = sourceData || {};
-  const period = String(safeData.company?.period || '').trim();
-  const company = String(safeData.company?.name || '').trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-
-  if (period && company) return `comptabilite-${company}-${period}.json`;
-  if (period) return `comptabilite-${period}.json`;
-  if (company) return `comptabilite-${company}.json`;
-  return 'comptabilite-export.json';
+  return BastAccountingExercise.fileName(sourceData);
 }
 
 function openIntervat() {
@@ -1125,41 +1100,7 @@ function commitPendingInputChanges() {
 }
 
 function buildNextExerciseData(targetYear) {
-  const year = String(targetYear || '').trim();
-  if (!/^\d{4}$/.test(year)) {
-    throw new Error('Année invalide.');
-  }
-
-  const t = totals();
-  const nextData = structuredClone(defaultData);
-  const preservedSettings = mergeDeep(structuredClone(defaultData.settings), structuredClone(data.settings || {}));
-
-  nextData.company = {
-    name: data.company?.name || '',
-    period: year,
-    notes: data.company?.notes || ''
-  };
-
-  nextData.stock = structuredClone(Array.isArray(data.stock) ? data.stock : []);
-  nextData.assets = structuredClone(Array.isArray(data.assets) ? data.assets : []);
-  nextData.investments = structuredClone(Array.isArray(data.investments) ? data.investments : []);
-
-  nextData.settings = preservedSettings;
-  nextData.settings.retainedEarnings = round2(
-    toNumber(preservedSettings.retainedEarnings)
-    + toNumber(t.estimatedProfit)
-  );
-  nextData.settings.vatCarryover = Math.max(0, round2(toNumber(t.receivableVat)));
-
-  nextData.purchases = [];
-  nextData.sales = [];
-  nextData.losses = [];
-  nextData.km = [];
-  nextData.privateMovements = [];
-  nextData.settings.ownerAccountCarryover = round2(toNumber(t.ownerAccountBalance));
-  nextData.vat = { declarations: [] };
-
-  return nextData;
+  return BastAccountingExercise.createNext({ currentData: data, defaults: defaultData, totals: totals(), targetYear });
 }
 
 function downloadJsonFile(sourceData, fileName = '') {
@@ -3240,14 +3181,6 @@ function printableDate(value) {
   return BastAccountingReportTemplate.date(value, escapeHtml);
 }
 
-function reportTable(headers, rows, options = {}) {
-  return BastAccountingReportTemplate.table(headers, rows, options);
-}
-
-function reportKv(items) {
-  return BastAccountingReportTemplate.keyValues(items);
-}
-
 function buildPrintReportHtml() {
   const t = totals();
   const year = parseInt(data.company.period, 10) || new Date().getFullYear();
@@ -3280,54 +3213,26 @@ function buildPrintReportHtml() {
     privateMovementRows,
     kmRows,
     exemptionThreshold,
-    contributionRate,
-    contributionFeeRate,
     isExemptSocial,
-    socialBaseContribution,
-    socialFeeContribution,
     socialTotalContribution
   } = reportData;
 
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Export comptabilité ${escapeHtml(data.company.period || '')}</title>
-<style>
-${BastAccountingReportTemplate.styles}
-</style>
-</head>
-<body>
-  <div class="print-toolbar">
-    <button onclick="window.print()">Imprimer / Enregistrer en PDF</button>
-    <button class="secondary" onclick="window.close()">Fermer</button>
-  </div>
-  <div class="report">
-    <div class="report-header">
-      <div>
-        <h1>Comptabilité – ${escapeHtml(data.company.name || 'Entreprise')}</h1>
-        <div class="report-subtitle">Export complet de tous les onglets, optimisé pour une impression propre en A4 paysage.</div>
-      </div>
-      <div class="report-meta">
-        <div><strong>Période :</strong> ${escapeHtml(data.company.period || '—')}</div>
-        <div><strong>Date d’export :</strong> ${new Intl.DateTimeFormat('fr-BE', { dateStyle: 'full', timeStyle: 'short' }).format(new Date())}</div>
-        <div><strong>Lignes achats :</strong> ${data.purchases.length}</div>
-        <div><strong>Lignes ventes :</strong> ${data.sales.length}</div>
-      </div>
-    </div>
+  return BastAccountingReportTemplate.documentStart({
+    title: `Export comptabilité ${escapeHtml(data.company.period || '')}`,
+    companyName: escapeHtml(data.company.name || 'Entreprise'),
+    period: escapeHtml(data.company.period || '—'),
+    generatedAt: new Intl.DateTimeFormat('fr-BE', { dateStyle: 'full', timeStyle: 'short' }).format(new Date()),
+    purchaseCount: data.purchases.length,
+    salesCount: data.sales.length,
+    metrics: [
+      ['Ventes HTVA', money(t.salesNet)],
+      ['Achats HTVA', money(t.purchasesNet)],
+      ...(!isVatExempt() ? [['TVA nette', money(t.netVat)]] : []),
+      ['Résultat estimé', money(t.estimatedProfit)]
+    ]
+  }) + `
 
-    <div class="metrics">
-      <div class="metric"><span>Ventes HTVA</span><strong>${money(t.salesNet)}</strong></div>
-      <div class="metric"><span>Achats HTVA</span><strong>${money(t.purchasesNet)}</strong></div>
-      ${isVatExempt() ? '' : `<div class="metric"><span>TVA nette</span><strong>${money(t.netVat)}</strong></div>`}
-      <div class="metric"><span>Résultat estimé</span><strong>${money(t.estimatedProfit)}</strong></div>
-    </div>
-
-    <section class="section">
-      <h2 class="section-title">Vue d'ensemble</h2>
-      <div class="section-grid">
-        <div class="panel soft"><div class="panel-body">${reportKv([
+    ${BastAccountingReportTemplate.keyValueGridSection("Vue d'ensemble", [
     ['Société', escapeHtml(data.company.name || '—')],
     ['Période', escapeHtml(data.company.period || '—')],
     ['Régime TVA', escapeHtml(getVatRegimeLabel())],
@@ -3336,134 +3241,84 @@ ${BastAccountingReportTemplate.styles}
     ['Km encodés', `${num(t.kmTotal, 0)} km`],
     ["Prélèvements de l'exploitant", money(t.ownerAccountBalance)],
     ['Stock estimé', money(t.stockValue)]
-  ])}</div></div>
-        <div class="panel soft"><div class="panel-body">${reportKv([
+  ], [
     ['TVA ventes', money(t.salesVat)],
     ['TVA achats récupérable', money(t.purchasesVat)],
     ['Report TVA', money(data.settings.vatCarryover)],
     ['Actif simplifié', money(t.assetsSide)],
     ['Passif simplifié', money(t.liabilitiesSide)],
     ['Écart bilan', money(t.assetsSide - t.liabilitiesSide)]
-  ])}</div></div>
-      </div>
-    </section>
+  ], { soft: true })}
 
-    <section class="section">
-      <h2 class="section-title">Ventes</h2>
-      ${reportTable(['Date', 'Client', 'N° facture', 'Description', 'Taux TVA', 'HTVA', 'TVA', 'TVAC'], salesRows)}
-      <div style="margin-top:12px;">${reportKv([
+    ${BastAccountingReportTemplate.tableSection('Ventes', ['Date', 'Client', 'N° facture', 'Description', 'Taux TVA', 'HTVA', 'TVA', 'TVAC'], salesRows, {}, [
     ['Total ventes HTVA', money(t.salesNet)],
     ['Total TVA ventes', money(t.salesVat)]
-  ])}</div>
-    </section>
+  ])}
 
-    <section class="section">
-      <h2 class="section-title">Achats</h2>
-      ${reportTable(['Date', 'Fournisseur', 'N° facture', 'Type', 'Taux TVA', 'HTVA', 'TVA déductible', 'TVA récup.', 'TVAC'], purchaseRows, { compact: true })}
-      <div style="margin-top:12px;">${reportKv([
+    ${BastAccountingReportTemplate.tableSection('Achats', ['Date', 'Fournisseur', 'N° facture', 'Type', 'Taux TVA', 'HTVA', 'TVA déductible', 'TVA récup.', 'TVAC'], purchaseRows, { compact: true }, [
     ['Total achats en charges', money(t.purchasesNet)],
     ['Dont frais généraux', money(t.purchasesGeneralNet)],
     ['Dont marchandises', money(t.purchasesMerchandiseNet)],
     ['Total TVA récupérable', money(t.purchasesVat)]
-  ])}</div>
-    </section>
+  ])}
 
-    <section class="section">
-      <h2 class="section-title">Investissements</h2>
-      ${reportTable(['Date achat', 'Fournisseur', 'N° facture', 'Description', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur restante'], investmentRows, { compact: true })}
-    </section>
+    ${BastAccountingReportTemplate.tableSection('Investissements', ['Date achat', 'Fournisseur', 'N° facture', 'Description', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur restante'], investmentRows, { compact: true })}
 
-    <section class="section">
-      <h2 class="section-title">Immobilisations</h2>
-      ${reportTable(['Date', 'Libellé', 'Fournisseur', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur nette'], assetRows, { compact: true })}
-    </section>
+    ${BastAccountingReportTemplate.tableSection('Immobilisations', ['Date', 'Libellé', 'Fournisseur', 'Montant HTVA', 'Durée', 'Amorti année', 'Amorti total', 'Valeur nette'], assetRows, { compact: true })}
 
-    <section class="section">
-      <h2 class="section-title">Stock matériaux</h2>
-      ${reportTable(['Libellé', 'Quantité', 'Prix unitaire', 'Valeur'], stockRows)}
-    </section>
+    ${BastAccountingReportTemplate.tableSection('Stock matériaux', ['Libellé', 'Quantité', 'Prix unitaire', 'Valeur'], stockRows)}
 
-    <section class="section">
-      <h2 class="section-title">Taxes et cotisations</h2>
-      ${reportTable(['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
-    </section>
+    ${BastAccountingReportTemplate.tableSection('Taxes et cotisations', ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
 
-    <section class="section">
-      <h2 class="section-title">Kilomètres</h2>
-      ${reportTable(['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux'], kmRows)}
-    </section>
+    ${BastAccountingReportTemplate.tableSection('Kilomètres', ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux'], kmRows)}
 
-    <section class="section">
-      <h2 class="section-title">Prélèvements de l'exploitant</h2>
-      ${reportTable(['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif'], privateMovementRows)}
-      <div style="margin-top:12px;">${reportKv([
+    ${BastAccountingReportTemplate.tableSection("Prélèvements de l'exploitant", ['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif'], privateMovementRows, {}, [
         ['Solde compte exploitant reporté', money(t.ownerAccountCarryover)],
         ["Mouvements de l'exploitant nets de l’exercice", money(t.privateMovementsNet)],
         ["Prélèvements de l'exploitant au passif", money(t.ownerAccountBalance)]
-      ])}</div>
-    </section>
+      ])}
 
-    <section class="section">
-      <h2 class="section-title">Compte de résultat</h2>
-      <div class="totals-grid">
-        <div class="result-card">
-          <div class="row"><div>Recettes des ventes</div><div>${money(t.salesNet)}</div></div>
-          ${excessSocialRefund > 0 ? `<div class="row"><div>Excédent remboursement cotisations sociales</div><div>${money(excessSocialRefund)}</div></div>` : ''}
-          <div class="row"><div>60 – Marchandises</div><div>${money(t.purchasesMerchandiseNet)}</div></div>
-          <div class="row"><div>61 – Frais généraux</div><div>${money(t.purchasesGeneralNet)}</div></div>
-          <div class="row"><div>63 – Amortissements</div><div>${money(t.yearlyAmort)}</div></div>
-          <div class="row"><div>64 – Taxes sans TVA récupérable</div><div>${money(t.otherTaxesTotal)}</div></div>
-          <div class="row"><div>Cotisations sociales versées</div><div>${money(t.socialContributionsTotal)}</div></div>
-          <div class="row total"><div>Résultat estimé</div><div>${money(t.estimatedProfit)}</div></div>
-        </div>
-        <div class="panel soft"><div class="panel-body">${reportKv([
+    ${BastAccountingReportTemplate.resultSection([
+      { label: 'Recettes des ventes', value: money(t.salesNet) },
+      ...(excessSocialRefund > 0 ? [{ label: 'Excédent remboursement cotisations sociales', value: money(excessSocialRefund) }] : []),
+      { label: '60 – Marchandises', value: money(t.purchasesMerchandiseNet) },
+      { label: '61 – Frais généraux', value: money(t.purchasesGeneralNet) },
+      { label: '63 – Amortissements', value: money(t.yearlyAmort) },
+      { label: '64 – Taxes sans TVA récupérable', value: money(t.otherTaxesTotal) },
+      { label: 'Cotisations sociales versées', value: money(t.socialContributionsTotal) },
+      { label: 'Résultat estimé', value: money(t.estimatedProfit), total: true }
+    ], [
     ['Exercice', String(year)],
     ['Seuil exonération sociale', money(exemptionThreshold)],
     ['Cotisations sociales estimées', money(socialTotalContribution)],
     ['Excédent remboursement (information)', money(excessSocialRefund)],
     ['Statut social', escapeHtml(isExemptSocial ? 'Exonéré' : 'Non exonéré')]
-  ])}</div></div>
-      </div>
-    </section>
+  ])}
 
-    <section class="section">
-      <h2 class="section-title">Bilan simplifié</h2>
-      <div class="section-grid">
-        <div class="panel"><div class="panel-body">${reportKv([
+    ${BastAccountingReportTemplate.keyValueGridSection('Bilan simplifié', [
     ['Immobilisations nettes', money(t.netFixedAssets)],
     ['Stock', money(t.stockValue)],
     ['TVA à recevoir', money(t.receivableVat)],
     ['Banque + caisse', money(t.liquidities)],
     ['Total actif', money(t.assetsSide)]
-  ])}</div></div>
-        <div class="panel"><div class="panel-body">${reportKv([
+  ], [
     ['Capital de départ', money(data.settings.capitalStart)],
     ['Résultat reporté', money(data.settings.retainedEarnings)],
     ["Prélèvements de l'exploitant", money(t.ownerAccountBalance)],
     ['Résultat de l’exercice', money(t.estimatedProfit)],
     ['TVA à payer', money(t.payableVat)],
     ['Total passif', money(t.liabilitiesSide)]
-  ])}</div></div>
-      </div>
-    </section>
+  ])}
 
-    <section class="section">
-      <h2 class="section-title">Suivi TVA</h2>
-      <div class="section-grid">
-        <div class="panel"><div class="panel-body">${reportKv(vatReportRows.length ? vatReportRows : [['Aucune période TVA', '—']])}</div></div>
-        <div class="panel"><div class="panel-body">${reportKv([
+    ${BastAccountingReportTemplate.keyValueGridSection('Suivi TVA',
+      vatReportRows.length ? vatReportRows : [['Aucune période TVA', '—']], [
     ['Report TVA initial', money(data.settings.vatCarryover)],
     ['TVA déclarée non payée', money(vatLedger.totalFiledUnpaid)],
     ['TVA non déclarée nette', money(vatLedger.totalUnfiledDue - vatLedger.totalUnfiledCredit)],
     ['Solde TVA ouvert', money(vatLedger.totalDueOpen)]
-  ])}</div></div>
-      </div>
-    </section>
+  ])}
 
-    <section class="section">
-      <h2 class="section-title">Paramètres</h2>
-      <div class="section-grid">
-        <div class="panel"><div class="panel-body">${reportKv([
+    ${BastAccountingReportTemplate.keyValueGridSection('Paramètres', [
     ['Nom de l’entreprise', escapeHtml(data.company.name || '—')],
     ['Période', escapeHtml(data.company.period || '—')],
     ['Report TVA', money(data.settings.vatCarryover)],
@@ -3472,20 +3327,14 @@ ${BastAccountingReportTemplate.styles}
     ['Capital de départ', money(data.settings.capitalStart)],
     ['Résultat reporté', money(data.settings.retainedEarnings)],
     ["Prélèvements de l'exploitant reportés", money(data.settings.ownerAccountCarryover)]
-  ])}</div></div>
-        <div class="panel"><div class="panel-body">${reportKv([
+  ], [
     ['Seuil exonération cotisations sociales', money(data.settings.socialExemptionThreshold)],
     ['Taux cotisations sociales', `${num(data.settings.socialContributionRate)} %`],
     ['Frais caisse sociale', `${num(data.settings.socialContributionFeeRate)} %`],
     ['Notes', escapeHtml((data.company.notes || '').trim() || '—')]
-  ])}</div></div>
-      </div>
-    </section>
+  ])}
 
-    <div class="footer-note">Export généré depuis l’application locale Bast Aménagement.</div>
-  </div>
-</body>
-</html>`;
+  ` + BastAccountingReportTemplate.documentEnd();
 }
 
 function openPrintReport() {
