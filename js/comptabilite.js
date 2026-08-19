@@ -481,59 +481,22 @@ async function saveCurrentYearJsonToDrive(showErrorAlert = false) {
 
   try {
     const fileName = getDriveFileName();
-    const content = JSON.stringify(data, null, 2);
-
-    let targetFileId = '';
-
-    if (selectedDriveFileId) {
-      targetFileId = selectedDriveFileId;
-    }
+    let targetFileId = selectedDriveFileId || '';
 
     if (!targetFileId) {
-      const existing = await driveFilesList({
-        spaces: 'appDataFolder',
-        q: `name='${escapeDriveQueryValue(fileName)}' and trashed=false`,
-        fields: 'files(id, name)'
+      const existing = await BastAnnualJsonDrive.findByName({
+        fileName,
+        listFiles: driveFilesList,
+        escapeQuery: escapeDriveQueryValue
       });
-
-      if (!existing) return false;
-      const files = existing.result.files || [];
-      if (files.length) {
-        targetFileId = files[0].id;
-      }
+      if (existing === undefined) return false;
+      if (existing) targetFileId = existing.id;
     }
-
-    const metadata = targetFileId
-      ? { name: fileName }
-      : { name: fileName, parents: ['appDataFolder'] };
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', new Blob([content], { type: 'application/json' }));
-
-    let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-    let method = 'POST';
-
-    if (targetFileId) {
-      url = `https://www.googleapis.com/upload/drive/v3/files/${targetFileId}?uploadType=multipart&fields=id,name`;
-      method = 'PATCH';
-    }
-
-    const res = await googleDriveFetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${googleAccessToken}`
-      },
-      body: form
+    const saved = await BastAnnualJsonDrive.upload({
+      sourceData: data, fileName, fileId: targetFileId,
+      accessToken: googleAccessToken, fetchDrive: googleDriveFetch
     });
-
-    if (!res) return false;
-
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-
-    const saved = await res.json();
+    if (!saved) return false;
     selectedDriveFileId = saved.id;
     await loadDriveFiles();
     return true;
@@ -1115,45 +1078,17 @@ async function uploadJsonObjectToDrive(sourceData, fileName = '') {
   }
 
   const finalFileName = fileName || getDriveFileNameFromData(sourceData);
-  const content = JSON.stringify(sourceData, null, 2);
-
-  const existing = await driveFilesList({
-    spaces: 'appDataFolder',
-    q: `name='${escapeDriveQueryValue(finalFileName)}' and trashed=false`,
-    fields: 'files(id, name)'
+  const existing = await BastAnnualJsonDrive.findByName({
+    fileName: finalFileName,
+    listFiles: driveFilesList,
+    escapeQuery: escapeDriveQueryValue
   });
-
-  const files = existing.result.files || [];
-  const metadata = {
-    name: finalFileName,
-    parents: ['appDataFolder']
-  };
-
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', new Blob([content], { type: 'application/json' }));
-
-  let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-  let method = 'POST';
-
-  if (files.length) {
-    url = `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`;
-    method = 'PATCH';
-  }
-
-  const res = await googleDriveFetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${googleAccessToken}`
-    },
-    body: form
+  if (existing === undefined) return false;
+  const saved = await BastAnnualJsonDrive.upload({
+    sourceData, fileName: finalFileName, fileId: existing?.id || '',
+    accessToken: googleAccessToken, fetchDrive: googleDriveFetch
   });
-
-  if (!res.ok) {
-    throw new Error(await res.text());
-  }
-
-  const saved = await res.json();
+  if (!saved) return false;
   selectedDriveFileId = saved.id;
   await loadDriveFiles();
   return saved;
@@ -1204,20 +1139,9 @@ async function loadDriveFiles() {
   }
 
   try {
-    const list = await driveFilesList({
-      spaces: 'appDataFolder',
-      q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-'`,
-      orderBy: 'modifiedTime desc',
-      pageSize: 100,
-      fields: 'files(id, name, modifiedTime)'
-    });
-
-    if (!list) return;
-
-    googleDriveFiles = (list.result.files || []).filter(file => {
-      const hiddenSyncNames = [DRIVE_SYNC_FILE_NAME, 'bastcompta-comptabilite-sync.json'];
-      return !hiddenSyncNames.includes(String(file.name || ''));
-    });
+    const files = await BastAnnualJsonDrive.list(driveFilesList);
+    if (!files) return;
+    googleDriveFiles = files;
     const validIds = new Set(googleDriveFiles.map(file => file.id));
     selectedDriveFileIds = selectedDriveFileIds.filter(id => validIds.has(id));
 
@@ -1251,19 +1175,10 @@ async function importSelectedJsonFromDrive() {
   try {
     const file = googleDriveFiles.find(f => f.id === selectedDriveFileId);
 
-    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${selectedDriveFileId}?alt=media`, {
-      headers: {
-        Authorization: `Bearer ${googleAccessToken}`
-      }
+    const parsed = await BastAnnualJsonDrive.read({
+      fileId: selectedDriveFileId, accessToken: googleAccessToken, fetchDrive: googleDriveFetch
     });
-
-    if (!res) return;
-
-    if (!res.ok) {
-      throw new Error(await res.text());
-    }
-
-    const parsed = await res.json();
+    if (!parsed) return;
     data = mergeDeep(structuredClone(defaultData), parsed);
     ensureVatStructures();
     saveData(false);
@@ -1345,14 +1260,10 @@ async function deleteSelectedJsonFromDrive() {
 
   try {
     for (const fileId of fileIds) {
-      const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${googleAccessToken}`
-        }
+      const removed = await BastAnnualJsonDrive.remove({
+        fileId, accessToken: googleAccessToken, fetchDrive: googleDriveFetch
       });
-      if (!res) return;
-      if (!res.ok) throw new Error(await res.text());
+      if (!removed) return;
     }
 
     selectedDriveFileIds = [];
