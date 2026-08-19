@@ -1517,7 +1517,9 @@ async function loadSyncDataFromDriveIfAvailable() {
       data.clients = parsed.clients.map(normalizeClient).filter(client => client.name);
     }
     if (parsed.mail && typeof parsed.mail === 'object') {
+      const localSentItems = Array.isArray(data.mail?.sentItems) ? data.mail.sentItems : [];
       data.mail = mergeDeep(structuredClone(defaultData.mail), parsed.mail);
+      data.mail.sentItems = BastMailHistory.merge(localSentItems, data.mail.sentItems);
     }
     if (parsed.tarifs && typeof parsed.tarifs === 'object') {
       ensureTarifsData();
@@ -2834,19 +2836,29 @@ function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId
   data.mail.sentItems = BastMailHistory.add(data.mail.sentItems, { docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo });
 }
 
+async function persistSentMailHistory() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  if (googleAccessToken) await saveSyncToDrive(false);
+  render();
+}
+
+function viewSentMailItem(id) {
+  const item = (data.mail?.sentItems || []).find(entry => entry.id === id);
+  if (!item) return;
+  BastDocumentMail.openSentItem(item, { formatDate: formatSentMailDate });
+}
+
 async function deleteSentMailItem(id) {
   if (!await BastUI.confirm('Supprimer cette trace de message envoyé ?',{type:'danger',title:'Supprimer de l’historique'})) return;
   data.mail.sentItems = BastMailHistory.remove(data.mail.sentItems, id);
-  saveData(false);
-  render();
+  await persistSentMailHistory();
 }
 
 async function clearSentMailHistory() {
   if (!(data.mail.sentItems || []).length) return;
   if (!await BastUI.confirm('Vider tout l’historique des messages envoyés ?',{type:'danger',title:'Vider l’historique',confirmLabel:'Vider définitivement'})) return;
   data.mail.sentItems = [];
-  saveData(false);
-  render();
+  await persistSentMailHistory();
 }
 
 function formatSentMailDate(value) {
@@ -2862,7 +2874,7 @@ function renderSentMails() {
       <td>${escapeHtml(item.subject || '')}<div class="muted-small">${escapeHtml(item.documentNumber || '')}</div></td>
       <td>${escapeHtml(item.senderEmail || '')}</td>
       <td>${item.pdfName ? `📎 ${escapeHtml(item.pdfName)}` : '—'}</td>
-      <td><button class="danger small" type="button" onclick="deleteSentMailItem('${escapeAttr(item.id)}')">Supprimer</button></td>
+      <td><div class="sent-mail-actions"><button class="secondary small" type="button" onclick="viewSentMailItem('${escapeAttr(item.id)}')">Consulter</button><button class="danger small" type="button" onclick="deleteSentMailItem('${escapeAttr(item.id)}')">Supprimer</button></div></td>
     </tr>`).join('') : `<tr><td colspan="6" class="empty-cell">Aucun message envoyé depuis BastCompta.</td></tr>`;
 
   return `
@@ -2984,7 +2996,7 @@ async function sendDocumentEmail(docKey) {
       senderEmail: result.senderEmail || 'documents@bast-amenagement.com',
       replyTo
     });
-    saveData(false);
+    await persistSentMailHistory();
     alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
   } catch (error) {
     console.error('Envoi e-mail Brevo impossible :', error);
@@ -4810,6 +4822,7 @@ Object.assign(window, {
   rememberTarifCategoryGroupState,
   receiveTarifLineFromExternalModule,
   updateMailSenderIdentity,
+  viewSentMailItem,
   deleteSentMailItem,
   clearSentMailHistory
 });

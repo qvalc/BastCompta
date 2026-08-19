@@ -36,5 +36,18 @@
       overlay.querySelector('#mail-preview-subject')?.focus();
     });
   }
-  global.BastDocumentMail=Object.freeze({textToHtml,callWorker,openPreview});
+  function openSentItem(item={},options={}){
+    const escape=global.BastFormatters.escapeHtml;
+    const formatDate=options.formatDate||function(value){return String(value||'');};
+    global.document.querySelector('.mail-preview-overlay')?.remove();
+    const overlay=global.document.createElement('div');
+    overlay.className='mail-preview-overlay';
+    overlay.innerHTML=`<div class="mail-preview-modal sent-mail-viewer" role="dialog" aria-modal="true" aria-labelledby="sent-mail-viewer-title"><div class="mail-preview-head"><div><h3 id="sent-mail-viewer-title">${escape(item.subject||'Message envoyé')}</h3><div class="muted-small">Envoyé le ${escape(formatDate(item.sentAt)||'—')}</div></div><button type="button" class="mail-preview-close" aria-label="Fermer">×</button></div><div class="mail-preview-body"><div class="sent-mail-viewer-grid"><div><span>De</span><strong>${escape(item.senderEmail||'—')}</strong></div><div><span>À</span><strong>${escape(item.to||'—')}</strong></div><div><span>Réponse à</span><strong>${escape(item.replyTo||'—')}</strong></div><div><span>Copie</span><strong>${escape(item.cc||'—')}</strong></div><div><span>Document</span><strong>${escape(item.documentNumber||'—')}</strong></div><div><span>Pièce jointe</span><strong>${escape(item.pdfName||'—')}</strong></div></div><div class="mail-preview-field"><label>Message</label><pre class="sent-mail-viewer-body">${escape(item.body||'')}</pre></div>${item.messageId?`<div class="muted-small">Identifiant d’envoi : ${escape(item.messageId)}</div>`:''}</div><div class="mail-preview-actions"><button type="button" class="primary" data-action="close">Fermer</button></div></div>`;
+    const close=()=>overlay.remove();
+    overlay.querySelector('.mail-preview-close').addEventListener('click',close);
+    overlay.querySelector('[data-action="close"]').addEventListener('click',close);
+    overlay.addEventListener('click',event=>{if(event.target===overlay)close();});
+    global.document.body.appendChild(overlay);
+  }
+  global.BastDocumentMail=Object.freeze({textToHtml,callWorker,openPreview,openSentItem});
 })(globalThis);
