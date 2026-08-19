@@ -2,20 +2,18 @@
 (function (global) {
   'use strict';
 
-  const selector = [
+  const fieldSelector = [
     'input:not([type="hidden"]):not([disabled])',
     'select:not([disabled])',
     'textarea:not([disabled])',
-    'button:not([disabled])',
-    'a[href]',
-    '[tabindex]:not([tabindex="-1"])'
+    '[contenteditable="true"]'
   ].join(',');
   let pending = null;
   let clearTimer = 0;
   let restoreQueued = false;
 
-  function focusableControls() {
-    return Array.from(global.document.querySelectorAll(selector)).filter(element => {
+  function editableFields() {
+    return Array.from(global.document.querySelectorAll(fieldSelector)).filter(element => {
       if (!element.isConnected || element.closest('[hidden],[aria-hidden="true"]')) return false;
       const style = global.getComputedStyle(element);
       return style.display !== 'none' && style.visibility !== 'hidden' && element.getClientRects().length > 0;
@@ -24,7 +22,8 @@
 
   function rememberNextControl(event) {
     if (event.key !== 'Tab' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
-    const controls = focusableControls();
+    if (!event.target.matches?.(fieldSelector)) return;
+    const controls = editableFields();
     const currentIndex = controls.indexOf(event.target);
     if (currentIndex < 0) return;
     const nextIndex = currentIndex + (event.shiftKey ? -1 : 1);
@@ -32,15 +31,18 @@
       pending = null;
       return;
     }
+    event.preventDefault();
     pending = { index: nextIndex, startedAt: Date.now() };
     global.clearTimeout(clearTimer);
-    clearTimer = global.setTimeout(() => { pending = null; }, 8000);
+    clearTimer = global.setTimeout(() => { pending = null; }, 60000);
+    event.target.blur();
+    queueRestore();
   }
 
   function restoreFocus() {
     restoreQueued = false;
-    if (!pending || Date.now() - pending.startedAt > 8000) return;
-    const controls = focusableControls();
+    if (!pending || Date.now() - pending.startedAt > 60000) return;
+    const controls = editableFields();
     const target = controls[pending.index];
     if (!target || target === global.document.activeElement) return;
     const active = global.document.activeElement;
