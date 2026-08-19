@@ -1,4 +1,22 @@
-/* Fondations visuelles communes à toutes les pages BastCompta. */
+/* Système visuel commun à toutes les pages BastCompta. */
+:root {
+  --bast-navy: #10233f;
+  --bast-primary: #2563eb;
+  --bast-primary-dark: #1d4ed8;
+  --bast-success: #15803d;
+  --bast-danger: #b91c1c;
+  --bast-text-muted: #64748b;
+  --bast-line: #dbe4f0;
+  --bast-panel: #fff;
+  --bast-soft: #f6f8fb;
+  --bast-radius-sm: 10px;
+  --bast-radius: 14px;
+  --bast-radius-lg: 18px;
+  --bast-shadow: 0 10px 30px rgba(15, 35, 63, .07);
+  --bast-focus: 0 0 0 3px rgba(37, 99, 235, .22);
+  color-scheme: light;
+}
+
 :where(*, *::before, *::after) {
   box-sizing: border-box;
 }
@@ -12,3 +30,113 @@
   font: inherit;
 }
 
+:where(button, [role="button"], a, input, select, textarea) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, [role="button"], a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--bast-primary);
+  outline-offset: 2px;
+  box-shadow: var(--bast-focus);
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+  min-height: 42px;
+  border-color: var(--bast-line);
+  transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea):hover:not(:disabled) {
+  border-color: #aebdd0;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea):focus {
+  border-color: var(--bast-primary);
+}
+
+:where(input, select, textarea, button):disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+
+:where(input, textarea)::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* Onglets : même rythme et même retour d'interaction dans tous les modules. */
+:where(.tabs, .global-filter-tabs, .hidden-drive-tabs, .auth-tabs) {
+  scrollbar-width: thin;
+  overscroll-behavior-inline: contain;
+}
+
+:where(.tab, .tab-btn, .global-filter-btn, .hidden-drive-tab, .auth-tab) {
+  min-height: 40px;
+  transition: color .16s ease, background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+:where(.tab, .tab-btn, .global-filter-btn, .hidden-drive-tab, .auth-tab):hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+/* Tableaux : lecture stable, en-tête visible et survol discret. */
+:where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) {
+  background: var(--bast-panel);
+  border-color: var(--bast-line);
+  scrollbar-color: #94a3b8 transparent;
+}
+
+:where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) table {
+  width: 100%;
+}
+
+:where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bast-soft);
+  box-shadow: inset 0 -1px 0 var(--bast-line);
+}
+
+:where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) tbody tr {
+  transition: background-color .14s ease;
+}
+
+:where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) tbody tr:hover {
+  background: #f8fbff;
+}
+
+/* Cartes et fenêtres partagent une profondeur légère et professionnelle. */
+:where(.card, .panel, .side-panel, .main-panel, .modal, .modal-card, .drive-modal-card, .subscription-modal-card) {
+  border-color: var(--bast-line);
+}
+
+:where(.modal-backdrop, .drive-modal, .subscription-modal) {
+  backdrop-filter: blur(3px);
+}
+
+:where(.modal-head, .drive-modal-head) h2,
+:where(.modal-head, .drive-modal-head) h3 {
+  letter-spacing: -.02em;
+}
+
+::selection {
+  color: var(--bast-navy);
+  background: #bfdbfe;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media print {
+  :root { color-scheme: light; }
+  :where(.table-wrap, .doc-table-wrap, .global-table-wrap, .meta-table-wrap) thead th {
+    position: static;
+  }
+}
