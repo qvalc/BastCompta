@@ -1215,21 +1215,10 @@ async function createCreditNoteFromInvoice() {
   notifyPortalBusinessChange('Note de crédit créée');
   await refreshDocumentNumberSources();
   const creditNumber = makeCreditNoteNumber(original);
-
-  const cloneLinesAsCredit = rows => (Array.isArray(rows) ? rows : defaultLines()).map(row => ({
-    ...structuredClone(row),
-    qty: -Math.abs(toNumber(row.qty) || 1)
+  Object.assign(data.invoice, BastCreditNote.prepare(data.invoice, {
+    originalNumber: original,
+    creditNumber
   }));
-
-  data.invoice.documentNumber = creditNumber;
-  data.invoice.linkedInvoiceNumber = original;
-  data.invoice.creditNoteReason = data.invoice.creditNoteReason || `Note de crédit liée à la facture ${original}`;
-  data.invoice.status = '';
-  data.invoice.paidAmount = 0;
-  data.invoice.lines = cloneLinesAsCredit(data.invoice.lines);
-  if (data.invoice.suppliesEnabled) {
-    data.invoice.suppliesLines = cloneLinesAsCredit(data.invoice.suppliesLines);
-  }
   saveData(false);
   activePage = 'invoice';
   render();
