@@ -15,8 +15,17 @@ try{
   assert.equal(files[0].id,'f1');
   assert.deepEqual(await BastComptaDriveClient.readFile('token','f1'),{ok:true});
   assert.equal((await BastComptaDriveClient.uploadJson('token',{name:'test.json',value:{ok:true}})).id,'f1');
+  assert.equal((await BastComptaDriveClient.uploadJson('token',{fileId:'existing/file',name:'test.json',value:{ok:false},fields:'id,name'})).id,'f1');
   assert.equal(await BastComptaDriveClient.deleteFile('token','f1'),true);
   assert.ok(calls.every(call=>call.options.headers.Authorization==='Bearer token'));
   assert.match(calls[0].url,/spaces=appDataFolder/);
+  const uploads=calls.filter(call=>call.url.includes('/upload/'));
+  assert.equal(uploads[0].options.method,'POST');
+  assert.equal(uploads[1].options.method,'PATCH');
+  assert.match(uploads[1].url,/existing%2Ffile/);
+  const createdMetadata=JSON.parse(await uploads[0].options.body.get('metadata').text());
+  const updatedMetadata=JSON.parse(await uploads[1].options.body.get('metadata').text());
+  assert.deepEqual(createdMetadata,{name:'test.json',parents:['appDataFolder']});
+  assert.deepEqual(updatedMetadata,{name:'test.json'});
 }finally{globalThis.fetch=originalFetch;}
 console.log('Client Google Drive commun valide.');

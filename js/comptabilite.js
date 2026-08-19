@@ -1485,7 +1485,6 @@ async function saveChantiersSyncToDrive(showErrorAlert = false) {
   if (!googleAccessToken) return false;
   try {
     const chantiersData = loadChantiersLocalData();
-    const content = JSON.stringify(chantiersData, null, 2);
     const existing = await driveFilesList({
       spaces: 'appDataFolder',
       q: `name='${CHANTIERS_DRIVE_SYNC_FILE_NAME}' and trashed=false`,
@@ -1493,24 +1492,16 @@ async function saveChantiersSyncToDrive(showErrorAlert = false) {
     }, false);
     if (!existing) return false;
     const files = existing.result.files || [];
-    const isUpdate = files.length > 0;
-    const metadata = isUpdate
-      ? { name: CHANTIERS_DRIVE_SYNC_FILE_NAME }
-      : { name: CHANTIERS_DRIVE_SYNC_FILE_NAME, parents: ['appDataFolder'] };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', new Blob([content], { type: 'application/json' }));
-    const url = isUpdate
-      ? `https://www.googleapis.com/upload/drive/v3/files/${files[0].id}?uploadType=multipart&fields=id,name`
-      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';
-    const res = await googleDriveFetch(url, {
-      method: isUpdate ? 'PATCH' : 'POST',
-      headers: { Authorization: `Bearer ${googleAccessToken}` },
-      body: form
-    }, false);
-    return !!res && res.ok;
+    const saved = await BastComptaDriveClient.uploadJson(googleAccessToken, {
+      fileId: files[0]?.id || '',
+      name: CHANTIERS_DRIVE_SYNC_FILE_NAME,
+      value: chantiersData,
+      fields: 'id,name'
+    });
+    return !!saved?.id;
   } catch (error) {
     console.error(error);
+    if (await handleGoogleDriveException(error, false)) return false;
     if (showErrorAlert) alert('La synchronisation des chantiers vers Google Drive a échoué.');
     return false;
   }
