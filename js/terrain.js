@@ -1096,7 +1096,7 @@ function renderQuoteFinal() {
     const el = document.getElementById(id);
     el.addEventListener('input', () => {
       const map = {qDate:'date',qValidity:'validity',qAddress:'address',qNotes:'notes'};
-      state.activeDraft[map[id]] = el.value;
+      state.activeDraft[map[id]] = id === 'qDate' ? BastDateInputs.value(el) : el.value;
     });
   });
 }

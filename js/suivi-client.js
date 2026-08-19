@@ -2446,8 +2446,8 @@ function openProjectModal(id = '') {
   document.getElementById('formStatus').value = project?.status || 'planned';
   document.getElementById('formClientName').value = project?.clientName || '';
   document.getElementById('formClientRef').value = project?.clientRef || '';
-  document.getElementById('formStartDate').value = project?.startDate || '';
-  document.getElementById('formEndDate').value = project?.endDate || '';
+  BastDateInputs.setValue(document.getElementById('formStartDate'), project?.startDate || '');
+  BastDateInputs.setValue(document.getElementById('formEndDate'), project?.endDate || '');
   document.getElementById('formAddress').value = project?.address || '';
   document.getElementById('formDescription').value = project?.description || '';
 
@@ -2465,8 +2465,8 @@ async function submitProjectForm() {
     status: document.getElementById('formStatus').value,
     clientName: document.getElementById('formClientName').value.trim(),
     clientRef: document.getElementById('formClientRef').value.trim(),
-    startDate: document.getElementById('formStartDate').value,
-    endDate: document.getElementById('formEndDate').value,
+    startDate: BastDateInputs.value(document.getElementById('formStartDate')),
+    endDate: BastDateInputs.value(document.getElementById('formEndDate')),
     address: document.getElementById('formAddress').value.trim(),
     description: document.getElementById('formDescription').value.trim()
   };
@@ -3187,7 +3187,7 @@ async function submitMoneyItem(type) {
 
   const item = {
     id: uid(type),
-    date: document.getElementById('moneyDate').value,
+    date: BastDateInputs.value(document.getElementById('moneyDate')),
     ref: document.getElementById('moneyRef').value.trim(),
     description: document.getElementById('moneyDescription').value.trim(),
     amount: Number(document.getElementById('moneyAmount').value) || 0
@@ -3271,7 +3271,7 @@ async function submitTask() {
   project.tasks.unshift({
     id: uid('task'),
     title,
-    dueDate: document.getElementById('taskDueDate').value,
+    dueDate: BastDateInputs.value(document.getElementById('taskDueDate')),
     assignedTo: document.getElementById('taskAssignedTo').value.trim(),
     done: false
   });
