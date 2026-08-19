@@ -67,6 +67,8 @@ const disconnectDriveBtn = document.getElementById('disconnectDriveBtn');
 const settingsMenu = document.getElementById('settingsMenu');
 const settingsMenuBtn = document.getElementById('settingsMenuBtn');
 const hiddenDriveBtn = document.getElementById('hiddenDriveBtn');
+const trashBtn = document.getElementById('trashBtn');
+const trashCount = document.getElementById('trashCount');
 const hiddenDriveModal = document.getElementById('hiddenDriveModal');
 const closeHiddenDriveBtn = document.getElementById('closeHiddenDriveBtn');
 const refreshHiddenDriveBtn = document.getElementById('refreshHiddenDriveBtn');
@@ -2886,6 +2888,59 @@ document.addEventListener('click', event => {
 });
 
 globalSaveBtn?.addEventListener('click', saveAllModulesFromPortal);
+function refreshTrashCount() {
+  if (trashCount) trashCount.textContent = String(window.BastTrash?.list().length || 0);
+}
+
+function closeTrashModal() {
+  document.getElementById('trashModal')?.remove();
+  document.body.classList.remove('bast-ui-dialog-open');
+}
+
+function renderTrashModal() {
+  const modal = document.getElementById('trashModal');
+  if (!modal) return;
+  const list = modal.querySelector('.trash-list');
+  const items = window.BastTrash?.list() || [];
+  modal.querySelector('.trash-total').textContent = `${items.length} élément${items.length === 1 ? '' : 's'} · conservation 30 jours`;
+  if (!items.length) {
+    list.innerHTML = '<div class="trash-empty"><strong>La corbeille est vide</strong><span>Les éléments supprimés apparaîtront ici pendant 30 jours.</span></div>';
+    return;
+  }
+  list.innerHTML = items.map(item => {
+    const remaining = Math.max(1, Math.ceil((new Date(item.expiresAt).getTime() - Date.now()) / 86400000));
+    return `<article class="trash-item"><div><span class="trash-module">${escapeHtml(item.module)}</span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.type)} · encore ${remaining} jour${remaining === 1 ? '' : 's'}</small></div><div class="trash-actions"><button type="button" data-trash-restore="${escapeHtml(item.id)}">Restaurer</button><button type="button" class="danger" data-trash-delete="${escapeHtml(item.id)}" aria-label="Supprimer définitivement">Supprimer</button></div></article>`;
+  }).join('');
+  list.querySelectorAll('[data-trash-restore]').forEach(button => button.addEventListener('click', () => {
+    const result = BastTrash.restore(button.dataset.trashRestore);
+    if (!result.ok) return BastUI.notify(result.message, { type: 'error' });
+    document.querySelectorAll('.portal-content iframe').forEach(frame => { try { if (frame.src !== 'about:blank') frame.contentWindow.location.reload(); } catch {} });
+    BastUI.notify(`« ${result.entry.label} » a été restauré.`, { type: 'success' });
+    refreshTrashCount(); renderTrashModal();
+  }));
+  list.querySelectorAll('[data-trash-delete]').forEach(button => button.addEventListener('click', async () => {
+    if (!await BastUI.confirm('Cet élément sera supprimé définitivement et ne pourra plus être restauré.', { type: 'danger', title: 'Vider cet élément', confirmLabel: 'Supprimer définitivement' })) return;
+    BastTrash.remove(button.dataset.trashDelete); refreshTrashCount(); renderTrashModal();
+  }));
+}
+
+function openTrashModal() {
+  settingsMenu?.classList.remove('open');
+  if (!document.getElementById('trashModal')) {
+    const modal = document.createElement('div');
+    modal.id = 'trashModal'; modal.className = 'trash-modal';
+    modal.innerHTML = '<section class="trash-dialog" role="dialog" aria-modal="true" aria-labelledby="trashTitle"><header><div><h2 id="trashTitle">Corbeille</h2><p class="trash-total"></p></div><button type="button" class="trash-close" aria-label="Fermer">×</button></header><div class="trash-list"></div></section>';
+    document.body.appendChild(modal); document.body.classList.add('bast-ui-dialog-open');
+    modal.querySelector('.trash-close').addEventListener('click', closeTrashModal);
+    modal.addEventListener('click', event => { if (event.target === modal) closeTrashModal(); });
+  }
+  renderTrashModal();
+}
+
+trashBtn?.addEventListener('click', openTrashModal);
+window.addEventListener('basttrashchange', refreshTrashCount);
+window.addEventListener('storage', event => { if (event.key === BastTrash?.key) refreshTrashCount(); });
+refreshTrashCount();
 hiddenDriveBtn?.addEventListener('click', openHiddenDriveModal);
 closeHiddenDriveBtn?.addEventListener('click', closeHiddenDriveModal);
 refreshHiddenDriveBtn?.addEventListener('click', refreshHiddenDriveList);

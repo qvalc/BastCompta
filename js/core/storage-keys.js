@@ -14,6 +14,7 @@
     taxes: 'bastcompta-impots-belgique-v1',
     terrainDrafts: 'bastcompta-terrain-drafts-v1',
     terrainFavorites: 'bastcompta-terrain-favorites-v1',
+    trash: 'bastcompta-trash-v1',
     googleWasConnected: 'bastcompta_google_was_connected'
   });
 

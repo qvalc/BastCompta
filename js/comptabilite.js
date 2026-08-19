@@ -2315,7 +2315,8 @@ async function deleteAccountingRow(collection, index) {
     alert(getVatLockMessage(lockedDec));
     return;
   }
-  if (!await BastUI.confirm('Supprimer cette ligne ?',{type:'danger',title:'Supprimer la ligne'})) return;
+  if (!await BastUI.confirm('Placer cette ligne dans la corbeille ?',{type:'danger',title:'Mettre la ligne à la corbeille',confirmLabel:'Mettre à la corbeille'})) return;
+  BastTrash.add({module:'Comptabilité',type:'Écriture',label:`${row?.date||''} ${row?.description||row?.client||''}`.trim()||'Écriture comptable',storageKey:STORAGE_KEY,path:[collection],item:row});
   notifyPortalBusinessChange('Écriture comptable supprimée');
   data[collection].splice(index, 1);
   saveData(false);
@@ -2602,7 +2603,8 @@ async function deleteRow(key, index) {
     alert(getVatLockMessage(getClosedVatDeclarationForDate(data[key]?.[index]?.date || '')));
     return;
   }
-  if (!await BastUI.confirm('Supprimer cette ligne ?',{type:'danger',title:'Supprimer la ligne'})) return;
+  if (!await BastUI.confirm('Placer cette ligne dans la corbeille ?',{type:'danger',title:'Mettre la ligne à la corbeille',confirmLabel:'Mettre à la corbeille'})) return;
+  BastTrash.add({module:'Comptabilité',type:'Écriture',label:`${data[key]?.[index]?.date||''} ${data[key]?.[index]?.description||data[key]?.[index]?.client||''}`.trim()||'Ligne comptable',storageKey:STORAGE_KEY,path:[key],item:data[key][index]});
   notifyPortalBusinessChange('Ligne comptable supprimée');
   data[key].splice(index, 1);
   saveData(false);

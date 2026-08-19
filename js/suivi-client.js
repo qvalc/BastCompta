@@ -2524,13 +2524,14 @@ function updateProjectField(field, value) {
 async function deleteProject(id) {
   const project = data.projects.find(item => item.id === id);
   if (!project) return;
-  if (!confirm('Supprimer définitivement le suivi client "' + project.title + '" ?')) return;
-  notifyPortalBusinessChange('Fiche client supprimée');
+  if (!await BastUI.confirm('Placer le suivi client « ' + project.title + ' » dans la corbeille ?',{type:'danger',title:'Mettre le suivi à la corbeille',confirmLabel:'Mettre à la corbeille'})) return;
+  BastTrash.add({module:'Suivi client',type:'Client / chantier',label:project.title||'Suivi client',storageKey:STORAGE_KEY,path:['projects'],item:project});
+  notifyPortalBusinessChange('Fiche client placée dans la corbeille');
 
   data.projects = data.projects.filter(item => item.id !== id);
   selectedProjectId = data.projects[0]?.id || '';
   await saveData();
-  notify('Suivi client supprimé.');
+  notify('Suivi client placé dans la corbeille.');
 }
 
 

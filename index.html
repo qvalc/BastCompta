@@ -89,11 +89,12 @@
       border: 0 !important;
     }
   </style>
-<link href="css/base.css?v=3" rel="stylesheet"/>
+<link href="css/base.css?v=4" rel="stylesheet"/>
 <link href="css/index.css?v=43" rel="stylesheet"/>
 <script src="js/core/storage-keys.js"></script>
 <script src="js/core/utils.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/trash.js?v=1"></script>
 <script src="js/ui-feedback.js?v=1"></script>
 <script async="" defer="" src="https://accounts.google.com/gsi/client"></script>
 <script src="https://apis.google.com/js/api.js"></script>
@@ -684,6 +685,7 @@
 <button id="fullBackupBtn" type="button">Créer une sauvegarde ZIP</button>
 <button id="fullRestoreBtn" type="button">Restaurer une sauvegarde ZIP</button>
 <button id="hiddenDriveBtn" type="button">Fichiers Drive cachés</button>
+<button id="trashBtn" type="button">Corbeille <span class="settings-count" id="trashCount">0</span></button>
 <button id="connectDriveBtn" type="button">Connecter Google Drive</button>
 <button id="disconnectDriveBtn" type="button">Déconnecter Google Drive</button>
 <button id="sendVerificationBtn" type="button">Renvoyer l’email de vérification</button>
@@ -815,7 +817,7 @@
 <p id="backupOverlayText">Veuillez patienter…</p>
 </div>
 </div>
-<script src="js/index.js?v=43" type="module"></script>
+<script src="js/index.js?v=44" type="module"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
       document.querySelectorAll(".landing-register-link").forEach(function (link) {
