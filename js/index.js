@@ -47,6 +47,8 @@ let googleRequestInFlight = null;
 let silentReconnectAttempted = false;
 let hiddenDriveFilesCache = [];
 let hiddenDriveActiveCategory = 'all';
+let hiddenDriveSearchQuery = '';
+let hiddenDriveSortMode = 'modified-desc';
 
 const authScreen = document.getElementById('authScreen');
 const portalScreen = document.getElementById('portalScreen');
@@ -71,6 +73,9 @@ const refreshHiddenDriveBtn = document.getElementById('refreshHiddenDriveBtn');
 const hiddenDriveStatus = document.getElementById('hiddenDriveStatus');
 const hiddenDriveList = document.getElementById('hiddenDriveList');
 const hiddenDriveTabs = document.getElementById('hiddenDriveTabs');
+const hiddenDriveOverview = document.getElementById('hiddenDriveOverview');
+const hiddenDriveSearch = document.getElementById('hiddenDriveSearch');
+const hiddenDriveSort = document.getElementById('hiddenDriveSort');
 const fullBackupBtn = document.getElementById('fullBackupBtn');
 const fullRestoreBtn = document.getElementById('fullRestoreBtn');
 const fullRestoreInput = document.getElementById('fullRestoreInput');
@@ -1293,6 +1298,10 @@ const HIDDEN_DRIVE_CATEGORIES = [
   { key: 'clients', label: 'Clients / chantiers' },
   { key: 'personnel', label: 'Personnel' },
   { key: 'impots', label: 'Impôts' },
+  { key: 'fournisseurs', label: 'Fournisseurs' },
+  { key: 'tarifs', label: 'Tarifs' },
+  { key: 'terrain', label: 'Terrain' },
+  { key: 'documents', label: 'Pièces jointes' },
   { key: 'sauvegardes', label: 'Sauvegardes' },
   { key: 'autres', label: 'Autres' }
 ];
@@ -1300,6 +1309,7 @@ const HIDDEN_DRIVE_CATEGORIES = [
 function detectHiddenDriveCategory(file = {}) {
   const name = normalizeSearchText(file.name || '');
   const mime = normalizeSearchText(file.mimeType || '');
+  const properties = normalizeSearchText(JSON.stringify(file.appProperties || {}));
 
   if (name.endsWith(' zip') || name.includes(' sauvegarde ') || name.includes(' backup ') || mime.includes(' zip')) return 'sauvegardes';
   if (name.startsWith('devis ') || name.includes(' devis ') || name.includes(' quote ')) return 'devis';
@@ -1309,7 +1319,12 @@ function detectHiddenDriveCategory(file = {}) {
   if (name.includes('suivi client') || name.includes('suivi-client') || name.includes(' chantier ') || name.includes(' chantiers ') || name.includes(' client ') || name.includes(' crm ')) return 'clients';
   if (name.includes('personnel') || name.includes('travailleur') || name.includes('salaire') || name.includes('ouvrier') || name.includes('employe')) return 'personnel';
   if (name.includes('impot') || name.includes('impots') || name.includes(' ipp ') || name.includes(' fiscal ') || name.includes(' taxe ') || name.includes(' taxes ')) return 'impots';
-  if (name.includes('tarif') || name.includes('prix') || name.includes('poste')) return 'autres';
+  if (name.includes('fournisseur') || name.includes('supplier') || properties.includes('fournisseur')) return 'fournisseurs';
+  if (name.includes('tarif') || name.includes('prix') || name.includes('poste')) return 'tarifs';
+  if (name.includes('terrain') || name.includes('draft') || name.includes('brouillon')) return 'terrain';
+  if (properties.includes('personnel')) return 'personnel';
+  if (properties.includes('client') || properties.includes('chantier') || properties.includes('crm')) return 'clients';
+  if (/image|pdf|word|sheet|excel|officedocument/.test(mime) || properties.includes('originalname')) return 'documents';
   return 'autres';
 }
 
@@ -1340,13 +1355,60 @@ function updateHiddenDriveTabs(files = []) {
 }
 
 function filteredHiddenDriveFiles() {
-  if (hiddenDriveActiveCategory === 'all') return hiddenDriveFilesCache;
-  return hiddenDriveFilesCache.filter(file => detectHiddenDriveCategory(file) === hiddenDriveActiveCategory);
+  const query = normalizeSearchText(hiddenDriveSearchQuery);
+  const categoryOrder = Object.fromEntries(HIDDEN_DRIVE_CATEGORIES.map((category, index) => [category.key, index]));
+  const files = hiddenDriveFilesCache.filter(file => {
+    const category = detectHiddenDriveCategory(file);
+    if (hiddenDriveActiveCategory !== 'all' && category !== hiddenDriveActiveCategory) return false;
+    if (!query) return true;
+    return normalizeSearchText([file.name, file.mimeType, getHiddenDriveCategoryLabel(category)].filter(Boolean).join(' ')).includes(query);
+  });
+  return files.sort((a, b) => {
+    if (hiddenDriveSortMode === 'modified-asc') return String(a.modifiedTime || '').localeCompare(String(b.modifiedTime || ''));
+    if (hiddenDriveSortMode === 'name-asc') return String(a.name || '').localeCompare(String(b.name || ''), 'fr', { numeric: true, sensitivity: 'base' });
+    if (hiddenDriveSortMode === 'category') return (categoryOrder[detectHiddenDriveCategory(a)] - categoryOrder[detectHiddenDriveCategory(b)]) || String(a.name || '').localeCompare(String(b.name || ''), 'fr', { numeric: true, sensitivity: 'base' });
+    if (hiddenDriveSortMode === 'size-desc') return Number(b.size || 0) - Number(a.size || 0);
+    return String(b.modifiedTime || '').localeCompare(String(a.modifiedTime || ''));
+  });
+}
+
+function hiddenDriveDuplicateCount(files = []) {
+  const counts = new Map();
+  files.forEach(file => {
+    const key = String(file.name || '').trim().toLocaleLowerCase('fr');
+    if (key) counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return Array.from(counts.values()).reduce((total, count) => total + Math.max(0, count - 1), 0);
+}
+
+function formatDriveSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return '0 Ko';
+  if (value >= 1024 ** 3) return (value / 1024 ** 3).toLocaleString('fr-BE', { maximumFractionDigits: 1 }) + ' Go';
+  if (value >= 1024 ** 2) return (value / 1024 ** 2).toLocaleString('fr-BE', { maximumFractionDigits: 1 }) + ' Mo';
+  return Math.max(1, Math.round(value / 1024)).toLocaleString('fr-BE') + ' Ko';
+}
+
+function hiddenDriveFileIcon(file = {}) {
+  const category = detectHiddenDriveCategory(file);
+  return ({ devis: 'D', factures: 'F', rappels: 'R', comptabilite: '€', clients: 'C', personnel: 'P', impots: '%', fournisseurs: 'S', tarifs: 'T', terrain: 'M', documents: '📎', sauvegardes: '↻', autres: '•' })[category] || '•';
+}
+
+function renderHiddenDriveOverview() {
+  if (!hiddenDriveOverview) return;
+  const totalSize = hiddenDriveFilesCache.reduce((sum, file) => sum + Number(file.size || 0), 0);
+  const duplicateCount = hiddenDriveDuplicateCount(hiddenDriveFilesCache);
+  const latest = hiddenDriveFilesCache.reduce((value, file) => String(file.modifiedTime || '') > value ? String(file.modifiedTime || '') : value, '');
+  hiddenDriveOverview.innerHTML = '<div><span>Fichiers</span><strong>' + hiddenDriveFilesCache.length + '</strong></div>'
+    + '<div><span>Espace utilisé</span><strong>' + escapeHtml(formatDriveSize(totalSize)) + '</strong></div>'
+    + '<div><span>Dernière modification</span><strong>' + escapeHtml(latest ? new Date(latest).toLocaleDateString('fr-BE') : '—') + '</strong></div>'
+    + '<div class="' + (duplicateCount ? 'has-warning' : '') + '"><span>Doublons de nom</span><strong>' + duplicateCount + '</strong></div>';
 }
 
 function renderHiddenDriveList() {
   if (!hiddenDriveStatus || !hiddenDriveList) return;
   updateHiddenDriveTabs(hiddenDriveFilesCache);
+  renderHiddenDriveOverview();
 
   const files = filteredHiddenDriveFiles();
   const categoryLabel = getHiddenDriveCategoryLabel(hiddenDriveActiveCategory);
@@ -1363,7 +1425,7 @@ function renderHiddenDriveList() {
     return;
   }
 
-  hiddenDriveStatus.textContent = files.length + ' fichier(s) affiché(s) dans « ' + categoryLabel + ' » · Total Drive caché : ' + hiddenDriveFilesCache.length + '.';
+  hiddenDriveStatus.textContent = files.length + ' fichier(s) affiché(s) dans « ' + categoryLabel + ' » sur ' + hiddenDriveFilesCache.length + ' au total.';
   hiddenDriveList.innerHTML = files.map(file => {
     const name = escapeHtml(file.name || 'Sans nom');
     const category = detectHiddenDriveCategory(file);
@@ -1375,7 +1437,8 @@ function renderHiddenDriveList() {
     ].filter(Boolean).map(escapeHtml).join(' · ');
 
     return '<div class="hidden-drive-item" data-drive-file-category="' + category + '">'
-      + '<div><div class="hidden-drive-name">' + name + '</div><div class="hidden-drive-meta"><span class="hidden-drive-category-badge">' + categoryLabel + '</span>' + (meta ? '<span>' + meta + '</span>' : '') + '</div></div>'
+      + '<div class="hidden-drive-file-icon" aria-hidden="true">' + hiddenDriveFileIcon(file) + '</div>'
+      + '<div class="hidden-drive-file-copy"><div class="hidden-drive-name">' + name + '</div><div class="hidden-drive-meta"><span class="hidden-drive-category-badge">' + categoryLabel + '</span>' + (meta ? '<span>' + meta + '</span>' : '') + '</div></div>'
       + '<div class="hidden-drive-actions">'
       + (isLikelyPreviewableDriveDocument(file) ? '<button class="small primary" type="button" data-preview-drive-file="' + escapeHtml(file.id) + '">Aperçu PDF</button>' : '')
       + '<button class="small" type="button" data-download-drive-file="' + escapeHtml(file.id) + '">Télécharger</button>'
@@ -1769,7 +1832,8 @@ async function listDriveAppDataFiles() {
   do {
     const params = new URLSearchParams({
       spaces: 'appDataFolder',
-      fields: 'nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime)',
+      q: 'trashed = false',
+      fields: 'nextPageToken,files(id,name,mimeType,size,createdTime,modifiedTime,appProperties,fileExtension)',
       pageSize: '100',
       orderBy: 'modifiedTime desc'
     });
@@ -2811,6 +2875,14 @@ hiddenDriveTabs?.addEventListener('click', event => {
   const button = event.target.closest('[data-drive-category]');
   if (!button) return;
   hiddenDriveActiveCategory = button.dataset.driveCategory || 'all';
+  renderHiddenDriveList();
+});
+hiddenDriveSearch?.addEventListener('input', event => {
+  hiddenDriveSearchQuery = event.target.value || '';
+  renderHiddenDriveList();
+});
+hiddenDriveSort?.addEventListener('change', event => {
+  hiddenDriveSortMode = event.target.value || 'modified-desc';
   renderHiddenDriveList();
 });
 hiddenDriveModal?.addEventListener('click', event => {

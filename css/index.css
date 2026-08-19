@@ -462,8 +462,8 @@ input:focus {
 }
 
 .drive-modal-card {
-    width: min(920px, 100%);
-    max-height: min(720px, calc(100vh - 48px));
+    width: min(1180px, 100%);
+    max-height: min(820px, calc(100vh - 48px));
     overflow: hidden;
     background: #fff;
     border: 1px solid var(--line);
@@ -494,6 +494,10 @@ input:focus {
     font-size: 13px;
 }
 
+.drive-modal-head .user-actions {
+    flex-wrap: nowrap;
+}
+
 .drive-modal-body {
     padding: 16px 20px 20px;
     overflow: auto;
@@ -503,7 +507,8 @@ input:focus {
 
 .hidden-drive-list {
     display: grid;
-    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
 }
 
 .hidden-drive-item {
@@ -511,18 +516,48 @@ input:focus {
     border-radius: 14px;
     padding: 12px;
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
-    align-items: center;
-    background: #fff;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px 12px;
+    align-items: start;
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+    box-shadow: 0 7px 22px rgba(15, 23, 42, .045);
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
+
+.hidden-drive-item:hover {
+    border-color: #bfd4ff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+    transform: translateY(-1px);
+}
+
+.hidden-drive-file-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    background: linear-gradient(145deg, #e8f0ff, #dbeafe);
+    color: var(--primary);
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.hidden-drive-file-copy { min-width: 0; }
 
 .hidden-drive-actions {
     display: flex;
     gap: 8px;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     flex-wrap: wrap;
+    grid-column: 2;
+}
+
+.hidden-drive-actions button {
+    min-height: 36px;
+    padding: 7px 11px;
+    border-radius: 10px;
+    box-shadow: none;
 }
 
 .hidden-drive-actions .danger {
@@ -533,7 +568,8 @@ input:focus {
 
 .hidden-drive-name {
     font-weight: 800;
-    word-break: break-word;
+    overflow-wrap: anywhere;
+    line-height: 1.3;
 }
 
 .hidden-drive-meta {
@@ -814,14 +850,81 @@ iframe {
 }
 
 /* Tri des fichiers Drive cachés */
+.hidden-drive-overview {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.hidden-drive-overview > div {
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.hidden-drive-overview span {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.hidden-drive-overview strong {
+    display: block;
+    margin-top: 5px;
+    color: var(--text);
+    font-size: 20px;
+    overflow-wrap: anywhere;
+}
+
+.hidden-drive-overview .has-warning {
+    border-color: #fed7aa;
+    background: #fff7ed;
+}
+
+.hidden-drive-overview .has-warning strong { color: #b45309; }
+
+.hidden-drive-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+    gap: 12px;
+    align-items: end;
+}
+
+.hidden-drive-toolbar label { display: grid; gap: 5px; }
+.hidden-drive-toolbar label > span { color: var(--muted); font-size: 12px; font-weight: 800; }
+.hidden-drive-toolbar input,
+.hidden-drive-toolbar select {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 9px 12px;
+    background: #fff;
+    color: var(--text);
+}
+
+.hidden-drive-toolbar input:focus,
+.hidden-drive-toolbar select:focus {
+    outline: 3px solid rgba(29, 78, 216, .12);
+    border-color: #93b4ff;
+}
+
 .hidden-drive-tabs {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     gap: 8px;
     padding: 4px;
     border: 1px solid var(--line);
     border-radius: 16px;
     background: #f8fafc;
+    scrollbar-width: thin;
 }
 
 .hidden-drive-tab {
@@ -837,6 +940,7 @@ iframe {
     color: var(--muted);
     font-size: 13px;
     font-weight: 800;
+    flex: 0 0 auto;
 }
 
 .hidden-drive-tab:hover {
@@ -907,14 +1011,34 @@ iframe {
 
 @media (max-width: 700px) {
     .hidden-drive-tabs {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        align-items: center;
     }
 
     .hidden-drive-tab {
-        justify-content: space-between;
-        width: 100%;
+        justify-content: center;
+        width: auto;
     }
+}
+
+@media (max-width: 900px) {
+    .hidden-drive-list { grid-template-columns: 1fr; }
+    .hidden-drive-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+    .drive-modal { padding: 0; }
+    .drive-modal-card { width: 100%; max-height: 100vh; height: 100vh; border: 0; border-radius: 0; }
+    .drive-modal-head { padding: 14px; }
+    .drive-modal-head { flex-direction: column; }
+    .drive-modal-head .user-actions { width: 100%; }
+    .drive-modal-head .user-actions button { flex: 1; }
+    .drive-modal-body { padding: 12px 14px 18px; }
+    .hidden-drive-toolbar { grid-template-columns: 1fr; }
+    .hidden-drive-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .hidden-drive-item { grid-template-columns: 38px minmax(0, 1fr); }
+    .hidden-drive-file-icon { width: 38px; height: 38px; border-radius: 11px; }
+    .hidden-drive-actions { grid-column: 1 / -1; }
 }
 
 .topbar-logo {

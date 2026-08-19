@@ -766,6 +766,11 @@
 </div>
 </div>
 <div class="drive-modal-body">
+<div class="hidden-drive-overview" id="hiddenDriveOverview" aria-live="polite"></div>
+<div class="hidden-drive-toolbar">
+<label class="hidden-drive-search"><span>Rechercher</span><input id="hiddenDriveSearch" type="search" placeholder="Nom, catégorie ou type de fichier…" autocomplete="off"/></label>
+<label class="hidden-drive-sort"><span>Trier par</span><select id="hiddenDriveSort"><option value="modified-desc">Plus récents</option><option value="modified-asc">Plus anciens</option><option value="name-asc">Nom A → Z</option><option value="category">Catégorie</option><option value="size-desc">Taille décroissante</option></select></label>
+</div>
 <div aria-label="Filtrer les fichiers Drive cachés" class="hidden-drive-tabs" id="hiddenDriveTabs">
 <button class="hidden-drive-tab active" data-drive-category="all" type="button">Tous</button>
 <button class="hidden-drive-tab" data-drive-category="devis" type="button">Devis</button>
@@ -775,6 +780,10 @@
 <button class="hidden-drive-tab" data-drive-category="clients" type="button">Clients / chantiers</button>
 <button class="hidden-drive-tab" data-drive-category="personnel" type="button">Personnel</button>
 <button class="hidden-drive-tab" data-drive-category="impots" type="button">Impôts</button>
+<button class="hidden-drive-tab" data-drive-category="fournisseurs" type="button">Fournisseurs</button>
+<button class="hidden-drive-tab" data-drive-category="tarifs" type="button">Tarifs</button>
+<button class="hidden-drive-tab" data-drive-category="terrain" type="button">Terrain</button>
+<button class="hidden-drive-tab" data-drive-category="documents" type="button">Pièces jointes</button>
 <button class="hidden-drive-tab" data-drive-category="sauvegardes" type="button">Sauvegardes</button>
 <button class="hidden-drive-tab" data-drive-category="autres" type="button">Autres</button>
 </div>
