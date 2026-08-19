@@ -35,5 +35,50 @@
     };
   }
 
-  global.BastPeppol = Object.freeze({ trim, amount, escapeXml, country, taxCategory, unitCode, groupVat, validateBelgianEndpoints });
+  function invoiceLines(invoice = {}) {
+    const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
+    const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines)
+      ? invoice.suppliesLines
+      : [];
+    return [...mainLines, ...suppliesLines].filter(row => {
+      return trim(row.description) || Number(row.qty || 0) || Number(row.unitPrice || 0);
+    });
+  }
+
+  function prepareInvoiceData(options = {}) {
+    const invoice = options.invoice || {};
+    const company = options.company || {};
+    const communication = options.communication || {};
+    const lines = invoiceLines(invoice);
+    const totals = global.BastDocumentCalculations.totalsForDocument(invoice);
+    const supplierVat = global.BastDocumentCalculations.normalizeVatNumber(company.vat);
+    const customerVat = global.BastDocumentCalculations.normalizeVatNumber(invoice.clientVat);
+    const issueDate = invoice.date || options.today || new Date().toISOString().slice(0, 10);
+    const invoiceNumber = trim(invoice.documentNumber) || 'FACTURE-SANS-NUMERO';
+
+    return {
+      invoice,
+      company,
+      lines,
+      totals,
+      vatGroups: groupVat(lines),
+      supplierVat,
+      customerVat,
+      supplierCountry: country(supplierVat),
+      customerCountry: country(customerVat),
+      supplierEndpoint: global.BastDocumentCalculations.belgianEnterpriseNumber(supplierVat),
+      customerEndpoint: global.BastDocumentCalculations.belgianEnterpriseNumber(customerVat),
+      issueDate,
+      dueDate: invoice.dueDate || issueDate,
+      invoiceNumber,
+      paymentReference: trim(communication.formatted) || invoiceNumber,
+      paymentTerms: trim(invoice.notes) || trim(company.conditions) || 'Paiement à l’échéance indiquée.',
+      currency: 'EUR'
+    };
+  }
+
+  global.BastPeppol = Object.freeze({
+    trim, amount, escapeXml, country, taxCategory, unitCode,
+    groupVat, validateBelgianEndpoints, invoiceLines, prepareInvoiceData
+  });
 })(globalThis);

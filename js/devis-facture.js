@@ -3305,11 +3305,7 @@ function peppolSafeFileName(value, fallback = 'facture') {
 }
 
 function getInvoiceLinesForPeppol() {
-  const invoice = data.invoice || {};
-  const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
-  const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines) ? invoice.suppliesLines : [];
-  return [...mainLines, ...suppliesLines]
-    .filter(row => peppolTrim(row.description) || toNumber(row.qty) || toNumber(row.unitPrice));
+  return BastPeppol.invoiceLines(data.invoice || {});
 }
 
 function getPeppolChecks() {
@@ -3408,16 +3404,16 @@ function copyInvoiceEmailText() {
 }
 
 function buildPeppolXml() {
-  const invoice = data.invoice || {};
-  const company = data.company || {};
-  const totals = totalsFor('invoice');
-  const lines = getInvoiceLinesForPeppol();
-  const supplierVat = normalizeVatNumber(company.vat);
-  const customerVat = normalizeVatNumber(invoice.clientVat);
-  const supplierCountry = getVatCountry(supplierVat);
-  const customerCountry = getVatCountry(customerVat);
-  const supplierEndpoint = getBelgianEnterpriseNumber(supplierVat);
-  const customerEndpoint = getBelgianEnterpriseNumber(customerVat);
+  const prepared = BastPeppol.prepareInvoiceData({
+    invoice: data.invoice,
+    company: data.company,
+    communication: data.communication
+  });
+  const {
+    invoice, company, totals, lines, supplierVat, customerVat,
+    supplierCountry, customerCountry, supplierEndpoint, customerEndpoint,
+    issueDate, dueDate, invoiceNumber, paymentReference, paymentTerms, currency
+  } = prepared;
 
   if (!isValidBelgianEnterpriseNumber(supplierEndpoint)) {
     throw new Error(
@@ -3431,14 +3427,7 @@ function buildPeppolXml() {
     );
   }
 
-  const issueDate = invoice.date || new Date().toISOString().slice(0, 10);
-  const dueDate = invoice.dueDate || issueDate;
-  const invoiceNumber = peppolTrim(invoice.documentNumber) || 'FACTURE-SANS-NUMERO';
-  const paymentReference = peppolTrim(data.communication?.formatted) || invoiceNumber;
-  const paymentTerms = peppolTrim(invoice.notes) || peppolTrim(company.conditions) || 'Paiement à l’échéance indiquée.';
-  const currency = 'EUR';
-
-  const taxSubtotals = BastPeppol.groupVat(lines).map(item => {
+  const taxSubtotals = prepared.vatGroups.map(item => {
     const { rate, category } = item;
     return `
       <cac:TaxSubtotal>
