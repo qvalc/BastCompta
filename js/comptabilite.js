@@ -201,24 +201,19 @@ function getLossTypeLabel(type) {
 }
 
 function getVatRegime() {
-  return data?.settings?.vatRegime || 'taxable';
+  return BastVatRegime.get(data?.settings);
 }
 
 function isVatExempt() {
-  return getVatRegime() === 'exempt_article_44';
+  return BastVatRegime.isExempt(getVatRegime());
 }
 
 function isVatMixed() {
-  return getVatRegime() === 'mixed';
+  return BastVatRegime.isMixed(getVatRegime());
 }
 
 function getVatRegimeLabel() {
-  const labels = {
-    taxable: 'Assujetti TVA',
-    mixed: 'Assujetti mixte',
-    exempt_article_44: 'Exonéré TVA – article 44'
-  };
-  return labels[getVatRegime()] || labels.taxable;
+  return BastVatRegime.label(getVatRegime());
 }
 
 function purchaseVatAmount(row) {
@@ -235,24 +230,11 @@ function purchaseProfessionalCost(row) {
 }
 
 function applyVatRegimeRules() {
-  if (!isVatExempt()) return;
-  data.sales.forEach(row => { row.rate = 0; });
-  data.purchases.forEach(row => { row.deductible = false; });
-  data.settings.vatCarryover = 0;
+  BastVatRegime.applyRules(data, getVatRegime());
 }
 
 function hasExistingAccountingEntries() {
-  return [
-    data.sales,
-    data.purchases,
-    data.investments,
-    data.assets,
-    data.stock,
-    data.losses,
-    data.km,
-    data.privateMovements,
-    data.vat?.declarations
-  ].some(rows => Array.isArray(rows) && rows.length > 0);
+  return BastVatRegime.hasEntries(data);
 }
 
 function setVatRegime(value) {
@@ -2007,119 +1989,7 @@ async function saveChantiersSyncToDrive(showErrorAlert = false) {
 }
 
 function purchaseVatDisplay(index) {
-  const row = data.purchases[index];
-  if (!row || !row.deductible) return 0;
-
-  const key = [
-    row.supplier || '',
-    row.invoiceNumber || '',
-    toNumber(row.rate),
-    row.deductible ? '1' : '0'
-  ].join('||');
-
-  const groupIndexes = data.purchases
-    .map((item, i) => ({ item, i }))
-    .filter(({ item }) => {
-      const itemKey = [
-        item.supplier || '',
-        item.invoiceNumber || '',
-        toNumber(item.rate),
-        item.deductible ? '1' : '0'
-      ].join('||');
-      return itemKey === key;
-    })
-    .map(({ i }) => i);
-
-  // Une seule ligne ou pas de numéro de facture : TVA simple
-  if (groupIndexes.length <= 1 || !row.invoiceNumber) {
-    return round2(rowHtvaToVat(row.htva, row.rate));
-  }
-
-  // Total HTVA du groupe
-  const groupHtva = groupIndexes.reduce(
-    (sum, i) => sum + toNumber(data.purchases[i].htva),
-    0
-  );
-
-  const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
-
-  let allocatedBefore = 0;
-
-  for (let pos = 0; pos < groupIndexes.length; pos++) {
-    const i = groupIndexes[pos];
-    const lineHtva = toNumber(data.purchases[i].htva);
-
-    if (pos === groupIndexes.length - 1) {
-      const lastValue = round2(groupVat - allocatedBefore);
-      if (i === index) return lastValue;
-    } else {
-      const proportional = groupHtva === 0
-        ? 0
-        : round2(groupVat * (lineHtva / groupHtva));
-
-      if (i === index) return proportional;
-      allocatedBefore += proportional;
-    }
-  }
-
-  return 0;
-}
-
-function purchaseVatAllocated(index) {
-  const row = data.purchases[index];
-  if (!row || !row.deductible) return 0;
-
-  const key = [
-    row.supplier || '',
-    row.invoiceNumber || '',
-    toNumber(row.rate),
-    row.deductible ? '1' : '0'
-  ].join('||');
-
-  const groupIndexes = data.purchases
-    .map((item, i) => ({ item, i }))
-    .filter(({ item }) => {
-      const itemKey = [
-        item.supplier || '',
-        item.invoiceNumber || '',
-        toNumber(item.rate),
-        item.deductible ? '1' : '0'
-      ].join('||');
-      return itemKey === key;
-    })
-    .map(({ i }) => i);
-
-  if (groupIndexes.length <= 1 || !row.invoiceNumber) {
-    return round2(rowHtvaToVat(row.htva, row.rate));
-  }
-
-  const groupHtva = groupIndexes.reduce(
-    (sum, i) => sum + toNumber(data.purchases[i].htva),
-    0
-  );
-
-  const groupVat = round2(rowHtvaToVat(groupHtva, row.rate));
-
-  let allocatedBefore = 0;
-
-  for (let pos = 0; pos < groupIndexes.length; pos++) {
-    const i = groupIndexes[pos];
-    const lineHtva = toNumber(data.purchases[i].htva);
-
-    if (pos === groupIndexes.length - 1) {
-      const lastValue = round2(groupVat - allocatedBefore);
-      if (i === index) return lastValue;
-    } else {
-      const proportional = groupHtva === 0
-        ? 0
-        : round2(groupVat * (lineHtva / groupHtva));
-
-      if (i === index) return proportional;
-      allocatedBefore += proportional;
-    }
-  }
-
-  return 0;
+  return BastAccountingCalculations.allocatedPurchaseVat(data.purchases, index);
 }
 
 function computeAmortization(amount, startDate, durationMonths, currentYear) {

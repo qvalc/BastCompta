@@ -16,6 +16,49 @@
   const purchaseVat = row => round2(vatFromHtva(row?.htva, row?.rate));
   const purchaseProfessionalCost = (row, vatRecoverable = true) => round2(number(row?.htva) + (vatRecoverable ? 0 : purchaseVat(row)));
 
+  function purchaseVatGroupKey(row = {}) {
+    return [
+      row.supplier || '',
+      row.invoiceNumber || '',
+      number(row.rate),
+      row.deductible ? '1' : '0'
+    ].join('||');
+  }
+
+  function allocatedPurchaseVat(purchases = [], index) {
+    const row = purchases[index];
+    if (!row || !row.deductible) return 0;
+
+    const key = purchaseVatGroupKey(row);
+    const groupIndexes = purchases
+      .map((item, itemIndex) => ({ item, itemIndex }))
+      .filter(({ item }) => purchaseVatGroupKey(item) === key)
+      .map(({ itemIndex }) => itemIndex);
+
+    if (groupIndexes.length <= 1 || !row.invoiceNumber) return purchaseVat(row);
+
+    const groupHtva = groupIndexes.reduce((sum, itemIndex) => sum + number(purchases[itemIndex].htva), 0);
+    const groupVat = round2(vatFromHtva(groupHtva, row.rate));
+    let allocatedBefore = 0;
+
+    for (let position = 0; position < groupIndexes.length; position += 1) {
+      const itemIndex = groupIndexes[position];
+      if (position === groupIndexes.length - 1) {
+        const remainder = round2(groupVat - allocatedBefore);
+        if (itemIndex === index) return remainder;
+        continue;
+      }
+
+      const lineVat = groupHtva === 0
+        ? 0
+        : round2(groupVat * (number(purchases[itemIndex].htva) / groupHtva));
+      if (itemIndex === index) return lineVat;
+      allocatedBefore += lineVat;
+    }
+
+    return 0;
+  }
+
   function amortization(amount, startDate, durationMonths, currentYear) {
     const safeAmount = number(amount), duration = Math.max(1, parseInt(durationMonths || 0, 10) || 1);
     const monthlyAmort = safeAmount / duration;
@@ -41,5 +84,6 @@
   }
 
   global.BastAccountingCalculations = Object.freeze({ number, round2, netFromTvac, vatFromTvac, vatFromHtva, tvacFromHtva,
-    isCreditNote, signedSalesTvac, salesNet, salesVat, purchaseVat, purchaseProfessionalCost, amortization });
+    isCreditNote, signedSalesTvac, salesNet, salesVat, purchaseVat, purchaseProfessionalCost,
+    purchaseVatGroupKey, allocatedPurchaseVat, amortization });
 })(globalThis);
