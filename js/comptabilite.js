@@ -3237,138 +3237,56 @@ function escapeAttr(str) {
 
 
 function printableDate(value) {
-  if (!value) return '—';
-  const d = new Date(value + 'T00:00:00');
-  if (Number.isNaN(d.getTime())) return escapeHtml(value);
-  return new Intl.DateTimeFormat('fr-BE').format(d);
+  return BastAccountingReportTemplate.date(value, escapeHtml);
 }
 
 function reportTable(headers, rows, options = {}) {
-  const cls = options.compact ? 'report-table compact' : 'report-table';
-  return `
-        <div class="table-wrap">
-          <table class="${cls}">
-            <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-            <tbody>${rows.length ? rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${headers.length}" class="empty-row">Aucune donnée</td></tr>`}</tbody>
-          </table>
-        </div>
-      `;
+  return BastAccountingReportTemplate.table(headers, rows, options);
 }
 
 function reportKv(items) {
-  return `<div class="report-kv">${items.map(([label, value]) => `
-        <div class="report-kv-row">
-          <span>${label}</span>
-          <strong>${value}</strong>
-        </div>
-      `).join('')}</div>`;
+  return BastAccountingReportTemplate.keyValues(items);
 }
 
 function buildPrintReportHtml() {
   const t = totals();
   const year = parseInt(data.company.period, 10) || new Date().getFullYear();
-  const taxAndSocial = t.deductibleSocialContributions;
   const excessSocialRefund = t.excessSocialRefund;
-  const exemptionThreshold = toNumber(data.settings.socialExemptionThreshold || 1881.76);
-  const contributionRate = toNumber(data.settings.socialContributionRate || 20.5);
-  const contributionFeeRate = toNumber(data.settings.socialContributionFeeRate || 3.5);
-  const isExemptSocial = t.estimatedProfit <= exemptionThreshold;
-  const socialBaseContribution = isExemptSocial ? 0 : (t.estimatedProfit * contributionRate / 100);
-  const socialFeeContribution = isExemptSocial ? 0 : (socialBaseContribution * contributionFeeRate / 100);
-  const socialTotalContribution = socialBaseContribution + socialFeeContribution;
   const vatLedger = computeVatLedger();
-  const vatReportRows = vatLedger.rows.flatMap(row => [
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – période`, `${printableDate(row.computed.startDate)} au ${printableDate(row.computed.endDate)}`],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – échéance`, printableDate(row.declaration.dueDate || '')],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 54`, money(row.computed.boxes['54'])],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 59`, money(row.computed.boxes['59'])],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 71`, money(row.computed.boxes['71'])],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – grille 72`, money(row.computed.boxes['72'])],
-    [`${quarterLabel(row.declaration.year, row.declaration.quarter)} – reste à payer`, money(row.outstanding)]
-  ]);
-
-  const salesRows = data.sales.map(row => [
-    printableDate(row.date),
-    escapeHtml(row.client || '—'),
-    escapeHtml(row.invoiceNumber || '—'),
-    escapeHtml(row.description || '—'),
-    `${num(row.rate)} %`,
-    money(salesRowNet(row)),
-    money(salesRowVat(row)),
-    money(salesRowTvac(row))
-  ]);
-
-  const purchaseRows = data.purchases.map((row, i) => [
-    printableDate(row.date),
-    escapeHtml(row.supplier || '—'),
-    escapeHtml(row.invoiceNumber || '—'),
-    escapeHtml(row.category === 'marchandise' ? 'Marchandise' : 'Frais généraux'),
-    `${num(row.rate)} %`,
-    money(row.htva),
-    row.deductible ? 'Oui' : 'Non',
-    money(row.deductible ? purchaseVatDisplay(i) : 0),
-    money(rowHtvaToTvac(row.htva, row.rate))
-  ]);
-
-  const investmentRows = t.investmentComputed.map(row => [
-    printableDate(row.date),
-    escapeHtml(row.supplier || '—'),
-    escapeHtml(row.invoiceNumber || '—'),
-    escapeHtml(row.description || row.label || '—'),
-    money(row.amount),
-    `${parseInt(row.durationMonths || 0, 10)} mois`,
-    money(row.amortYear),
-    money(row.amortTotal),
-    money(row.netValue)
-  ]);
-
-  const assetRows = t.assetsComputed.map(row => [
-    printableDate(row.date),
-    escapeHtml(row.label || '—'),
-    escapeHtml(row.supplier || '—'),
-    money(row.amount),
-    `${parseInt(row.durationMonths || 0, 10)} mois`,
-    money(row.amortYear),
-    money(row.amortTotal),
-    money(row.netValue)
-  ]);
-
-  const stockRows = data.stock.map(row => [
-    escapeHtml(row.label || '—'),
-    num(row.quantity),
-    money(row.unitPrice),
-    money(toNumber(row.quantity) * toNumber(row.unitPrice))
-  ]);
-
-  const lossRows = data.losses.map(row => [
-    printableDate(row.date),
-    escapeHtml(getLossTypeLabel(getLossType(row))),
-    escapeHtml(row.label || '—'),
-    num(row.quantity),
-    money(row.unitPrice),
-    money(toNumber(row.quantity) * toNumber(row.unitPrice))
-  ]);
-
-  const privateMovementRows = data.privateMovements.map(row => {
-    const amount = Math.abs(toNumber(row.amount));
-    const effect = ['withdrawal', 'regularization'].includes(row.type || 'withdrawal') ? -amount : amount;
-    return [
-      escapeHtml(row.date || '—'),
-      escapeHtml(getPrivateMovementTypeLabel(row.type)),
-      escapeHtml(row.label || '—'),
-      money(amount),
-      money(effect)
-    ];
+  const reportData = BastAccountingReportData.build({
+    data,
+    summary: t,
+    vatLedger,
+    vatExempt: isVatExempt(),
+    purchaseVatAt: purchaseVatDisplay,
+    format: {
+      date: printableDate,
+      escape: escapeHtml,
+      money,
+      num,
+      quarter: quarterLabel,
+      lossTypeLabel: getLossTypeLabel,
+      privateMovementTypeLabel: getPrivateMovementTypeLabel
+    }
   });
-
-  const kmRows = data.km.map(row => [
-    printableDate(row.date),
-    escapeHtml(row.person || '—'),
-    escapeHtml(row.route || '—'),
-    `${num(row.km)} km`,
-    num(row.trips),
-    `${num(toNumber(row.km) * toNumber(row.trips))} km`
-  ]);
+  const {
+    vatRows: vatReportRows,
+    salesRows,
+    purchaseRows,
+    investmentRows,
+    assetRows,
+    stockRows,
+    lossRows,
+    privateMovementRows,
+    kmRows,
+    exemptionThreshold,
+    contributionRate,
+    contributionFeeRate,
+    isExemptSocial,
+    socialBaseContribution,
+    socialFeeContribution,
+    socialTotalContribution
+  } = reportData;
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -3377,79 +3295,7 @@ function buildPrintReportHtml() {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Export comptabilité ${escapeHtml(data.company.period || '')}</title>
 <style>
-  :root {
-    --ink: #172033;
-    --muted: #5c667a;
-    --line: #d7deea;
-    --soft: #f6f8fc;
-    --soft-2: #edf2fb;
-    --accent: #1d4ed8;
-    --good: #166534;
-    --bad: #b91c1c;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #eef3f9; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
-  body { padding: 24px; }
-  .report { max-width: 1180px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 20px; box-shadow: 0 18px 50px rgba(15,23,42,0.08); }
-  .report-header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid var(--soft-2); margin-bottom: 20px; }
-  .report-header h1 { margin: 0 0 6px; font-size: 30px; }
-  .report-subtitle { color: var(--muted); line-height: 1.5; }
-  .report-meta { min-width: 270px; background: var(--soft); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
-  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin: 22px 0 26px; }
-  .metric { border: 1px solid var(--line); background: var(--soft); border-radius: 16px; padding: 16px; }
-  .metric span { display:block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-  .metric strong { font-size: 24px; }
-  .section { margin-top: 22px; page-break-inside: avoid; }
-  .section-title { font-size: 21px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--soft-2); }
-  .section-grid { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
-  .panel { border:1px solid var(--line); border-radius:16px; background: #fff; overflow:hidden; }
-  .panel.soft { background: var(--soft); }
-  .panel-body { padding: 16px; }
-  .table-wrap { overflow: hidden; border:1px solid var(--line); border-radius: 16px; }
-  table.report-table { width:100%; border-collapse: collapse; font-size: 12.5px; }
-  .report-table th { background: var(--soft-2); color: var(--muted); text-transform: uppercase; letter-spacing: .03em; font-size: 11px; padding: 10px 8px; text-align: center; border-bottom:1px solid var(--line); }
-  .report-table td { border-bottom:1px solid var(--line); padding: 8px; vertical-align: top; }
-  .report-table tbody tr:nth-child(even) td { background: #fbfcfe; }
-  .report-table td:nth-child(1), .report-table td:nth-last-child(1) { white-space: nowrap; }
-  .report-table.compact td, .report-table.compact th { padding: 7px 8px; }
-  .empty-row { text-align:center; color: var(--muted); padding: 14px; }
-  .report-kv { border:1px solid var(--line); border-radius: 16px; overflow:hidden; }
-  .report-kv-row { display:grid; grid-template-columns: 1fr auto; gap: 16px; padding: 11px 14px; border-bottom:1px solid var(--line); }
-  .report-kv-row:last-child { border-bottom:none; }
-  .totals-grid { display:grid; grid-template-columns: 1.2fr .8fr; gap: 16px; }
-  .result-card { border:1px solid var(--line); border-radius:16px; overflow:hidden; }
-  .result-card .row { display:grid; grid-template-columns: 1fr 220px; }
-  .result-card .row > div { padding: 12px 14px; border-bottom:1px solid var(--line); }
-  .result-card .row > div:last-child { text-align:right; font-weight:700; border-left:1px solid var(--line); }
-  .result-card .row.total > div { background: #fff7bf; font-size: 18px; }
-  .muted { color: var(--muted); }
-  .good { color: var(--good); }
-  .bad { color: var(--bad); }
-  .footer-note { margin-top: 20px; color: var(--muted); font-size: 12px; text-align: center; }
-  .print-toolbar { position: sticky; top: 0; z-index: 20; display:flex; justify-content:flex-end; gap:10px; margin-bottom: 18px; }
-  .print-toolbar button { border: none; background: var(--accent); color: #fff; padding: 12px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
-  .print-toolbar button.secondary { background: #e5e7eb; color: #111827; }
-  @page { size: A4 landscape; margin: 12mm; }
-  @media print {
-    html, body { background: #fff; }
-    body { padding: 0; }
-    .print-toolbar { display:none; }
-    .report { box-shadow:none; border-radius:0; max-width:none; padding: 0; }
-    .section { break-inside: avoid; page-break-inside: avoid; }
-    .table-wrap { overflow: visible; }
-    table.report-table { font-size: 10.5px; }
-    .report-table th, .report-table td { padding: 6px 5px; }
-    .report-table thead { display: table-header-group; }
-    .report-table tr { break-inside: avoid; }
-    .metrics { gap: 8px; }
-    .metric { padding: 10px; }
-    .metric strong { font-size: 18px; }
-  }
-  @media (max-width: 980px) {
-    .metrics, .section-grid, .totals-grid { grid-template-columns: 1fr; }
-    .report-header { flex-direction: column; }
-    .report-meta { min-width: 0; width: 100%; }
-  }
+${BastAccountingReportTemplate.styles}
 </style>
 </head>
 <body>
