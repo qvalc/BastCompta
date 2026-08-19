@@ -2853,22 +2853,15 @@ function viewSentMailItem(id) {
 }
 
 async function archiveSentMailAttachment(pdfBase64, pdfName) {
-  if (!googleAccessToken) return null;
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const driveName = `mail-${timestamp}-${pdfName}`;
-  const file = await BastComptaDriveClient.uploadFile(googleAccessToken, {
-    metadata: { name: driveName, parents: ['appDataFolder'] },
-    content: BastDocumentPdf.base64ToBlob(pdfBase64),
-    mimeType: 'application/pdf',
-    fields: 'id,name,modifiedTime'
+  return BastMailAttachments.archive({
+    accessToken: googleAccessToken,
+    pdfBase64,
+    pdfName
   });
-  return { fileId: file.id || '', driveName: file.name || driveName };
 }
 
 async function readSentMailAttachment(item) {
-  if (!item?.attachmentFileId) throw new Error('Cette pièce jointe n’est pas archivée dans Drive.');
-  if (!googleAccessToken) throw new Error('Reconnecte Google Drive pour ouvrir cette pièce jointe.');
-  return BastComptaDriveClient.readFile(googleAccessToken, item.attachmentFileId, { as: 'blob' });
+  return BastMailAttachments.read(item, { accessToken: googleAccessToken });
 }
 
 async function viewSentMailAttachment(item) {
@@ -2901,7 +2894,7 @@ async function deleteSentMailItem(id) {
   const item = (data.mail?.sentItems || []).find(entry => entry.id === id);
   if (item?.attachmentFileId && googleAccessToken) {
     try {
-      await BastComptaDriveClient.deleteFile(googleAccessToken, item.attachmentFileId);
+      await BastMailAttachments.remove(item, { accessToken: googleAccessToken });
     } catch (error) {
       console.warn('Suppression du PDF archivé impossible.', error);
     }
@@ -2914,8 +2907,7 @@ async function clearSentMailHistory() {
   if (!(data.mail.sentItems || []).length) return;
   if (!await BastUI.confirm('Vider tout l’historique des messages envoyés ?',{type:'danger',title:'Vider l’historique',confirmLabel:'Vider définitivement'})) return;
   if (googleAccessToken) {
-    const attachmentIds = data.mail.sentItems.map(item => item.attachmentFileId).filter(Boolean);
-    await Promise.allSettled(attachmentIds.map(fileId => BastComptaDriveClient.deleteFile(googleAccessToken, fileId)));
+    await BastMailAttachments.removeAll(data.mail.sentItems, { accessToken: googleAccessToken });
   }
   data.mail.sentItems = [];
   await persistSentMailHistory();
