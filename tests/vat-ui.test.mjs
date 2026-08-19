@@ -22,4 +22,16 @@ const form = ui.declarationForm({ year: 2026, quarter: 3, filed: true, paid: fal
 assert.match(form, /value="3" selected>T3 \(juillet à septembre\)/); assert.match(form, /setVatClosed\(1/); assert.match(form, /période verrouillée/);
 const detail = ui.calculationSummary({ computed: { salesVat: 21, deductibleVat: 10, previousCredit: 2, boxes: { '71': 9, '72': 0 }, salesCount: 1, purchaseCount: 2 }, outstanding: 9 }, String);
 assert.match(detail, /TVA ventes[\s\S]*21/); assert.match(detail, /status-bad/); assert.match(detail, /Lignes achats[\s\S]*2/);
+const cardRow = { declaration: { id: 'vat-2026-1', year: 2026, quarter: 1, notes: 'Note test' }, computed: {
+  startDate: '2026-01-01', endDate: '2026-03-31', dueAmount: 11, salesCount: 2, purchaseCount: 3,
+  boxes: { '54': 21, '59': 10, '71': 11, '72': 0 }
+}, outstanding: 11 };
+const cardFormat = { ...format, quarter: (year, quarter) => `T${quarter} ${year}`, escape: String, attr: String, num: String };
+const collapsedCard = ui.declarationCard(cardRow, 0, cardFormat);
+assert.match(collapsedCard, /T1 2026/); assert.match(collapsedCard, /2 vente\(s\)/); assert.match(collapsedCard, /3 achat\(s\)/);
+assert.match(collapsedCard, /toggleVatDeclarationExpanded\('vat-2026-1'\)/); assert.doesNotMatch(collapsedCard, /vat-expanded-panel/);
+const expandedCard = ui.declarationCard(cardRow, 0, { ...cardFormat, expanded: true });
+assert.match(expandedCard, /vat-expanded-panel/); assert.match(expandedCard, /Note test/); assert.match(expandedCard, /deleteVatDeclaration\(0\)/);
+const lockedCard = ui.declarationCard({ ...cardRow, declaration: { ...cardRow.declaration, closed: true } }, 0, { ...cardFormat, expanded: true });
+assert.match(lockedCard, /<textarea disabled/); assert.match(lockedCard, /aria-label="Supprimer" disabled/);
 console.log('Interface TVA valide.');

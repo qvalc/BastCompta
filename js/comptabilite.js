@@ -2508,56 +2508,16 @@ function renderVat() {
               Le bouton <strong>Intervat</strong> ouvre directement le portail officiel de déclaration.
             </div>
 
-            ${vatLedger.rows.map((row, i) => {
-    const dec = row.declaration;
-    const c = row.computed;
-    const isExpanded = expandedVatDeclarationId === dec.id;
-    const { isClosed, disableAttr, netLabel, netLabelClass, dueDateLabel, statusBadge, paymentBadge, situationText } = BastVatUi.declarationView(row, {
-      money, date: printableDate, situation: getVatSituationText
-    });
-    return `
-                <div class="card vat-declaration-card compact">
-                  <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${escapeAttr(dec.id)}')">
-                    <div class="vat-summary-main">
-                      <div class="vat-summary-title">${escapeHtml(quarterLabel(dec.year, dec.quarter))}</div>
-                      <div class="hint">Période : ${printableDate(c.startDate)} au ${printableDate(c.endDate)} · Échéance : ${dueDateLabel}</div>
-                      <div class="hint"><strong>${escapeHtml(situationText)}</strong></div>
-                      <div class="vat-summary-badges">
-                        ${statusBadge}
-                        ${paymentBadge}
-                        <span class="vat-pill muted">${c.salesCount} vente(s)</span>
-                        <span class="vat-pill muted">${c.purchaseCount} achat(s)</span>
-                      </div>
-                    </div>
-                    <div class="vat-summary-amount ${netLabelClass}">${netLabel}</div>
-                  </div>
-
-                  ${BastVatUi.miniSummary(c.boxes, money)}
-
-                  ${isExpanded ? `
-                    <div class="vat-expanded-panel">
-                      <div class="grid-2">
-                        ${BastVatUi.declarationForm(dec, i, { attr: escapeAttr, num })}
-                        ${BastVatUi.calculationSummary(row, money)}
-                      </div>
-
-                      ${BastVatUi.primaryCodes(c.boxes, money)}
-
-                      ${BastVatUi.extraCodes(dec, c, i, { num, attr: escapeAttr, money })}
-
-                      <div style="margin-top:16px;">
-                        <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
-                        <textarea ${disableAttr} onchange="data.vat.declarations[${i}].notes=this.value; saveData(false)">${escapeHtml(dec.notes || '')}</textarea>
-                      </div>
-
-                      <div class="inline-actions" style="margin-top:16px;">
-                        <button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${disableAttr} onclick="deleteVatDeclaration(${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
-                      </div>
-                    </div>
-                  ` : ''}
-                </div>
-              `;
-  }).join('') || `<div class="muted-box">Aucune période TVA.</div>`}
+            ${vatLedger.rows.map((row, i) => BastVatUi.declarationCard(row, i, {
+    expanded: expandedVatDeclarationId === row.declaration.id,
+    money,
+    date: printableDate,
+    situation: getVatSituationText,
+    quarter: quarterLabel,
+    escape: escapeHtml,
+    attr: escapeAttr,
+    num
+  })).join('') || `<div class="muted-box">Aucune période TVA.</div>`}
           </div>
         </section>
       `;

@@ -110,6 +110,46 @@
       </tbody></table></div>`;
   }
 
+  function declarationCard(row = {}, index, format = {}) {
+    const dec = row.declaration || {}, computed = row.computed || {};
+    const money = format.money || String, date = format.date || String;
+    const quarter = format.quarter || ((year, value) => `${year} T${value}`);
+    const escape = format.escape || String, attr = format.attr || String, num = format.num || String;
+    const view = declarationView(row, {
+      money,
+      date,
+      situation: format.situation || (() => '')
+    });
+    return `<div class="card vat-declaration-card compact">
+      <div class="vat-summary-header" onclick="toggleVatDeclarationExpanded('${attr(dec.id)}')">
+        <div class="vat-summary-main">
+          <div class="vat-summary-title">${escape(quarter(dec.year, dec.quarter))}</div>
+          <div class="hint">Période : ${date(computed.startDate)} au ${date(computed.endDate)} · Échéance : ${view.dueDateLabel}</div>
+          <div class="hint"><strong>${escape(view.situationText)}</strong></div>
+          <div class="vat-summary-badges">
+            ${view.statusBadge}${view.paymentBadge}
+            <span class="vat-pill muted">${computed.salesCount} vente(s)</span>
+            <span class="vat-pill muted">${computed.purchaseCount} achat(s)</span>
+          </div>
+        </div>
+        <div class="vat-summary-amount ${view.netLabelClass}">${view.netLabel}</div>
+      </div>
+      ${miniSummary(computed.boxes, money)}
+      ${format.expanded ? `<div class="vat-expanded-panel">
+        <div class="grid-2">${declarationForm(dec, index, { attr, num })}${calculationSummary(row, money)}</div>
+        ${primaryCodes(computed.boxes, money)}
+        ${extraCodes(dec, computed, index, { num, attr, money })}
+        <div style="margin-top:16px;">
+          <label style="display:block; font-weight:700; margin-bottom:8px;">Notes TVA / Intervat</label>
+          <textarea ${view.disableAttr} onchange="data.vat.declarations[${index}].notes=this.value; saveData(false)">${escape(dec.notes || '')}</textarea>
+        </div>
+        <div class="inline-actions" style="margin-top:16px;">
+          <button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" ${view.disableAttr} onclick="deleteVatDeclaration(${index})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+        </div>
+      </div>` : ''}
+    </div>`;
+  }
+
   global.BastVatUi = Object.freeze({ exemptPage, overview, declarationView, miniSummary, primaryCodes, extraCodes,
-    declarationForm, calculationSummary });
+    declarationForm, calculationSummary, declarationCard });
 })(globalThis);
