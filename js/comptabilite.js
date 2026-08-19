@@ -2230,109 +2230,29 @@ function computeVatLedger() {
 }
 
 function totals() {
-  const salesNet = data.sales.reduce((sum, row) => sum + salesRowNet(row), 0);
-  const salesVat = data.sales.reduce((sum, row) => sum + salesRowVat(row), 0);
-  const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
-
-  const purchasesNet = data.purchases.reduce(
-    (sum, row) => sum + purchaseProfessionalCost(row),
-    0
-  );
-
-  const purchasesVat = (() => {
-    const groups = {};
-
-    data.purchases.forEach(row => {
-      if (!isPurchaseVatRecoverable(row)) return;
-
-      const key = [
-        row.supplier || '',
-        row.invoiceNumber || '',
-        toNumber(row.rate)
-      ].join('||');
-
-      if (!groups[key]) {
-        groups[key] = {
-          htva: 0,
-          rate: toNumber(row.rate)
-        };
-      }
-
-      groups[key].htva += toNumber(row.htva);
-    });
-
-    return Object.values(groups).reduce((sum, g) => {
-      return sum + round2(rowHtvaToVat(g.htva, g.rate));
-    }, 0);
-  })();
-
-  const purchasesMerchandiseNet = data.purchases.reduce(
-    (sum, row) => sum + (row.category === 'marchandise' ? purchaseProfessionalCost(row) : 0),
-    0
-  );
-
-  const purchasesGeneralNet = data.purchases.reduce(
-    (sum, row) => sum + (row.category === 'frais_generaux' ? purchaseProfessionalCost(row) : 0),
-    0
-  );
-
-  const investmentComputed = data.investments.map((row) => {
-    const amount = toNumber(row.amount);
-    const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
-    const amort = computeAmortization(amount, row.date, durationMonths, currentYear);
-
-    return {
-      date: row.date || '',
-      supplier: row.supplier || '',
-      invoiceNumber: row.invoiceNumber || '',
-      description: row.description || '',
-      amount,
-      durationMonths,
-      amortYear: amort.amortYear,
-      amortTotal: amort.amortTotal,
-      netValue: amort.netValue
-    };
+  const journalTotals = BastAccountingJournals.summarize({
+    sales: data.sales,
+    purchases: data.purchases,
+    vatExempt: isVatExempt(),
+    isPurchaseVatRecoverable
   });
-
-  const assetsComputed = data.assets
-    .map((row, sourceIndex) => {
-      const amount = toNumber(row.amount);
-      const durationMonths = Math.max(1, parseInt(row.durationMonths || 60, 10));
-      const amort = computeAmortization(
-        amount,
-        row.date,
-        durationMonths,
-        currentYear
-      );
-
-      return {
-        sourceIndex,
-        date: row.date || '',
-        supplier: row.supplier || '',
-        invoiceNumber: row.invoiceNumber || '',
-        description: row.description || '',
-        label: row.label || '',
-        amount,
-        durationMonths,
-        amortYear: amort.amortYear,
-        amortTotal: amort.amortTotal,
-        netValue: amort.netValue
-      };
-    })
-    .sort((a, b) => {
-      if (!a.date && !b.date) return 0;
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-
-      return b.date.localeCompare(a.date);
-    });
-
-  const assetsGross = assetsComputed.reduce((sum, row) => sum + row.amount, 0);
-
-  const yearlyAmort = investmentComputed.reduce((sum, row) => sum + row.amortYear, 0);
-
-  const totalAmortized =
-    assetsComputed.reduce((sum, row) => sum + row.amortTotal, 0);
+  const {
+    salesNet,
+    salesVat,
+    purchasesNet,
+    purchasesVat,
+    purchasesMerchandiseNet,
+    purchasesGeneralNet
+  } = journalTotals;
+  const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
+  const fixedAssets = BastFixedAssets.summarize({
+    investments: data.investments,
+    assets: data.assets,
+    currentYear
+  });
+  const { investmentComputed, assetsComputed, assetsGross } = fixedAssets;
+  const yearlyAmort = fixedAssets.investmentsYearlyAmort;
+  const totalAmortized = fixedAssets.assetsTotalAmortized;
 
   const stockValue = data.stock.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
   const lossesTotal = data.losses.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
