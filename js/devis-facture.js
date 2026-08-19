@@ -128,7 +128,7 @@ async function driveFilesList(params, showAlert401 = true) {
 }
 
 async function googleDriveFetch(url, options = {}, showAlert401 = true) {
-  const response = await fetch(url, options);
+  const response = await BastComptaDriveClient.request(googleAccessToken, url, options);
   if (await handleGoogleDriveAuthError(response.status, showAlert401)) {
     return null;
   }
@@ -359,15 +359,7 @@ async function saveData(showAlert = true) {
 function exportDataLocal() {
   syncCommunicationFromInvoice(false);
   const fileName = getDriveFileName();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadJson(data, fileName);
 }
 
 function importDataLocal() {
@@ -382,8 +374,7 @@ async function handleLocalJsonImport(event) {
   if (!file) return;
 
   try {
-    const content = await file.text();
-    const parsed = JSON.parse(content);
+    const parsed = await BastFileUtils.parseJsonFile(file);
     const docType = normalizeDocTypeFromName(file.name || '');
 
     if (docType === 'quote' && parsed.quote) {
@@ -775,12 +766,7 @@ function toNumber(value) {
 }
 
 function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return BastFormatters.escapeHtml(str);
 }
 
 function escapeAttr(str) {
@@ -1148,13 +1134,11 @@ function collectDocumentNumberCandidates() {
 }
 
 function getHighestDocumentSequence(kind, year = getCurrentDocumentYear()) {
-  return collectDocumentNumberCandidates()
-    .filter(item => item.kind === kind && item.year === String(year))
-    .reduce((max, item) => Math.max(max, item.sequence || 0), 0);
+  return BastDocumentNumbering.highest(kind, year, collectDocumentNumberCandidates());
 }
 
 function generateNextDocumentNumber(kind, year = getCurrentDocumentYear()) {
-  return formatDocumentNumber(kind, year, getHighestDocumentSequence(kind, year) + 1);
+  return BastDocumentNumbering.next(kind, year, collectDocumentNumberCandidates());
 }
 
 async function refreshDocumentNumberSources() {
@@ -1203,15 +1187,7 @@ function getInvoiceStatusLabel(status) {
 
 function getEffectiveInvoiceStatus(doc = data.invoice) {
   const totals = totalsFor('invoice');
-  const total = toNumber(totals.tvac);
-  const paid = toNumber(doc?.paidAmount);
-
-  if (total < -0.009) return 'credit_note';
-  if (total > 0.009 && paid > total + 0.009) return 'overpaid';
-  if (total > 0.009 && Math.abs(paid - total) <= 0.009) return 'paid';
-  if (total > 0.009 && paid > 0.009) return 'partial';
-
-  return 'unpaid';
+  return BastDocumentCalculations.invoiceStatus(totals.tvac, doc?.paidAmount);
 }
 
 function setInvoiceStatus(status) {
@@ -1262,53 +1238,7 @@ async function createCreditNoteFromInvoice() {
 function getInvoiceAccountingRowsForComptabilite() {
   const invoice = data.invoice || {};
   const status = getEffectiveInvoiceStatus(invoice);
-  const invoiceNumber = String(invoice.documentNumber || '').trim();
-
-  const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
-  const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines) ? invoice.suppliesLines : [];
-  const allLines = [...mainLines, ...suppliesLines].filter(row => {
-    return String(row.description || '').trim() || toNumber(row.qty) || toNumber(row.unitPrice);
-  });
-
-  if (!allLines.length) {
-    return { rows: [], message: 'La facture ne contient aucune ligne.' };
-  }
-
-  const grouped = new Map();
-  allLines.forEach(row => {
-    const rate = roundMoney(row.vatRate);
-    const key = String(rate);
-    if (!grouped.has(key)) grouped.set(key, { rate, tvac: 0, descriptions: [] });
-    const group = grouped.get(key);
-    group.tvac += lineTvac(row);
-    const description = String(row.description || '').trim();
-    if (description) group.descriptions.push(description);
-  });
-
-  const isCreditNote = status === 'credit_note';
-  const rows = Array.from(grouped.values()).map(group => ({
-    date: invoice.date || '',
-    client: invoice.clientName || '',
-    invoiceNumber,
-    linkedInvoiceNumber: invoice.linkedInvoiceNumber || '',
-    documentStatus: status,
-    documentType: isCreditNote ? 'credit_note' : 'invoice',
-    description: isCreditNote
-      ? `Note de crédit${invoice.linkedInvoiceNumber ? ' liée à ' + invoice.linkedInvoiceNumber : ''}`
-      : '',
-    rate: group.rate,
-    tvac: isCreditNote ? -Math.abs(roundMoney(group.tvac)) : roundMoney(group.tvac)
-  }));
-
-  return {
-    action: 'upsert',
-    documentType: status === 'credit_note' ? 'credit_note' : 'invoice',
-    documentStatus: status,
-    invoiceNumber,
-    linkedInvoiceNumber: invoice.linkedInvoiceNumber || '',
-    rows,
-    message: rows.length + ' ligne(s) prête(s) pour la comptabilité.'
-  };
+  return BastDocumentCalculations.invoiceAccountingPayload(invoice, status);
 }
 
 window.getInvoiceAccountingRowsForComptabilite = getInvoiceAccountingRowsForComptabilite;
@@ -1367,23 +1297,7 @@ function toggleSupplies(docKey, checked) {
 async function copyQuoteToInvoice() {
   if (!confirm('Reprendre les données du devis dans la facture ? Cela remplacera les données actuelles de la facture.')) return;
 
-  data.invoice.clientId = data.quote.clientId || '';
-  data.invoice.clientNumber = data.quote.clientNumber;
-  data.invoice.clientVat = data.quote.clientVat;
-  data.invoice.clientName = data.quote.clientName;
-  data.invoice.clientEmail = data.quote.clientEmail || '';
-  data.invoice.address = data.quote.address;
-  data.invoice.siteName = data.quote.siteName;
-  data.invoice.chantierId = data.quote.chantierId || '';
-  data.invoice.notes = data.quote.notes;
-  data.invoice.status = 'draft';
-  data.invoice.linkedInvoiceNumber = '';
-  data.invoice.creditNoteReason = '';
-  data.invoice.paidAmount = 0;
-
-  data.invoice.lines = structuredClone(data.quote.lines || defaultLines());
-  data.invoice.suppliesEnabled = !!data.quote.suppliesEnabled;
-  data.invoice.suppliesLines = structuredClone(data.quote.suppliesLines || defaultLines());
+  Object.assign(data.invoice, BastDocumentTransfer.quoteToInvoice(data.quote));
 
   await prepareNewDocument('invoice', 'invoice');
 
@@ -1396,21 +1310,7 @@ async function copyQuoteToInvoice() {
 async function copyInvoiceToReminder() {
   if (!confirm('Reprendre les données de la facture dans le rappel ? Cela remplacera les données actuelles du rappel.')) return;
 
-  data.reminder.clientId = data.invoice.clientId || '';
-  data.reminder.clientNumber = data.invoice.clientNumber;
-  data.reminder.clientVat = data.invoice.clientVat;
-  data.reminder.clientName = data.invoice.clientName;
-  data.reminder.clientEmail = data.invoice.clientEmail || '';
-  data.reminder.address = data.invoice.address;
-  data.reminder.date = data.invoice.date || '';
-  data.reminder.dueDate = data.invoice.dueDate || '';
-  data.reminder.siteName = data.invoice.siteName;
-  data.reminder.chantierId = data.invoice.chantierId || '';
-  data.reminder.paidAmount = toNumber(data.invoice.paidAmount);
-  data.reminder.notes = data.invoice.notes;
-  data.reminder.lines = structuredClone(data.invoice.lines || defaultLines());
-  data.reminder.suppliesEnabled = !!data.invoice.suppliesEnabled;
-  data.reminder.suppliesLines = structuredClone(data.invoice.suppliesLines || defaultLines());
+  Object.assign(data.reminder, BastDocumentTransfer.invoiceToReminder(data.invoice));
 
   await prepareNewDocument('reminder', 'reminder');
 
@@ -1462,8 +1362,7 @@ function toggleToolbarMenu(event, menuId) {
 
 function getInvoicePaymentText() {
   const totals = totalsFor('invoice');
-  const paidAmount = toNumber(data.invoice.paidAmount);
-  const balance = totals.tvac - paidAmount;
+  const balance = BastDocumentCalculations.paymentBalance(totals.tvac, data.invoice.paidAmount);
 
   return `Paiement : ${money(balance)}
 Compte : ${data.company.iban || 'IBAN'}
@@ -1693,15 +1592,7 @@ async function downloadHiddenCrmSyncFromDrive() {
     }
 
     const content = await res.text();
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name || fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    BastFileUtils.downloadBlob(new Blob([content], { type: 'application/json' }), file.name || fileName);
 
     alert(`Téléchargement terminé : ${file.name || fileName}`);
     return true;
@@ -2907,23 +2798,7 @@ function requestBastComptaFirebaseToken() {
 
 async function callBastComptaMailWorker(action, payload = {}) {
   const firebaseToken = await requestBastComptaFirebaseToken();
-  if (!firebaseToken) throw new Error('Session BastCompta introuvable. Reconnectez-vous puis réessayez.');
-
-  const response = await fetch(BASTCOMPTA_MAIL_WORKER_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${firebaseToken}`
-    },
-    body: JSON.stringify({ action, ...payload })
-  });
-
-  let result = {};
-  try { result = await response.json(); } catch (_) {}
-  if (!response.ok || result?.ok === false) {
-    throw new Error(result?.error || `Erreur e-mail (${response.status}).`);
-  }
-  return result;
+  return BastDocumentMail.callWorker(BASTCOMPTA_MAIL_WORKER_URL, firebaseToken, action, payload);
 }
 
 function getConfiguredMailSender() {
@@ -2941,45 +2816,26 @@ function updateMailSenderIdentity(field, value) {
 }
 
 function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo }) {
-  if (!Array.isArray(data.mail.sentItems)) data.mail.sentItems = [];
-  const item = {
-    id: `mail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    sentAt: new Date().toISOString(),
-    docKey,
-    documentNumber: doc?.documentNumber || '',
-    clientName: doc?.clientName || '',
-    to: to || '',
-    cc: cc || '',
-    subject: subject || '',
-    body: body || '',
-    pdfName: pdfName || '',
-    messageId: messageId || '',
-    senderEmail: senderEmail || '',
-    replyTo: replyTo || ''
-  };
-  data.mail.sentItems.unshift(item);
-  data.mail.sentItems = data.mail.sentItems.slice(0, 500);
+  data.mail.sentItems = BastMailHistory.add(data.mail.sentItems, { docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo });
 }
 
-function deleteSentMailItem(id) {
-  if (!confirm('Supprimer cette trace de message envoyé ?')) return;
-  data.mail.sentItems = (data.mail.sentItems || []).filter(item => item.id !== id);
+async function deleteSentMailItem(id) {
+  if (!await BastUI.confirm('Supprimer cette trace de message envoyé ?',{type:'danger',title:'Supprimer de l’historique'})) return;
+  data.mail.sentItems = BastMailHistory.remove(data.mail.sentItems, id);
   saveData(false);
   render();
 }
 
-function clearSentMailHistory() {
+async function clearSentMailHistory() {
   if (!(data.mail.sentItems || []).length) return;
-  if (!confirm('Vider tout l’historique des messages envoyés ?')) return;
+  if (!await BastUI.confirm('Vider tout l’historique des messages envoyés ?',{type:'danger',title:'Vider l’historique',confirmLabel:'Vider définitivement'})) return;
   data.mail.sentItems = [];
   saveData(false);
   render();
 }
 
 function formatSentMailDate(value) {
-  const d = value ? new Date(value) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' });
+  return BastMailHistory.formatDate(value);
 }
 
 function renderSentMails() {
@@ -3015,26 +2871,14 @@ function renderSentMails() {
 }
 
 function mailTextToHtml(text) {
-  return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-    .replace(/\r?\n/g, '<br>');
+  return BastDocumentMail.textToHtml(text);
 }
 
 function safePdfFileName(docKey, doc) {
-  const prefix = docKey === 'quote' ? 'Devis' : docKey === 'reminder' ? 'Rappel' : 'Facture';
-  const number = String(doc?.documentNumber || 'document').trim().replace(/[^a-zA-Z0-9._-]+/g, '-');
-  return `${prefix}-${number || 'document'}.pdf`;
+  return BastDocumentPdf.safeFileName(docKey, doc);
 }
 
 async function generateDocumentPdfBase64(docKey) {
-  if (!window.html2canvas || !window.jspdf?.jsPDF) {
-    throw new Error('Les bibliothèques PDF ne sont pas disponibles. Rechargez la page puis réessayez.');
-  }
-
   const snapshot = cloneForBackup(data);
   await prepareBastComptaDocumentForBackupPdf(snapshot, docKey);
 
@@ -3043,110 +2887,14 @@ async function generateDocumentPdfBase64(docKey) {
     const sheet = page?.querySelector('.sheet');
     if (!sheet) throw new Error('Document introuvable pour la génération PDF.');
 
-    const canvas = await window.html2canvas(sheet, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: Math.max(sheet.scrollWidth, 1100),
-      windowHeight: Math.max(sheet.scrollHeight, 1500)
-    });
-
-    const pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 24;
-    const imgWidth = pageWidth - margin * 2;
-    const sliceHeight = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
-    const pageCanvas = document.createElement('canvas');
-    const ctx = pageCanvas.getContext('2d');
-    pageCanvas.width = canvas.width;
-
-    let y = 0;
-    let pageIndex = 0;
-    while (y < canvas.height) {
-      const currentSliceHeight = Math.min(sliceHeight, canvas.height - y);
-      pageCanvas.height = currentSliceHeight;
-      ctx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-      ctx.drawImage(canvas, 0, y, canvas.width, currentSliceHeight, 0, 0, canvas.width, currentSliceHeight);
-      if (pageIndex > 0) pdf.addPage();
-      const h = currentSliceHeight * imgWidth / canvas.width;
-      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.96), 'JPEG', margin, margin, imgWidth, h);
-      y += currentSliceHeight;
-      pageIndex += 1;
-    }
-
-    return pdf.output('datauristring').split(',')[1] || '';
+    return await BastDocumentPdf.elementToBase64(sheet);
   } finally {
     await restoreBastComptaAfterBackupPdf();
   }
 }
 
 function openMailPreview(docKey, defaults) {
-  return new Promise(resolve => {
-    document.querySelector('.mail-preview-overlay')?.remove();
-
-    const overlay = document.createElement('div');
-    overlay.className = 'mail-preview-overlay';
-    overlay.innerHTML = `
-      <div class="mail-preview-modal" role="dialog" aria-modal="true" aria-labelledby="mail-preview-title">
-        <div class="mail-preview-head">
-          <h3 id="mail-preview-title">Aperçu avant envoi</h3>
-          <button type="button" class="mail-preview-close" aria-label="Fermer">×</button>
-        </div>
-        <div class="mail-preview-body">
-          <div class="mail-preview-field">
-            <label>À</label>
-            <input id="mail-preview-to" type="email" value="${escapeAttr(defaults.to || '')}">
-          </div>
-          <div class="mail-preview-field">
-            <label>Copie (Cc)</label>
-            <input id="mail-preview-cc" type="email" value="${escapeAttr(defaults.cc || '')}">
-          </div>
-          <div class="mail-preview-field">
-            <label>Objet</label>
-            <input id="mail-preview-subject" type="text" value="${escapeAttr(defaults.subject || '')}">
-          </div>
-          <div class="mail-preview-field">
-            <label>Message</label>
-            <textarea id="mail-preview-body">${escapeHtml(defaults.body || '')}</textarea>
-          </div>
-          <div class="mail-preview-field">
-            <label>Pièce jointe</label>
-            <div class="mail-preview-attachment">📎 <span>${escapeHtml(defaults.pdfName || 'document.pdf')}</span></div>
-          </div>
-        </div>
-        <div class="mail-preview-actions">
-          <button type="button" class="secondary" data-action="cancel">Annuler</button>
-          <button type="button" class="primary" data-action="send">Envoyer</button>
-        </div>
-      </div>`;
-
-    const finish = value => {
-      overlay.remove();
-      resolve(value);
-    };
-
-    overlay.querySelector('.mail-preview-close').addEventListener('click', () => finish(null));
-    overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => finish(null));
-    overlay.addEventListener('click', event => {
-      if (event.target === overlay) finish(null);
-    });
-    overlay.querySelector('[data-action="send"]').addEventListener('click', () => {
-      const to = sanitizeEmail(overlay.querySelector('#mail-preview-to').value);
-      const cc = sanitizeEmail(overlay.querySelector('#mail-preview-cc').value);
-      const subject = overlay.querySelector('#mail-preview-subject').value.trim();
-      const body = overlay.querySelector('#mail-preview-body').value;
-      if (!to) return alert("Renseigne l'adresse e-mail du destinataire.");
-      if (!subject) return alert("Renseigne l'objet du message.");
-      if (!body.trim()) return alert('Le message est vide.');
-      finish({ to, cc, subject, body });
-    });
-
-    document.body.appendChild(overlay);
-    overlay.querySelector('#mail-preview-subject')?.focus();
-  });
+  return BastDocumentMail.openPreview(defaults, { sanitizeEmail });
 }
 
 async function sendDocumentEmail(docKey) {
@@ -3829,14 +3577,7 @@ function downloadPeppolXmlForCurrentInvoice() {
 
   const number = peppolSafeFileName(data.invoice.documentNumber, 'facture');
   const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${number}-peppol.xml`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadBlob(blob, `${number}-peppol.xml`);
   addPeppolHistory('XML Peppol exporté');
 }
 
@@ -4630,8 +4371,7 @@ function normalizeTarifText(value) {
 }
 
 function tarifNumber(value) {
-  const n = parseFloat(String(value || '').replace(',', '.'));
-  return Number.isFinite(n) ? n : 0;
+  return BastTariffsModel.number(value);
 }
 
 function cleanTarifCategories(list) {
@@ -4640,18 +4380,15 @@ function cleanTarifCategories(list) {
 
 function getTarifCategories() {
   ensureTarifsData();
-  return cleanTarifCategories([
-    ...data.tarifs.categories,
-    ...data.tarifs.items.map(t => t.categorie).filter(Boolean)
-  ]).sort((a, b) => a.localeCompare(b, 'fr'));
+  return BastTariffsModel.categories(data.tarifs);
 }
 
 function tarifComponentTotal(component) {
-  return tarifNumber(component.quantite) * tarifNumber(component.prixUnitaire);
+  return BastTariffsModel.componentTotal(component);
 }
 
 function tarifTotalCost(tarif) {
-  return (tarif.composants || []).reduce((sum, component) => sum + tarifComponentTotal(component), 0);
+  return BastTariffsModel.totalCost(tarif);
 }
 
 function getSelectedTarifIndex() {
@@ -4667,21 +4404,15 @@ function getSelectedTarif() {
 
 function getFilteredTarifs() {
   ensureTarifsData();
-  const query = normalizeTarifText(tarifSearchTerm.trim());
-  return data.tarifs.items.filter(t => {
-    const categoryOk = tarifCategoryFilter === 'Toutes' || !tarifCategoryFilter || t.categorie === tarifCategoryFilter;
-    const queryOk = !query || tarifSearchableText(t).includes(query);
-    return categoryOk && queryOk;
-  });
+  return BastTariffsModel.filter(data.tarifs.items, tarifSearchTerm, tarifCategoryFilter);
 }
 
 function renderTarifCategoryOptions(selected = '') {
-  return getTarifCategories().map(c => `<option value="${escapeHtml(c)}" ${c === selected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  return BastTariffsUi.selectOptions(getTarifCategories(), selected);
 }
 
 function getTarifGroupKey(category) {
-  const label = String(category || '').trim() || 'Sans catégorie';
-  return normalizeTarifText(label) || 'sans-categorie';
+  return BastTariffsModel.groupKey(category);
 }
 
 function rememberTarifCategoryGroupState(key, isOpen) {
@@ -4697,17 +4428,7 @@ function rememberTarifCategoryGroupState(key, isOpen) {
 }
 
 function renderTarifActionMenu(items = []) {
-  const buttons = items.map(item => item.separator
-    ? '<div class="tarif-action-separator" role="separator"></div>'
-    : `
-    <button type="button" class="${item.danger ? 'danger-item' : ''}" onclick="event.preventDefault(); event.stopPropagation(); this.closest('details').removeAttribute('open'); ${item.action}">${escapeHtml(item.label)}</button>
-  `).join('');
-  return `
-    <details class="tarif-action-menu" onclick="event.stopPropagation()" ontoggle="if(this.open) document.querySelectorAll('.tarif-action-menu[open]').forEach(menu => { if (menu !== this) menu.removeAttribute('open'); })">
-      <summary title="Actions" aria-label="Actions">•••</summary>
-      <div class="tarif-action-panel">${buttons}</div>
-    </details>
-  `;
+  return BastTariffsUi.actionMenu(items);
 }
 
 
@@ -4944,48 +4665,11 @@ function deleteTarifCategory(name) {
 
 
 function closeTarifModal() {
-  const modal = document.getElementById('tarifModalOverlay');
-  if (modal) modal.remove();
+  BastTariffsUi.closeModal();
 }
 
-function openTarifModal({ title, label, value = '', type = 'text', options = [], confirmLabel = 'Enregistrer', onConfirm }) {
-  closeTarifModal();
-  const overlay = document.createElement('div');
-  overlay.id = 'tarifModalOverlay';
-  overlay.className = 'tarif-modal-overlay';
-  const fieldHtml = type === 'select'
-    ? `<select id="tarifModalField">${options.map(option => `<option value="${escapeHtml(option.value)}" ${option.value === value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}</select>`
-    : `<input id="tarifModalField" type="text" value="${escapeHtml(value)}" autocomplete="off">`;
-  overlay.innerHTML = `
-    <div class="tarif-modal" role="dialog" aria-modal="true" aria-labelledby="tarifModalTitle">
-      <div class="tarif-modal-head">
-        <h3 id="tarifModalTitle">${escapeHtml(title)}</h3>
-        <button type="button" class="tarif-modal-close" aria-label="Fermer">×</button>
-      </div>
-      <label for="tarifModalField">${escapeHtml(label)}</label>
-      ${fieldHtml}
-      <div class="tarif-modal-actions">
-        <button type="button" class="tarif-modal-cancel">Annuler</button>
-        <button type="button" class="primary tarif-modal-confirm">${escapeHtml(confirmLabel)}</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  const field = document.getElementById('tarifModalField');
-  const confirm = () => {
-    const result = String(field?.value ?? '').trim();
-    if (!result && type !== 'select') return field?.focus();
-    if (typeof onConfirm === 'function' && onConfirm(result) === false) return;
-    closeTarifModal();
-  };
-  overlay.querySelector('.tarif-modal-close').onclick = closeTarifModal;
-  overlay.querySelector('.tarif-modal-cancel').onclick = closeTarifModal;
-  overlay.querySelector('.tarif-modal-confirm').onclick = confirm;
-  overlay.addEventListener('click', event => { if (event.target === overlay) closeTarifModal(); });
-  field?.addEventListener('keydown', event => {
-    if (event.key === 'Enter') { event.preventDefault(); confirm(); }
-    if (event.key === 'Escape') closeTarifModal();
-  });
-  setTimeout(() => { field?.focus(); if (type !== 'select') field?.select(); }, 0);
+function openTarifModal(options) {
+  BastTariffsUi.openModal(options);
 }
 
 function renameTarifPost(id) {
@@ -5167,22 +4851,14 @@ function copyTextToClipboard(text) {
 
 function exportTarifsJson() {
   ensureTarifsData();
-  const blob = new Blob([JSON.stringify(data.tarifs, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'tarifs.json';
-  a.click();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadJson(data.tarifs, 'tarifs.json');
 }
 
-function importTarifsJson(event) {
+async function importTarifsJson(event) {
   const file = event.target.files?.[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(reader.result);
+  try {
+      const imported = await BastFileUtils.parseJsonFile(file);
       ensureTarifsData();
       if (Array.isArray(imported)) {
         data.tarifs.items = imported.map(normalizeTarifItem);
@@ -5198,13 +4874,11 @@ function importTarifsJson(event) {
       selectedTarifId = '';
       saveTarifsData();
       render();
-    } catch (error) {
-      alert('Le fichier JSON n’est pas valide.');
-    } finally {
-      event.target.value = '';
-    }
-  };
-  reader.readAsText(file);
+  } catch (error) {
+    alert('Le fichier JSON n’est pas valide.');
+  } finally {
+    event.target.value = '';
+  }
 }
 
 
@@ -5572,25 +5246,24 @@ function normalizeTarifItem(item = {}) {
 }
 function getTarifSubcategories(parent = '') {
   ensureTarifsData();
-  return data.tarifs.subcategories
-    .filter(s => !parent || s.parent === parent)
-    .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  return BastTariffsModel.subcategories(data.tarifs, parent);
 }
 function tarifSubcategoryExists(parent, name) {
-  return getTarifSubcategories(parent).some(s => normalizeTarifText(s.name) === normalizeTarifText(name));
+  ensureTarifsData();
+  return BastTariffsModel.subcategoryExists(data.tarifs, parent, name);
 }
 function tarifSearchableText(tarif) {
   return BastTariffsModel.searchableText(tarif);
 }
 function getTarifPathLabel(tarif) {
-  return [tarif.categorie || 'Sans catégorie', tarif.sousCategorie || ''].filter(Boolean).join(' › ');
+  return BastTariffsModel.pathLabel(tarif);
 }
 function getTarifSubGroupKey(category, subcategory) {
-  return getTarifGroupKey(category) + '::' + (normalizeTarifText(subcategory || 'Sans sous-catégorie') || 'sans-sous-categorie');
+  return BastTariffsModel.groupKey(category, subcategory);
 }
 function renderTarifSubcategoryOptions(parent, selected = '') {
   const rows = getTarifSubcategories(parent);
-  return `<option value="">Sans sous-catégorie</option>` + rows.map(s => `<option value="${escapeHtml(s.name)}" ${s.name === selected ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+  return BastTariffsUi.selectOptions([{ value: '', label: 'Sans sous-catégorie' }, ...rows.map(item => ({ value: item.name, label: item.name }))], selected);
 }
 function updateTarifSubcategorySelect(category, selected = '') {
   const select = document.getElementById('tarifSubcategorySelect');

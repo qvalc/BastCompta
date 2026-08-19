@@ -46,7 +46,7 @@ function notifyPortalBusinessChange(detail) {
 }
 
 function uid(prefix = 'id') {
-  return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  return BastFileUtils.createId(prefix);
 }
 
 function todayISO() {
@@ -58,26 +58,15 @@ function nowLabel() {
 }
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  }[char]));
+  return BastFormatters.escapeHtml(value);
 }
 
 function formatMoney(value) {
-  return new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
+  return BastFormatters.money(value);
 }
 
 function formatDate(value) {
-  if (!value) return '—';
-  try {
-    return new Date(value + 'T00:00:00').toLocaleDateString('fr-BE');
-  } catch {
-    return value;
-  }
+  return BastFormatters.date(value);
 }
 
 function loadData() {
@@ -3526,14 +3515,7 @@ function closeFileMenu() {
 }
 
 function exportDataLocal() {
-  const content = JSON.stringify(data, null, 2);
-  const blob = new Blob([content], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = getLocalFileName();
-  a.click();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadJson(data, getLocalFileName());
   notify('Fichier suivi client téléchargé.');
 }
 
@@ -3548,7 +3530,7 @@ async function importDataLocal(event) {
   if (!file) return;
 
   try {
-    const parsed = JSON.parse(await file.text());
+    const parsed = await BastFileUtils.parseJsonFile(file);
 
     if (!parsed.projects && !parsed.crmClients && !parsed.meta) {
       notify("Ce bouton sert uniquement à importer une sauvegarde complète du suivi client, pas une facture/devis JSON.");
@@ -3695,7 +3677,7 @@ async function driveFilesList(params, showAlert401 = true) {
 }
 
 async function googleDriveFetch(url, options = {}, showAlert401 = true) {
-  const response = await fetch(url, options);
+  const response = await BastComptaDriveClient.request(googleAccessToken, url, options);
   if (await handleGoogleDriveAuthError(response.status, showAlert401)) return null;
   return response;
 }

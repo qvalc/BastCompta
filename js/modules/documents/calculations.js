@@ -35,6 +35,73 @@
     };
   }
 
+  function invoiceStatus(totalValue, paidValue, tolerance = 0.009) {
+    const total = number(totalValue);
+    const paid = number(paidValue);
+    const margin = Math.abs(number(tolerance));
+    if (total < -margin) return 'credit_note';
+    if (total > margin && paid > total + margin) return 'overpaid';
+    if (total > margin && Math.abs(paid - total) <= margin) return 'paid';
+    if (total > margin && paid > margin) return 'partial';
+    return 'unpaid';
+  }
+
+  function paymentBalance(totalValue, paidValue) {
+    return number(totalValue) - number(paidValue);
+  }
+
+  function roundMoney(value) {
+    return Math.round((number(value) + Number.EPSILON) * 100) / 100;
+  }
+
+  function invoiceAccountingPayload(invoice = {}, status) {
+    const documentStatus = status || invoiceStatus(totalsForDocument(invoice).tvac, invoice.paidAmount);
+    const invoiceNumber = String(invoice.documentNumber || '').trim();
+    const mainLines = Array.isArray(invoice.lines) ? invoice.lines : [];
+    const suppliesLines = invoice.suppliesEnabled && Array.isArray(invoice.suppliesLines)
+      ? invoice.suppliesLines
+      : [];
+    const lines = [...mainLines, ...suppliesLines].filter(row => {
+      return String(row.description || '').trim() || number(row.qty) || number(row.unitPrice);
+    });
+
+    if (!lines.length) return { rows: [], message: 'La facture ne contient aucune ligne.' };
+
+    const grouped = new Map();
+    lines.forEach(row => {
+      const rate = roundMoney(row.vatRate);
+      const key = String(rate);
+      if (!grouped.has(key)) grouped.set(key, { rate, tvac: 0 });
+      grouped.get(key).tvac += lineTvac(row);
+    });
+
+    const isCreditNote = documentStatus === 'credit_note';
+    const linkedInvoiceNumber = invoice.linkedInvoiceNumber || '';
+    const rows = Array.from(grouped.values()).map(group => ({
+      date: invoice.date || '',
+      client: invoice.clientName || '',
+      invoiceNumber,
+      linkedInvoiceNumber,
+      documentStatus,
+      documentType: isCreditNote ? 'credit_note' : 'invoice',
+      description: isCreditNote
+        ? `Note de crédit${linkedInvoiceNumber ? ' liée à ' + linkedInvoiceNumber : ''}`
+        : '',
+      rate: group.rate,
+      tvac: isCreditNote ? -Math.abs(roundMoney(group.tvac)) : roundMoney(group.tvac)
+    }));
+
+    return {
+      action: 'upsert',
+      documentType: isCreditNote ? 'credit_note' : 'invoice',
+      documentStatus,
+      invoiceNumber,
+      linkedInvoiceNumber,
+      rows,
+      message: `${rows.length} ligne(s) prête(s) pour la comptabilité.`
+    };
+  }
+
   function normalizeClientNumber(value) {
     const digits = String(value || '').replace(/\D/g, '');
     if (!digits) return '';
@@ -69,7 +136,8 @@
 
   global.BastDocumentCalculations = Object.freeze({
     lineBase, lineDiscountAmount, lineNet, lineVat, lineTvac, lineCost, lineSupplyMargin,
-    totalsForDocument, normalizeClientNumber, normalizeYear, normalizeInvoiceNumber,
+    totalsForDocument, invoiceStatus, paymentBalance, invoiceAccountingPayload,
+    normalizeClientNumber, normalizeYear, normalizeInvoiceNumber,
     structuredCommunication, normalizeVatNumber, belgianEnterpriseNumber,
     isValidBelgianEnterpriseNumber
   });

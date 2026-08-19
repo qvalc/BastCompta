@@ -136,7 +136,7 @@ async function driveFilesList(params, showAlert401 = true) {
 }
 
 async function googleDriveFetch(url, options = {}, showAlert401 = true) {
-  const response = await fetch(url, options);
+  const response = await BastComptaDriveClient.request(googleAccessToken, url, options);
   if (await handleGoogleDriveAuthError(response.status, showAlert401)) {
     return null;
   }
@@ -600,15 +600,7 @@ function closeFileMenu() {
 
 function exportDataLocal() {
   const fileName = getDriveFileName();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadJson(data, fileName);
 }
 
 function importDataLocal() {
@@ -623,8 +615,7 @@ async function handleLocalJsonImport(event) {
   if (!file) return;
 
   try {
-    const content = await file.text();
-    const parsed = JSON.parse(content);
+    const parsed = await BastFileUtils.parseJsonFile(file);
     data = mergeDeep(structuredClone(defaultData), parsed);
     saveData(false);
     alert(`Import réussi : ${file.name}`);
@@ -1249,15 +1240,7 @@ function buildNextExerciseData(targetYear) {
 
 function downloadJsonFile(sourceData, fileName = '') {
   const finalFileName = fileName || getDriveFileNameFromData(sourceData);
-  const blob = new Blob([JSON.stringify(sourceData, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = finalFileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  BastFileUtils.downloadJson(sourceData, finalFileName);
 }
 
 async function uploadJsonObjectToDrive(sourceData, fileName = '') {
@@ -3604,12 +3587,7 @@ function renderTablePage({ key, title, hint, addLabel, onAdd, headers, rows, foo
 }
 
 function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return BastFormatters.escapeHtml(str);
 }
 
 function escapeAttr(str) {

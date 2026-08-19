@@ -11,19 +11,19 @@ let selectedIndicatorFilter = 'total';
 let data = loadData();
 let driveSaveTimer = null;
 
-const money = value => new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(Number(value) || 0);
-const dateLabel = value => value ? new Date(value + (String(value).length === 10 ? 'T00:00:00' : '')).toLocaleDateString('fr-BE') : '—';
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-const uid = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+const money = BastFormatters.money;
+const dateLabel = BastFormatters.date;
+const esc = BastFormatters.escapeHtml;
+const uid = prefix => BastFileUtils.createId(prefix);
 const today = () => new Date().toISOString().slice(0,10);
-const num = value => Number(String(value ?? '').replace(',', '.')) || 0;
+const num = BastFormatters.number;
 
 function blankData(){ return { version: 1, updatedAt: new Date().toISOString(), workers: [] }; }
 function normalizeWorker(w={}){
   return BastWorkerModel.normalize(w,()=>uid('worker'));
 }
 function normalizeData(source){ return BastWorkerModel.normalizeData(source,{createId:()=>uid('worker'),now:()=>new Date().toISOString()}); }
-function loadData(){ try{return normalizeData(JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'));}catch{return blankData();} }
+function loadData(){ return normalizeData(BastFileUtils.parseJson(localStorage.getItem(STORAGE_KEY),null)); }
 function saveLocal(detail='Modification du personnel'){
   data.updatedAt=new Date().toISOString(); localStorage.setItem(STORAGE_KEY,JSON.stringify(data));
   try{window.parent?.BastComptaPortal?.markChanged?.('personnel',detail);}catch{}
@@ -293,15 +293,15 @@ function renderAll(){ buildYearOptions();renderSummary();renderWorkerList();rend
 
 function toggleFileMenu(event){event?.stopPropagation();document.getElementById('fileDropdown').classList.toggle('open');}
 function closeFileMenu(){document.getElementById('fileDropdown').classList.remove('open');}
-function exportDataLocal(){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bastcompta-personnel-${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
-async function importDataLocal(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const parsed=JSON.parse(await file.text());if(!await BastUI.confirm('Importer ce fichier remplacera les données Personnel actuelles. Continuer ?',{title:'Remplacer les données Personnel'}))return;data=normalizeData(parsed);selectedWorkerId='';saveLocal('Import des données personnel');renderAll();notify('Données Personnel importées.');}catch{notify('Fichier invalide.');}}
+function exportDataLocal(){BastFileUtils.downloadJson(data,`bastcompta-personnel-${today()}.json`);}
+async function importDataLocal(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const parsed=await BastFileUtils.parseJsonFile(file);if(!await BastUI.confirm('Importer ce fichier remplacera les données Personnel actuelles. Continuer ?',{title:'Remplacer les données Personnel'}))return;data=normalizeData(parsed);selectedWorkerId='';saveLocal('Import des données personnel');renderAll();notify('Données Personnel importées.');}catch{notify('Fichier invalide.');}}
 
 function safePostToParent(message){try{window.parent?.postMessage(message,window.location.origin&&window.location.origin!=='null'?window.location.origin:'*');}catch{}}
 async function driveList(){
-  const q=encodeURIComponent(`name='${DRIVE_SYNC_FILE_NAME}' and trashed=false`); const res=await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime%20desc&pageSize=10`,{headers:{Authorization:`Bearer ${googleAccessToken}`}}); if(res.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'});return [];} if(!res.ok)throw new Error('Drive list '+res.status);return (await res.json()).files||[];
+  try{return await BastComptaDriveClient.listFiles(googleAccessToken,{q:`name='${DRIVE_SYNC_FILE_NAME}' and trashed=false`,fields:'nextPageToken,files(id,name,modifiedTime)',orderBy:'modifiedTime desc',pageSize:10});}catch(error){if(error?.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'});return [];}throw error;}
 }
-async function saveSyncToDrive(showToast=true){ if(!googleAccessToken){if(showToast)notify('Google Drive non connecté via le portail.');return false;} try{const existing=(await driveList())[0];const metadata=existing?{name:DRIVE_SYNC_FILE_NAME}:{name:DRIVE_SYNC_FILE_NAME,parents:['appDataFolder']};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const url=existing?`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=multipart&fields=id,name`:'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name';const res=await fetch(url,{method:existing?'PATCH':'POST',headers:{Authorization:`Bearer ${googleAccessToken}`},body:form});if(res.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'});return false;}if(!res.ok)throw new Error('Drive save '+res.status);if(showToast)notify('Personnel sauvegardé sur Google Drive.');return true;}catch(e){console.error(e);if(showToast)notify('Sauvegarde Google Drive impossible.');return false;} }
-async function loadSyncDataFromDrive(confirmReplace=false,onlyIfNewer=false){if(!googleAccessToken)return false;try{const file=(await driveList())[0];if(!file)return false;if(confirmReplace&&!await BastUI.confirm('Charger les données Personnel depuis Google Drive et remplacer les données locales ?',{title:'Remplacer les données locales'}))return false;const res=await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,{headers:{Authorization:`Bearer ${googleAccessToken}`}});if(!res.ok)throw new Error('Drive load '+res.status);const parsed=normalizeData(await res.json());if(onlyIfNewer&&data.workers.length&&String(parsed.updatedAt||'')<=String(data.updatedAt||''))return false;data=parsed;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));selectedWorkerId='';renderAll();return true;}catch(e){console.error(e);return false;}}
+async function saveSyncToDrive(showToast=true){ if(!googleAccessToken){if(showToast)notify('Google Drive non connecté via le portail.');return false;} try{const existing=(await driveList())[0];await BastComptaDriveClient.uploadJson(googleAccessToken,{fileId:existing?.id||'',name:DRIVE_SYNC_FILE_NAME,value:data,fields:'id,name'});if(showToast)notify('Personnel sauvegardé sur Google Drive.');return true;}catch(e){if(e?.status===401){googleAccessToken=null;setDriveState(false);safePostToParent({type:'BASTCOMPTA_REFRESH_TOKEN'});}console.error(e);if(showToast)notify('Sauvegarde Google Drive impossible.');return false;} }
+async function loadSyncDataFromDrive(confirmReplace=false,onlyIfNewer=false){if(!googleAccessToken)return false;try{const file=(await driveList())[0];if(!file)return false;if(confirmReplace&&!await BastUI.confirm('Charger les données Personnel depuis Google Drive et remplacer les données locales ?',{title:'Remplacer les données locales'}))return false;const parsed=normalizeData(await BastComptaDriveClient.readFile(googleAccessToken,file.id));if(onlyIfNewer&&data.workers.length&&String(parsed.updatedAt||'')<=String(data.updatedAt||''))return false;data=parsed;localStorage.setItem(STORAGE_KEY,JSON.stringify(data));selectedWorkerId='';renderAll();return true;}catch(e){console.error(e);return false;}}
 async function exportJsonToDrive(){await saveSyncToDrive(true);}
 async function loadFromDrive(){if(!googleAccessToken)return notify('Google Drive non connecté via le portail.');const ok=await loadSyncDataFromDrive(true);notify(ok?'Personnel chargé depuis Google Drive.':'Aucune sauvegarde Personnel trouvée sur Drive.');}
 async function uploadDocumentFile(worker,file){

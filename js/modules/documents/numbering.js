@@ -17,6 +17,13 @@
   }
   function candidates(values = []) {
     return values.flatMap(entry => {
+      if (entry && typeof entry === 'object' && entry.kind && entry.year && Number(entry.sequence) > 0) {
+        return [{
+          ...entry,
+          year: String(entry.year),
+          sequence: Number(entry.sequence)
+        }];
+      }
       const value = typeof entry === 'object' ? entry.value : entry;
       const parsed = parse(value);
       return parsed?.sequence ? [{ ...parsed, source: entry?.source || '' }] : [];

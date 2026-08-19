@@ -34,5 +34,43 @@
     return files;
   }
 
-  global.BastComptaDriveClient = Object.freeze({ request, listFiles });
-})(window);
+  async function checked(response) {
+    if (response.ok) return response;
+    const error = new Error(await response.text() || `Google Drive ${response.status}`);
+    error.status = response.status;
+    throw error;
+  }
+
+  async function readFile(accessToken, fileId, options = {}) {
+    const response = await request(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`);
+    await checked(response);
+    if (options.as === 'blob') return response.blob();
+    if (options.as === 'text') return response.text();
+    return response.json();
+  }
+
+  async function uploadFile(accessToken, { fileId = '', metadata = {}, content, mimeType = 'application/octet-stream', fields = 'id,name,modifiedTime' } = {}) {
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', content instanceof Blob ? content : new Blob([content ?? ''], { type: mimeType }));
+    const base = fileId
+      ? `https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}`
+      : 'https://www.googleapis.com/upload/drive/v3/files';
+    const response = await request(accessToken, `${base}?uploadType=multipart&fields=${encodeURIComponent(fields)}`, { method: fileId ? 'PATCH' : 'POST', body: form });
+    await checked(response);
+    return response.json();
+  }
+
+  function uploadJson(accessToken, { fileId = '', name, value, fields } = {}) {
+    const metadata = fileId ? { name } : { name, parents: ['appDataFolder'] };
+    return uploadFile(accessToken, { fileId, metadata, content: JSON.stringify(value, null, 2), mimeType: 'application/json', fields });
+  }
+
+  async function deleteFile(accessToken, fileId) {
+    const response = await request(accessToken, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+    await checked(response);
+    return true;
+  }
+
+  global.BastComptaDriveClient = Object.freeze({ request, listFiles, readFile, uploadFile, uploadJson, deleteFile });
+})(globalThis);
