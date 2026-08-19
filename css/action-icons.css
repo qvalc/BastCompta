@@ -108,9 +108,17 @@
 }
 
 :where(.table-wrap,.doc-table-wrap,.global-table-wrap){
+  width:100%;
   max-width:100%;
   overscroll-behavior-inline:contain;
   scrollbar-width:thin;
+}
+
+@media screen and (min-width:761px) and (min-height:600px){
+  .bast-page-table{
+    min-height:var(--bast-table-page-height,320px);
+    background:#fff;
+  }
 }
 
 @media screen and (max-width:760px){

@@ -138,6 +138,19 @@
         wrapper.setAttribute('role','region');
         wrapper.setAttribute('aria-label','Tableau défilable');
       }
+      if (wrapper && !wrapper.closest('.modal,.modal-backdrop,.sheet,.drive-modal,.mail-preview-modal,.document-photo-viewer') && !wrapper.matches('.doc-table-wrap,.meta-table-wrap')) {
+        const width = wrapper.getBoundingClientRect().width;
+        if (wrapper.matches('.global-table-wrap') || width >= window.innerWidth * .55) wrapper.classList.add('bast-page-table');
+      }
+    });
+  }
+
+  function sizePageTables(){
+    document.querySelectorAll('.bast-page-table').forEach(wrapper=>{
+      if (!wrapper.offsetParent) return;
+      const top = wrapper.getBoundingClientRect().top;
+      const available = Math.max(280, Math.floor(window.innerHeight - Math.max(0, top) - 26));
+      wrapper.style.setProperty('--bast-table-page-height',available+'px');
     });
   }
 
@@ -145,6 +158,7 @@
     flattenTopbarDropdowns(root);
     root.querySelectorAll('button,label.file-label').forEach(iconify);
     enhanceTables(root);
+    requestAnimationFrame(sizePageTables);
   }
 
   let queued=false;
@@ -159,6 +173,7 @@
 
   document.addEventListener('pointerover',event=>positionTooltip(event.target.closest?.('.bast-action-icon,.has-tooltip')));
   document.addEventListener('focusin',event=>positionTooltip(event.target.closest?.('.bast-action-icon,.has-tooltip')));
+  window.addEventListener('resize',()=>requestAnimationFrame(sizePageTables),{passive:true});
 
   new MutationObserver(queueProcess).observe(document.documentElement,{childList:true,subtree:true});
 })();
