@@ -1,4 +1,4 @@
-/* BastCompta - calendrier natif avec saisie manuelle facultative JJ-MM-AAAA. */
+/* BastCompta - calendrier natif avec saisie clavier JJ-MM-AAAA. */
 (function (global) {
   'use strict';
 
@@ -33,10 +33,6 @@
     return `${day}-${month}-${year}`;
   }
 
-  function companion(input) {
-    return input?.parentElement?.querySelector?.('.bast-date-manual') || null;
-  }
-
   function value(inputOrValue) {
     const raw = inputOrValue && typeof inputOrValue === 'object' ? inputOrValue.value : inputOrValue;
     return normalize(raw) || '';
@@ -46,80 +42,126 @@
     if (!input) return '';
     const iso = normalize(nextValue);
     input.value = iso || '';
-    const manual = companion(input);
-    if (manual) manual.value = display(iso || '');
     return iso || '';
   }
 
-  function enhance(input) {
-    if (!input || input.dataset.bastDateEnhanced === '1') return;
-    input.dataset.bastDateEnhanced = '1';
-    const wrapper = global.document.createElement('span');
-    wrapper.className = 'bast-date-combo';
-    input.parentNode.insertBefore(wrapper, input);
-    wrapper.appendChild(input);
+  let buffer = '';
+  let activeInput = null;
+  let bufferTimer = 0;
+  let indicator = null;
 
-    const manual = global.document.createElement('input');
-    manual.type = 'text';
-    manual.className = 'bast-date-manual';
-    manual.inputMode = 'numeric';
-    manual.autocomplete = 'off';
-    manual.placeholder = 'JJ-MM-AAAA';
-    manual.setAttribute('aria-label', 'Saisie manuelle de la date au format jour mois année');
-    manual.value = display(input.value);
-    wrapper.appendChild(manual);
-
-    const syncManual = () => {
-      manual.value = display(input.value);
-      manual.setCustomValidity('');
-    };
-    input.addEventListener('input', syncManual);
-    input.addEventListener('change', syncManual);
-
-    manual.addEventListener('input', () => manual.setCustomValidity(''));
-    manual.addEventListener('change', () => {
-      const iso = normalize(manual.value);
-      if (iso === null) {
-        manual.setCustomValidity('Indique une date valide au format JJ-MM-AAAA, par exemple 11-03-1986.');
-        manual.reportValidity();
-        manual.focus();
-        return;
-      }
-      manual.setCustomValidity('');
-      input.value = iso;
-      manual.value = display(iso);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+  function formattedBuffer() {
+    const padded = (buffer + '________').slice(0, 8);
+    return `${padded.slice(0, 2)}-${padded.slice(2, 4)}-${padded.slice(4, 8)}`;
   }
 
-  function enhanceAll(root) {
-    if (!global.document) return;
-    if (root?.matches?.('input[type="date"]')) enhance(root);
-    root?.querySelectorAll?.('input[type="date"]').forEach(enhance);
+  function ensureIndicator() {
+    if (indicator?.isConnected) return indicator;
+    indicator = global.document.createElement('div');
+    indicator.className = 'bast-date-keyboard-indicator';
+    indicator.setAttribute('role', 'status');
+    global.document.body.appendChild(indicator);
+    return indicator;
+  }
+
+  function positionIndicator(input) {
+    const popup = ensureIndicator();
+    const rect = input.getBoundingClientRect();
+    popup.style.left = `${Math.max(8, Math.min(rect.left, global.innerWidth - 190))}px`;
+    popup.style.top = `${Math.min(global.innerHeight - 46, rect.bottom + 6)}px`;
+    popup.textContent = `Saisie : ${formattedBuffer()}`;
+    popup.classList.add('visible');
+  }
+
+  function clearBuffer() {
+    buffer = '';
+    activeInput = null;
+    global.clearTimeout(bufferTimer);
+    indicator?.classList.remove('visible');
+  }
+
+  function commitBuffer(input) {
+    const iso = normalize(buffer);
+    if (iso === null) {
+      input.setCustomValidity('Indique une date valide au format JJ-MM-AAAA, par exemple 11-03-1986.');
+      input.reportValidity();
+      clearBuffer();
+      return false;
+    }
+    input.setCustomValidity('');
+    input.value = iso;
+    clearBuffer();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  function handleDateKey(event) {
+    const input = event.target;
+    if (!input?.matches?.('input[type="date"]') || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === 'Escape') {
+      clearBuffer();
+      return;
+    }
+    if (event.key === 'Backspace' && buffer) {
+      event.preventDefault();
+      buffer = buffer.slice(0, -1);
+      positionIndicator(input);
+      return;
+    }
+    if (/^[\d]$/.test(event.key)) {
+      event.preventDefault();
+      if (activeInput !== input) buffer = '';
+      activeInput = input;
+      buffer = (buffer + event.key).slice(0, 8);
+      input.setCustomValidity('');
+      positionIndicator(input);
+      global.clearTimeout(bufferTimer);
+      bufferTimer = global.setTimeout(clearBuffer, 10000);
+      if (buffer.length === 8) commitBuffer(input);
+      return;
+    }
+    if (/^[-/.]$/.test(event.key) && buffer) {
+      event.preventDefault();
+    }
+  }
+
+  function handlePaste(event) {
+    const input = event.target;
+    if (!input?.matches?.('input[type="date"]')) return;
+    const pasted = event.clipboardData?.getData('text') || '';
+    const iso = normalize(pasted);
+    if (iso === null) return;
+    event.preventDefault();
+    input.value = iso;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function installStyles() {
-    if (!global.document || global.document.getElementById('bast-date-input-styles')) return;
+    if (global.document.getElementById('bast-date-input-styles')) return;
     const style = global.document.createElement('style');
     style.id = 'bast-date-input-styles';
     style.textContent = `
-      .bast-date-combo{display:grid;grid-template-columns:minmax(135px,1fr) minmax(118px,.75fr);gap:7px;align-items:center;width:100%}
-      .bast-date-combo>input{min-width:0;width:100%;box-sizing:border-box}
-      .bast-date-manual{font-variant-numeric:tabular-nums}
-      @media(max-width:620px){.bast-date-combo{grid-template-columns:1fr}.bast-date-manual{min-height:42px}}
-      @media print{.bast-date-manual{display:none!important}.bast-date-combo{display:block}}
+      .bast-date-keyboard-indicator{position:fixed;z-index:12000;display:none;min-width:160px;padding:8px 11px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#1e3a5f;box-shadow:0 8px 24px rgba(15,23,42,.16);font:700 13px/1.2 system-ui,sans-serif;pointer-events:none}
+      .bast-date-keyboard-indicator.visible{display:block}
     `;
     global.document.head.appendChild(style);
   }
 
   if (global.document) {
-    const start = () => { installStyles(); enhanceAll(global.document); };
+    const start = installStyles;
     if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start);
     else start();
-    new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(enhanceAll)))
-      .observe(global.document.documentElement, { childList: true, subtree: true });
+    global.document.addEventListener('keydown', handleDateKey, true);
+    global.document.addEventListener('paste', handlePaste, true);
+    global.document.addEventListener('pointerdown', event => {
+      if (event.target !== activeInput) clearBuffer();
+    }, true);
+    global.document.addEventListener('focusout', event => {
+      if (event.target === activeInput && buffer.length < 8) clearBuffer();
+    }, true);
   }
 
-  global.BastDateInputs = Object.freeze({ normalize, display, value, setValue, enhance, enhanceAll });
+  global.BastDateInputs = Object.freeze({ normalize, display, value, setValue });
 })(globalThis);
