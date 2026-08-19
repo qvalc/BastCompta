@@ -1684,14 +1684,14 @@ function renderMoneyTable(items, type) {
                   <td data-label="Date">${formatDate(item.date)}</td>
                   <td data-label="Référence">${escapeHtml(item.displayRef || item.ref || '—')}</td>
                   <td data-label="Description">${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
-                  <td class="num" data-label="Montant">${formatMoney(projectMoneyValue(item))}${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<br><small>Fournitures vendues: ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + ' · Revient: ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</small>' : ''}</td>
+                  <td class="num" data-label="Montant"><strong class="money-main-value">${formatMoney(projectMoneyValue(item))}</strong>${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<small class="money-breakdown"><span>Vendu ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + '</span><span>Revient ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</span></small>' : ''}</td>
                   <td class="no-print" data-label="Actions">
                     <div class="inline-actions document-actions">
-                      ${isCrmDoc ? `<button class="small" onclick="previewCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')">Afficher</button>` : ''}
-                      ${isCrmDoc ? `<button class="small" onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')">Charger</button>` : ''}
+                      ${isCrmDoc ? `<button class="crm-doc-action is-preview" type="button" title="Afficher" aria-label="Afficher" onclick="previewCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg></button>` : ''}
+                      ${isCrmDoc ? `<button class="crm-doc-action is-load" type="button" title="Charger dans le module" aria-label="Charger dans le module" onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg></button>` : ''}
                       ${isCrmDoc ? `
                         <details class="download-menu">
-                          <summary>Télécharger</summary>
+                          <summary class="crm-doc-action is-download" title="Télécharger" aria-label="Télécharger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></summary>
                           <div class="download-menu-panel">
                             <button class="small" type="button" onclick="downloadCrmLinkedDocumentPdf('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">PDF</button>
                             <button class="small" type="button" onclick="downloadCrmLinkedDocument('${type}', '${escapeAttr(item.id)}'); this.closest('details').removeAttribute('open');">JSON</button>

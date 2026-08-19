@@ -60,7 +60,7 @@
 
   function isExcluded(el){
     if (!el || el.dataset.bastIconified === '1') return true;
-    if (el.matches('.toolbar-action-icon,.delete-icon-btn,.icon-btn,.icon-button,.sidebar-toggle,.sidebar-close,.mobile-menu,.faq-nav-item,.auth-tab,.tab,.tab-btn,.global-filter-btn,.supplier-item,.worker-item,.hidden-drive-tab,.main-tab')) return true;
+    if (el.matches('.toolbar-action-icon,.delete-icon-btn,.icon-btn,.icon-button,.crm-doc-action,.sidebar-toggle,.sidebar-close,.mobile-menu,.faq-nav-item,.auth-tab,.tab,.tab-btn,.global-filter-btn,.supplier-item,.worker-item,.hidden-drive-tab,.main-tab')) return true;
     if (el.closest('nav,.tabs,.sidebar,.supplier-list,.worker-list,.modal,.modal-backdrop,.dialog,.dropdown-menu,.global-filter-tabs,.landing-page,.auth-screen')) return true;
     if (el.closest('.modal-actions')) return true;
     return false;

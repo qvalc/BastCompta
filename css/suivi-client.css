@@ -869,9 +869,43 @@ th.num {
 .document-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: nowrap;
 }
+
+.money-table { table-layout: fixed; min-width: 820px; }
+.money-table th:nth-child(1) { width: 110px; }
+.money-table th:nth-child(2) { width: 142px; }
+.money-table th:nth-child(4) { width: 220px; }
+.money-table th:nth-child(5) { width: 210px; }
+.money-table td[data-label="Description"] { overflow-wrap: anywhere; line-height: 1.3; }
+.money-main-value { display: block; font-size: 15px; white-space: nowrap; }
+.money-breakdown { display: flex; justify-content: flex-end; gap: 5px 12px; flex-wrap: wrap; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.25; }
+.money-breakdown span { white-space: nowrap; }
+
+.crm-doc-action {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 0 !important;
+    border: 1px solid #dbe4f0 !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    color: #334155 !important;
+    box-shadow: none !important;
+    cursor: pointer;
+    transition: transform .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.crm-doc-action svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.crm-doc-action:hover { transform: translateY(-1px); border-color: #93c5fd !important; background: #eff6ff !important; color: #1d4ed8 !important; }
+.crm-doc-action.is-preview { color: #2563eb !important; background: #eff6ff !important; border-color: #bfdbfe !important; }
+.crm-doc-action.is-load { color: #6d28d9 !important; background: #f5f3ff !important; border-color: #ddd6fe !important; }
+.crm-doc-action.is-download { color: #087a72 !important; background: #ecfdf5 !important; border-color: #a7f3d0 !important; list-style: none; }
+.download-menu summary.crm-doc-action::after { content: none; }
 
 /* Les historiques financiers deviennent des cartes lorsque la table ne tient plus. */
 @media (max-width: 980px) {
@@ -906,6 +940,7 @@ th.num {
         letter-spacing: .03em;
     }
     .money-table td.num { text-align: left; white-space: normal; }
+    .money-breakdown { justify-content: flex-start; }
     .money-table td[data-label="Description"],
     .money-table td[data-label="Actions"] { grid-column: 1 / -1; }
     .money-table .document-actions { justify-content: flex-start; }
