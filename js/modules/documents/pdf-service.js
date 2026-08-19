@@ -6,6 +6,12 @@
     const number=String(documentData?.documentNumber||'document').trim().replace(/[^a-zA-Z0-9._-]+/g,'-');
     return `${prefix}-${number||'document'}.pdf`;
   }
+  function base64ToBlob(base64,mimeType='application/pdf'){
+    const binary=global.atob(String(base64||''));
+    const bytes=new Uint8Array(binary.length);
+    for(let index=0;index<binary.length;index+=1)bytes[index]=binary.charCodeAt(index);
+    return new Blob([bytes],{type:mimeType});
+  }
   async function elementToBase64(element,options={}){
     const html2canvas=options.html2canvas||global.html2canvas;
     const JsPdf=options.jsPDF||global.jspdf?.jsPDF;
@@ -34,5 +40,5 @@
     }
     return pdf.output('datauristring').split(',')[1]||'';
   }
-  global.BastDocumentPdf=Object.freeze({safeFileName,elementToBase64});
+  global.BastDocumentPdf=Object.freeze({safeFileName,base64ToBlob,elementToBase64});
 })(globalThis);

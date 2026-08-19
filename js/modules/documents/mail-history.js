@@ -5,7 +5,7 @@
     const now=options.now?.()||new Date();
     const id=options.createId?.()||`mail_${now.getTime()}_${Math.random().toString(36).slice(2,8)}`;
     const doc=payload.doc||{};
-    return {id,sentAt:now.toISOString(),docKey:payload.docKey||'',documentNumber:doc.documentNumber||'',clientName:doc.clientName||'',to:payload.to||'',cc:payload.cc||'',subject:payload.subject||'',body:payload.body||'',pdfName:payload.pdfName||'',messageId:payload.messageId||'',senderEmail:payload.senderEmail||'',replyTo:payload.replyTo||''};
+    return {id,sentAt:now.toISOString(),docKey:payload.docKey||'',documentNumber:doc.documentNumber||'',clientName:doc.clientName||'',to:payload.to||'',cc:payload.cc||'',subject:payload.subject||'',body:payload.body||'',pdfName:payload.pdfName||'',attachmentFileId:payload.attachmentFileId||'',attachmentDriveName:payload.attachmentDriveName||'',messageId:payload.messageId||'',senderEmail:payload.senderEmail||'',replyTo:payload.replyTo||''};
   }
   function add(items,payload,options={}){
     const list=Array.isArray(items)?items:[];

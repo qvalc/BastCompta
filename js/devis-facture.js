@@ -2832,8 +2832,8 @@ function updateMailSenderIdentity(field, value) {
   saveData(false);
 }
 
-function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo }) {
-  data.mail.sentItems = BastMailHistory.add(data.mail.sentItems, { docKey, doc, to, cc, subject, body, pdfName, messageId, senderEmail, replyTo });
+function recordSentMail({ docKey, doc, to, cc, subject, body, pdfName, attachmentFileId, attachmentDriveName, messageId, senderEmail, replyTo }) {
+  data.mail.sentItems = BastMailHistory.add(data.mail.sentItems, { docKey, doc, to, cc, subject, body, pdfName, attachmentFileId, attachmentDriveName, messageId, senderEmail, replyTo });
 }
 
 async function persistSentMailHistory() {
@@ -2845,11 +2845,67 @@ async function persistSentMailHistory() {
 function viewSentMailItem(id) {
   const item = (data.mail?.sentItems || []).find(entry => entry.id === id);
   if (!item) return;
-  BastDocumentMail.openSentItem(item, { formatDate: formatSentMailDate });
+  BastDocumentMail.openSentItem(item, {
+    formatDate: formatSentMailDate,
+    onViewAttachment: viewSentMailAttachment,
+    onDownloadAttachment: downloadSentMailAttachment
+  });
+}
+
+async function archiveSentMailAttachment(pdfBase64, pdfName) {
+  if (!googleAccessToken) return null;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const driveName = `mail-${timestamp}-${pdfName}`;
+  const file = await BastComptaDriveClient.uploadFile(googleAccessToken, {
+    metadata: { name: driveName, parents: ['appDataFolder'] },
+    content: BastDocumentPdf.base64ToBlob(pdfBase64),
+    mimeType: 'application/pdf',
+    fields: 'id,name,modifiedTime'
+  });
+  return { fileId: file.id || '', driveName: file.name || driveName };
+}
+
+async function readSentMailAttachment(item) {
+  if (!item?.attachmentFileId) throw new Error('Cette pièce jointe n’est pas archivée dans Drive.');
+  if (!googleAccessToken) throw new Error('Reconnecte Google Drive pour ouvrir cette pièce jointe.');
+  return BastComptaDriveClient.readFile(googleAccessToken, item.attachmentFileId, { as: 'blob' });
+}
+
+async function viewSentMailAttachment(item) {
+  const previewWindow = window.open('about:blank', '_blank');
+  try {
+    const blob = await readSentMailAttachment(item);
+    const url = URL.createObjectURL(blob);
+    if (previewWindow) previewWindow.location.href = url;
+    else window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    previewWindow?.close();
+    console.error(error);
+    alert(error?.message || 'Impossible d’ouvrir la pièce jointe.');
+  }
+}
+
+async function downloadSentMailAttachment(item) {
+  try {
+    const blob = await readSentMailAttachment(item);
+    BastFileUtils.downloadBlob(blob, item.pdfName || 'document.pdf');
+  } catch (error) {
+    console.error(error);
+    alert(error?.message || 'Impossible de télécharger la pièce jointe.');
+  }
 }
 
 async function deleteSentMailItem(id) {
   if (!await BastUI.confirm('Supprimer cette trace de message envoyé ?',{type:'danger',title:'Supprimer de l’historique'})) return;
+  const item = (data.mail?.sentItems || []).find(entry => entry.id === id);
+  if (item?.attachmentFileId && googleAccessToken) {
+    try {
+      await BastComptaDriveClient.deleteFile(googleAccessToken, item.attachmentFileId);
+    } catch (error) {
+      console.warn('Suppression du PDF archivé impossible.', error);
+    }
+  }
   data.mail.sentItems = BastMailHistory.remove(data.mail.sentItems, id);
   await persistSentMailHistory();
 }
@@ -2857,6 +2913,10 @@ async function deleteSentMailItem(id) {
 async function clearSentMailHistory() {
   if (!(data.mail.sentItems || []).length) return;
   if (!await BastUI.confirm('Vider tout l’historique des messages envoyés ?',{type:'danger',title:'Vider l’historique',confirmLabel:'Vider définitivement'})) return;
+  if (googleAccessToken) {
+    const attachmentIds = data.mail.sentItems.map(item => item.attachmentFileId).filter(Boolean);
+    await Promise.allSettled(attachmentIds.map(fileId => BastComptaDriveClient.deleteFile(googleAccessToken, fileId)));
+  }
   data.mail.sentItems = [];
   await persistSentMailHistory();
 }
@@ -2984,6 +3044,13 @@ async function sendDocumentEmail(docKey) {
       pdfName: finalPdfName
     });
 
+    let attachmentArchive = null;
+    try {
+      attachmentArchive = await archiveSentMailAttachment(pdfBase64, finalPdfName);
+    } catch (error) {
+      console.warn('Archivage Drive du PDF envoyé impossible.', error);
+    }
+
     recordSentMail({
       docKey,
       doc: currentDoc,
@@ -2992,12 +3059,17 @@ async function sendDocumentEmail(docKey) {
       subject: preview.subject,
       body: preview.body,
       pdfName: finalPdfName,
+      attachmentFileId: attachmentArchive?.fileId || '',
+      attachmentDriveName: attachmentArchive?.driveName || '',
       messageId: result.messageId || '',
       senderEmail: result.senderEmail || 'documents@bast-amenagement.com',
       replyTo
     });
     await persistSentMailHistory();
-    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.`);
+    const archiveText = attachmentArchive
+      ? ' Une copie du PDF est archivée dans Drive.'
+      : ' Le message est conservé, mais le PDF n’a pas pu être archivé dans Drive.';
+    alert(`${isQuote ? 'Devis' : isReminder ? 'Rappel' : 'Facture'} envoyé(e) par e-mail avec le PDF en pièce jointe.${archiveText}`);
   } catch (error) {
     console.error('Envoi e-mail Brevo impossible :', error);
     alert(`Envoi impossible : ${error?.message || 'erreur inconnue'}`);
