@@ -17,11 +17,27 @@
     return response ? visibleFiles(response.result?.files || []) : null;
   }
 
+  async function listYear(listFiles, year) {
+    const response = await listFiles({
+      spaces: 'appDataFolder',
+      q: `mimeType='application/json' and trashed=false and name contains 'comptabilite-' and name contains '${year}'`,
+      orderBy: 'modifiedTime desc', pageSize: 20, fields: 'files(id, name, modifiedTime)'
+    });
+    return response ? visibleFiles(response.result?.files || []).filter(file => String(file.name || '').endsWith('.json')) : null;
+  }
+
+  function selectYearFile(files = [], year) {
+    const exact = files.filter(file => new RegExp(`(^|-)${year}\\.json$`).test(String(file.name || '')));
+    return exact[0] || files[0] || null;
+  }
+
   async function findByName({ fileName, listFiles, escapeQuery }) {
     const response = await listFiles({
       spaces: 'appDataFolder',
       q: `name='${escapeQuery(fileName)}' and trashed=false`,
-      fields: 'files(id, name)'
+      orderBy: 'modifiedTime desc',
+      pageSize: 1,
+      fields: 'files(id, name, modifiedTime)'
     });
     return response ? (response.result?.files || [])[0] || null : undefined;
   }
@@ -63,5 +79,6 @@
     return true;
   }
 
-  global.BastAnnualJsonDrive = Object.freeze({ HIDDEN_NAMES, LIST_OPTIONS, visibleFiles, list, findByName, upload, read, remove });
+  global.BastAnnualJsonDrive = Object.freeze({ HIDDEN_NAMES, LIST_OPTIONS, visibleFiles, list, listYear, selectYearFile,
+    findByName, upload, read, remove });
 })(globalThis);

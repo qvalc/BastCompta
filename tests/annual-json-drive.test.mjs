@@ -14,6 +14,14 @@ const listed = await drive.list(async options => {
 });
 assert.equal(listed.length, 1);
 assert.match(listOptions.q, /mimeType='application\/json'/);
+const yearFiles = await drive.listYear(async () => ({ result: { files: [
+  { id: 'sync', name: 'bastcompta-comptabilite-sync.json' },
+  { id: 'fallback', name: 'comptabilite-demo-archive-2026-copie.json' },
+  { id: 'exact', name: 'comptabilite-demo-2026.json' }
+] } }), '2026');
+assert.deepEqual(yearFiles.map(file => file.id), ['fallback', 'exact']);
+assert.equal(drive.selectYearFile(yearFiles, '2026').id, 'exact');
+assert.equal(drive.selectYearFile([{ id: 'fallback', name: 'autre.json' }], '2026').id, 'fallback');
 
 const found = await drive.findByName({ fileName: "comptabilite-l'entreprise-2026.json", escapeQuery: value => value.replaceAll("'", "\\'"),
   listFiles: async options => ({ result: { files: [{ id: 'abc', name: options.q }] } }) });
