@@ -315,8 +315,8 @@ button.danger {
 }
 
 .company-logo {
-    max-width: 115px;
-    max-height: 115px;
+    max-width: 88px;
+    max-height: 88px;
     width: auto;
     height: auto;
     display: block;
@@ -794,6 +794,10 @@ textarea {
         width: 100%;
         justify-content: flex-start;
     }
+
+    .seller { margin-top: 0; }
+
+    .doc-head-right { gap: 10px; }
 }
 
 @media (max-width: 700px) {
@@ -810,6 +814,10 @@ textarea {
     .doc-title-top {
         font-size: 26px;
     }
+
+    .company-logo-wrap { margin-left: 10px; }
+
+    .company-logo { max-width: 72px; max-height: 72px; }
 }
 
 /* Mode spécial pour générer les PDF fidèles dans la sauvegarde ZIP */
@@ -2344,6 +2352,26 @@ button.small { padding:6px 8px; font-size:12px; }
 .toolbar .has-tooltip:focus-visible::after {
     transform: translate(-50%, 0);
 }
+
+.toolbar .has-tooltip.bast-tooltip-left::after {
+    left: -4px;
+    right: auto;
+    transform: translate(0, -4px);
+}
+
+.toolbar .has-tooltip.bast-tooltip-left:hover::after,
+.toolbar .has-tooltip.bast-tooltip-left:focus-visible::after { transform: translate(0, 0); }
+.toolbar .has-tooltip.bast-tooltip-left::before { left: 16px; }
+
+.toolbar .has-tooltip.bast-tooltip-right::after {
+    left: auto;
+    right: -4px;
+    transform: translate(0, -4px);
+}
+
+.toolbar .has-tooltip.bast-tooltip-right:hover::after,
+.toolbar .has-tooltip.bast-tooltip-right:focus-visible::after { transform: translate(0, 0); }
+.toolbar .has-tooltip.bast-tooltip-right::before { left: auto; right: 16px; transform: none; }
 
 .toolbar .toolbar-action-icon:focus-visible,
 .toolbar .toolbar-action-chevron:focus-visible {

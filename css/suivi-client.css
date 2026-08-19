@@ -221,7 +221,7 @@ button:disabled {
 
 .workspace {
     display: grid;
-    grid-template-columns: 430px 1fr;
+    grid-template-columns: minmax(310px, 380px) minmax(0, 1fr);
     gap: 16px;
     align-items: start;
 }
@@ -870,7 +870,50 @@ th.num {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+}
+
+/* Les historiques financiers deviennent des cartes lorsque la table ne tient plus. */
+@media (max-width: 980px) {
+    .money-table-wrap { overflow: visible; border: 0; background: transparent; }
+    .money-table { min-width: 0; display: block; }
+    .money-table thead { display: none; }
+    .money-table tbody { display: grid; gap: 10px; }
+    .money-table tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 14px;
+        padding: 13px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: var(--shadow-soft);
+    }
+    .money-table td {
+        min-width: 0;
+        padding: 0;
+        border: 0;
+        overflow-wrap: anywhere;
+    }
+    .money-table td::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .money-table td.num { text-align: left; white-space: normal; }
+    .money-table td[data-label="Description"],
+    .money-table td[data-label="Actions"] { grid-column: 1 / -1; }
+    .money-table .document-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 560px) {
+    .money-table tr { grid-template-columns: 1fr; }
+    .money-table td[data-label] { grid-column: auto; }
 }
 
 /* Petite croix rouge au lieu du bouton Supprimer */

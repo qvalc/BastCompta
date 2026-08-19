@@ -1667,8 +1667,8 @@ function renderMoneyTable(items, type) {
   const isCrmDoc = ['quote', 'invoice', 'reminder'].includes(type);
 
   return `
-        <div class="table-wrap">
-          <table>
+        <div class="table-wrap money-table-wrap">
+          <table class="money-table">
             <thead>
               <tr>
                 <th>Date</th>
@@ -1681,11 +1681,11 @@ function renderMoneyTable(items, type) {
             <tbody>
               ${items.map(item => `
                 <tr>
-                  <td>${formatDate(item.date)}</td>
-                  <td>${escapeHtml(item.displayRef || item.ref || '—')}</td>
-                  <td>${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
-                  <td class="num">${formatMoney(projectMoneyValue(item))}${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<br><small>Fournitures vendues: ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + ' · Revient: ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</small>' : ''}</td>
-                  <td class="no-print">
+                  <td data-label="Date">${formatDate(item.date)}</td>
+                  <td data-label="Référence">${escapeHtml(item.displayRef || item.ref || '—')}</td>
+                  <td data-label="Description">${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
+                  <td class="num" data-label="Montant">${formatMoney(projectMoneyValue(item))}${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<br><small>Fournitures vendues: ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + ' · Revient: ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</small>' : ''}</td>
+                  <td class="no-print" data-label="Actions">
                     <div class="inline-actions document-actions">
                       ${isCrmDoc ? `<button class="small" onclick="previewCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')">Afficher</button>` : ''}
                       ${isCrmDoc ? `<button class="small" onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')">Charger</button>` : ''}
