@@ -276,6 +276,7 @@ const pageDefs = [
 let data = loadData();
 let activePage = 'quote';
 let crmExpandedClientId = '';
+const manualChantierEditors = new Set();
 let crmSearchTerm = '';
 let driveFileIndex = {};
 let tarifsLocalDirty = false;
@@ -2384,15 +2385,40 @@ function getChantiersForDocument(doc) {
     .sort((a, b) => `${a.clientName || ''} ${a.title || ''}`.localeCompare(`${b.clientName || ''} ${b.title || ''}`, 'fr', { sensitivity: 'base' }));
 }
 
-function renderChantierOptionsForDocument(doc) {
+function renderChantierOptionsForDocument(doc, docKey) {
   const projects = getChantiersForDocument(doc);
   const selectedId = String(doc?.chantierId || '').trim();
-  const rows = ['<option value="">— Aucun suivi client synchronisé —</option>'];
+  const manualSelected = manualChantierEditors.has(docKey) || (!selectedId && !!String(doc?.siteName || '').trim());
+  const rows = [`<option value="" ${!selectedId && !manualSelected ? 'selected' : ''}>Aucun chantier</option>`];
   projects.forEach(project => {
     const label = `${project.clientName || 'Client'} — ${project.title || 'Chantier'}`;
     rows.push(`<option value="${escapeAttr(project.id)}" ${selectedId === String(project.id) ? 'selected' : ''}>${escapeHtml(label)}</option>`);
   });
+  rows.push(`<option value="__custom__" ${manualSelected ? 'selected' : ''}>＋ Saisir un autre chantier</option>`);
   return rows.join('');
+}
+
+function setDocumentChantierChoice(docKey, choice) {
+  const doc = data[docKey];
+  if (!doc) return;
+
+  if (choice === '__custom__') {
+    manualChantierEditors.add(docKey);
+    doc.chantierId = '';
+    doc.siteName = '';
+    render();
+    requestAnimationFrame(() => document.getElementById(`${docKey}-custom-chantier`)?.focus());
+    return;
+  }
+
+  manualChantierEditors.delete(docKey);
+  if (!choice) doc.siteName = '';
+  setDocumentChantier(docKey, choice);
+}
+
+function setCustomDocumentChantier(docKey, value) {
+  manualChantierEditors.delete(docKey);
+  setDocumentField(docKey, 'siteName', value, doc => { doc.chantierId = ''; });
 }
 
 function setDocumentChantier(docKey, projectId) {
@@ -4000,14 +4026,16 @@ function renderDocumentPage(docKey) {
       </div>
     </div>
 
-    <div class="client-box" style="margin-top:10px;">
+    <div class="client-box chantier-picker no-print" style="margin-top:10px;">
       <div class="box-title">Chantier</div>
       <div class="stack">
-        <select class="no-print" onchange="setDocumentChantier('${docKey}', this.value)">
-          ${renderChantierOptionsForDocument(doc)}
+        <select aria-label="Choisir un chantier" onchange="setDocumentChantierChoice('${docKey}', this.value)">
+          ${renderChantierOptionsForDocument(doc, docKey)}
         </select>
-        <input placeholder="Nom du chantier / site" value="${escapeAttr(doc.siteName || '')}" onchange="setDocumentField('${docKey}', 'siteName', this.value, doc => { doc.chantierId = ''; })">
-        <div class="hint no-print">Sélectionnez un chantier existant ou tapez un nom : le document sera lié par identifiant chantier quand il existe.</div>
+        ${manualChantierEditors.has(docKey) || (!doc.chantierId && String(doc.siteName || '').trim()) ? `
+          <input id="${docKey}-custom-chantier" placeholder="Nom du nouveau chantier" value="${escapeAttr(doc.siteName || '')}" onchange="setCustomDocumentChantier('${docKey}', this.value)">
+          <div class="chantier-picker-hint">Indiquez simplement le nom du chantier.</div>
+        ` : ''}
       </div>
     </div>
   </div>

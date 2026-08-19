@@ -333,6 +333,21 @@ button.danger {
     flex: 1;
 }
 
+.chantier-picker {
+    background: linear-gradient(180deg, #fff 0%, #f8fbff 100%);
+}
+
+.chantier-picker select,
+.chantier-picker input {
+    width: 100%;
+}
+
+.chantier-picker-hint {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
 .box-title {
     font-size: 11px;
     text-transform: uppercase;
