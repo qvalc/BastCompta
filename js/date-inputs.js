@@ -1,4 +1,4 @@
-/* BastCompta - saisie uniforme des dates au format JJ-MM-AAAA. */
+/* BastCompta - calendrier natif avec saisie manuelle facultative JJ-MM-AAAA. */
 (function (global) {
   'use strict';
 
@@ -33,30 +33,64 @@
     return `${day}-${month}-${year}`;
   }
 
+  function companion(input) {
+    return input?.parentElement?.querySelector?.('.bast-date-manual') || null;
+  }
+
   function value(inputOrValue) {
-    const raw = inputOrValue && typeof inputOrValue === 'object'
-      ? (inputOrValue.dataset?.bastDateIso ?? inputOrValue.value)
-      : inputOrValue;
+    const raw = inputOrValue && typeof inputOrValue === 'object' ? inputOrValue.value : inputOrValue;
     return normalize(raw) || '';
   }
 
   function setValue(input, nextValue) {
     if (!input) return '';
     const iso = normalize(nextValue);
-    input.dataset.bastDateIso = iso || '';
-    input.value = iso === null ? String(nextValue ?? '') : display(iso);
+    input.value = iso || '';
+    const manual = companion(input);
+    if (manual) manual.value = display(iso || '');
     return iso || '';
   }
 
   function enhance(input) {
     if (!input || input.dataset.bastDateEnhanced === '1') return;
-    const initial = input.value;
-    input.type = 'text';
-    input.inputMode = 'numeric';
-    input.autocomplete = 'off';
-    input.placeholder = input.placeholder || 'JJ-MM-AAAA';
     input.dataset.bastDateEnhanced = '1';
-    setValue(input, initial);
+    const wrapper = global.document.createElement('span');
+    wrapper.className = 'bast-date-combo';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+
+    const manual = global.document.createElement('input');
+    manual.type = 'text';
+    manual.className = 'bast-date-manual';
+    manual.inputMode = 'numeric';
+    manual.autocomplete = 'off';
+    manual.placeholder = 'JJ-MM-AAAA';
+    manual.setAttribute('aria-label', 'Saisie manuelle de la date au format jour mois année');
+    manual.value = display(input.value);
+    wrapper.appendChild(manual);
+
+    const syncManual = () => {
+      manual.value = display(input.value);
+      manual.setCustomValidity('');
+    };
+    input.addEventListener('input', syncManual);
+    input.addEventListener('change', syncManual);
+
+    manual.addEventListener('input', () => manual.setCustomValidity(''));
+    manual.addEventListener('change', () => {
+      const iso = normalize(manual.value);
+      if (iso === null) {
+        manual.setCustomValidity('Indique une date valide au format JJ-MM-AAAA, par exemple 11-03-1986.');
+        manual.reportValidity();
+        manual.focus();
+        return;
+      }
+      manual.setCustomValidity('');
+      input.value = iso;
+      manual.value = display(iso);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
   }
 
   function enhanceAll(root) {
@@ -65,35 +99,24 @@
     root?.querySelectorAll?.('input[type="date"]').forEach(enhance);
   }
 
-  function commitDate(event) {
-    const input = event.target;
-    if (!input?.matches?.('input[data-bast-date-enhanced="1"]')) return;
-    const iso = normalize(input.value);
-    if (iso === null) {
-      input.setCustomValidity('Indique une date valide au format JJ-MM-AAAA, par exemple 11-03-1986.');
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      global.setTimeout(() => { input.reportValidity(); input.focus(); }, 0);
-      return;
-    }
-    input.setCustomValidity('');
-    input.dataset.bastDateIso = iso;
-    input.value = iso;
-    global.setTimeout(() => {
-      if (input.isConnected) input.value = display(iso);
-    }, 0);
+  function installStyles() {
+    if (!global.document || global.document.getElementById('bast-date-input-styles')) return;
+    const style = global.document.createElement('style');
+    style.id = 'bast-date-input-styles';
+    style.textContent = `
+      .bast-date-combo{display:grid;grid-template-columns:minmax(135px,1fr) minmax(118px,.75fr);gap:7px;align-items:center;width:100%}
+      .bast-date-combo>input{min-width:0;width:100%;box-sizing:border-box}
+      .bast-date-manual{font-variant-numeric:tabular-nums}
+      @media(max-width:620px){.bast-date-combo{grid-template-columns:1fr}.bast-date-manual{min-height:42px}}
+      @media print{.bast-date-manual{display:none!important}.bast-date-combo{display:block}}
+    `;
+    global.document.head.appendChild(style);
   }
 
   if (global.document) {
-    const start = () => enhanceAll(global.document);
+    const start = () => { installStyles(); enhanceAll(global.document); };
     if (global.document.readyState === 'loading') global.document.addEventListener('DOMContentLoaded', start);
     else start();
-    global.document.addEventListener('change', commitDate, true);
-    global.document.addEventListener('input', event => event.target?.setCustomValidity?.(''), true);
-    global.document.addEventListener('focusin', event => {
-      const input = event.target;
-      if (input?.matches?.('input[data-bast-date-enhanced="1"]')) setValue(input, input.value);
-    }, true);
     new MutationObserver(mutations => mutations.forEach(mutation => mutation.addedNodes.forEach(enhanceAll)))
       .observe(global.document.documentElement, { childList: true, subtree: true });
   }
