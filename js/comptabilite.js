@@ -746,26 +746,6 @@ async function openSalesInvoicePreview(invoiceNumber) {
 
 window.openSalesInvoicePreview = openSalesInvoicePreview;
 
-function sanitizeDriveFileNamePart(value, fallback = 'sans-reference') {
-  const cleaned = String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80);
-  return cleaned || fallback;
-}
-
-function getPurchasePdfFileName(row, originalName = 'facture.pdf') {
-  const invoice = sanitizeDriveFileNamePart(row?.invoiceNumber, 'sans-numero');
-  const supplier = sanitizeDriveFileNamePart(row?.supplier, 'fournisseur');
-  const date = sanitizeDriveFileNamePart(row?.date, 'sans-date');
-  const baseName = String(originalName || 'facture.pdf').replace(/\.pdf$/i, '');
-  const shortOriginal = sanitizeDriveFileNamePart(baseName, 'document');
-  return `achat-${date}-${supplier}-${invoice}-${shortOriginal}.pdf`;
-}
-
 function getPurchasePdfFileById(fileId) {
   if (!fileId) return null;
   return purchasePdfDriveFiles.find(file => file.id === fileId) || null;
@@ -775,16 +755,9 @@ async function loadPurchasePdfDriveFiles(showAlert401 = false) {
   if (!googleAccessToken || !window.gapi?.client) return [];
 
   try {
-    const list = await driveFilesList({
-      spaces: 'appDataFolder',
-      q: `mimeType='application/pdf' and trashed=false and name contains 'achat-'`,
-      orderBy: 'modifiedTime desc',
-      pageSize: 100,
-      fields: 'files(id, name, modifiedTime, size)'
-    }, showAlert401);
-
-    if (!list) return purchasePdfDriveFiles;
-    purchasePdfDriveFiles = list.result.files || [];
+    const files = await BastPurchasePdfDrive.list(driveFilesList, showAlert401);
+    if (!files) return purchasePdfDriveFiles;
+    purchasePdfDriveFiles = files;
     return purchasePdfDriveFiles;
   } catch (error) {
     console.error(error);
@@ -834,23 +807,13 @@ async function handlePurchasePdfUpload(event) {
       alert(getVatLockMessage(lockedDec));
       return;
     }
-    const fileName = getPurchasePdfFileName(row, file.name);
-    const metadata = { name: fileName, parents: ['appDataFolder'] };
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', file);
-
-    const res = await googleDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime,size', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${googleAccessToken}` },
-      body: form
+    const saved = await BastPurchasePdfDrive.upload({
+      row,
+      file,
+      accessToken: googleAccessToken,
+      fetchDrive: googleDriveFetch
     });
-
-    if (!res) return;
-    if (!res.ok) throw new Error(await res.text());
-
-    const saved = await res.json();
+    if (!saved) return;
     data.purchases[rowIndex].pdfFileId = saved.id;
     data.purchases[rowIndex].pdfFileName = saved.name;
     data.purchases[rowIndex].pdfModifiedTime = saved.modifiedTime || '';
@@ -902,17 +865,15 @@ async function openPurchasePdf(fileId) {
         </div>
       </div>`;
 
-    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    const blob = await BastPurchasePdfDrive.download({
+      fileId,
+      accessToken: googleAccessToken,
+      fetchDrive: googleDriveFetch
     });
-
-    if (!res) {
+    if (!blob) {
       previewWindow.close();
       return;
     }
-    if (!res.ok) throw new Error(await res.text());
-
-    const blob = await res.blob();
     const pdfBlob = blob.type === 'application/pdf'
       ? blob
       : new Blob([blob], { type: 'application/pdf' });
@@ -945,21 +906,13 @@ async function deletePurchasePdf(fileId) {
   if (!await BastUI.confirm('Supprimer définitivement cette facture PDF de Google Drive ?',{type:'danger',title:'Supprimer le PDF'})) return;
 
   try {
-    const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${googleAccessToken}` }
+    const removed = await BastPurchasePdfDrive.remove({
+      fileId,
+      accessToken: googleAccessToken,
+      fetchDrive: googleDriveFetch
     });
-
-    if (!res) return;
-    if (!res.ok) throw new Error(await res.text());
-
-    data.purchases.forEach(row => {
-      if (row.pdfFileId === fileId) {
-        row.pdfFileId = '';
-        row.pdfFileName = '';
-        row.pdfModifiedTime = '';
-      }
-    });
+    if (!removed) return;
+    BastPurchasePdfDrive.unlinkPurchases(data.purchases, fileId);
 
     await saveData(false);
     await saveCurrentYearJsonToDrive(false);
@@ -973,18 +926,7 @@ async function deletePurchasePdf(fileId) {
 }
 
 function getPurchasePdfYear(file) {
-  const name = String(file?.name || '');
-  const match = name.match(/(?:^|[^0-9])((?:19|20)\d{2})(?:[^0-9]|$)/);
-  if (match) return match[1];
-
-  if (file?.modifiedTime) {
-    const modifiedDate = new Date(file.modifiedTime);
-    if (!Number.isNaN(modifiedDate.getTime())) {
-      return String(modifiedDate.getFullYear());
-    }
-  }
-
-  return 'Sans année';
+  return BastPurchasePdfDrive.year(file);
 }
 
 function setPurchasePdfPanelOpen(isOpen) {
@@ -3747,52 +3689,19 @@ function render() {
 }
 
 
-function normalizeInvoiceImportRow(row) {
-  const documentStatus = String(row?.documentStatus || 'sent');
-  const documentType = String(row?.documentType || 'invoice');
-  const rawTvac = Math.round(((parseFloat(row?.tvac) || 0) + Number.EPSILON) * 100) / 100;
-  const isCreditNote = documentType.toLowerCase() === 'credit_note' || documentStatus.toLowerCase() === 'credit_note';
-  return {
-    date: String(row?.date || ''),
-    client: String(row?.client || ''),
-    invoiceNumber: String(row?.invoiceNumber || ''),
-    linkedInvoiceNumber: String(row?.linkedInvoiceNumber || ''),
-    documentStatus,
-    documentType,
-    description: String(row?.description || ''),
-    rate: parseFloat(row?.rate) || 0,
-    tvac: isCreditNote ? -Math.abs(rawTvac) : rawTvac
-  };
-}
-
 function getInvoiceImportTypeLabel(row) {
-  if (row.documentType === 'credit_note' || row.documentStatus === 'credit_note') return 'Note de crédit';
-  return 'Facture';
+  return BastSalesImport.typeLabel(row);
 }
 
 async function importInvoiceSalesRowsFromPortal(payloadOrRows) {
-  const payload = Array.isArray(payloadOrRows)
-    ? { action: 'upsert', rows: payloadOrRows }
-    : (payloadOrRows || {});
-
-  const action = String(payload.action || 'upsert');
-  const invoiceNumber = String(payload.invoiceNumber || '').trim();
-
-  const rawRows = Array.isArray(payload.rows) ? payload.rows : [];
-  const incomingRows = rawRows
-    .map(normalizeInvoiceImportRow)
-    .filter(row => row.tvac !== 0 || row.description || row.invoiceNumber || row.client);
-
-  const invoiceNumbers = [...new Set([
-    invoiceNumber,
-    ...incomingRows.map(row => row.invoiceNumber)
-  ].filter(Boolean))];
+  const plan = BastSalesImport.prepare(payloadOrRows);
+  const { action, incomingRows, invoiceNumbers } = plan;
 
   if (!invoiceNumbers.length) {
     return { ok: false, count: 0, message: 'Aucun numéro de facture valide à traiter.' };
   }
 
-  const existingRows = data.sales.filter(row => invoiceNumbers.includes(String(row.invoiceNumber || '')));
+  const existingRows = BastSalesImport.matchingRows(data.sales, invoiceNumbers);
   const lockedExisting = existingRows.find(row => getClosedVatDeclarationForDate(row.date || ''));
   if (lockedExisting) {
     const dec = getClosedVatDeclarationForDate(lockedExisting.date || '');
@@ -3800,10 +3709,8 @@ async function importInvoiceSalesRowsFromPortal(payloadOrRows) {
   }
 
   if (action === 'cancel') {
-    const before = data.sales.length;
-    data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
-    const removed = before - data.sales.length;
-    sortByDate(data.sales);
+    const result = BastSalesImport.apply(data.sales, plan);
+    data.sales = result.sales;
     activePage = 'sales';
     await saveData(false);
     if (googleAccessToken) await saveCurrentYearJsonToDrive(false);
@@ -3811,10 +3718,8 @@ async function importInvoiceSalesRowsFromPortal(payloadOrRows) {
 
     return {
       ok: true,
-      count: removed,
-      message: removed
-        ? `Facture annulée : ${removed} ligne(s) retirée(s) du journal des ventes.`
-        : 'Facture annulée : aucune ligne existante à retirer du journal des ventes.'
+      count: result.count,
+      message: result.message
     };
   }
 
@@ -3828,20 +3733,17 @@ async function importInvoiceSalesRowsFromPortal(payloadOrRows) {
     return { ok: false, count: 0, message: getVatLockMessage(dec) };
   }
 
-  data.sales = data.sales.filter(row => !invoiceNumbers.includes(String(row.invoiceNumber || '')));
-  data.sales.push(...incomingRows);
-  sortByDate(data.sales);
+  const result = BastSalesImport.apply(data.sales, plan);
+  data.sales = result.sales;
   activePage = 'sales';
   await saveData(false);
   if (googleAccessToken) await saveCurrentYearJsonToDrive(false);
   render();
 
-  const hasCreditNote = incomingRows.some(row => row.documentType === 'credit_note');
-  const replacedText = invoiceNumbers.length ? ' Les anciennes lignes avec le même N° document ont été remplacées.' : '';
   return {
     ok: true,
-    count: incomingRows.length,
-    message: incomingRows.length + (hasCreditNote ? ' ligne(s) de note de crédit ajoutée(s) dans le journal des ventes.' : ' ligne(s) ajoutée(s) dans le journal des ventes.') + replacedText
+    count: result.count,
+    message: result.message
   };
 }
 
