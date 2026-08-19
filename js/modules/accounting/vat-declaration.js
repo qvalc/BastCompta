@@ -42,5 +42,21 @@
     return { rows, totalDueOpen: sum(rows, row => row.outstanding), totalUnfiledDue: sum(unfiled, row => row.computed.dueAmount),
       totalUnfiledCredit: sum(unfiled, row => row.computed.creditAmount), totalFiledUnpaid: sum(unpaid, row => row.outstanding) };
   }
-  global.BastVatDeclaration = Object.freeze({ compute, ledger });
+
+  function openPosition({ vatLedger = null, initialCredit = 0, salesVat = 0, purchasesVat = 0, vatExempt = false } = {}) {
+    const calc = global.BastAccountingCalculations;
+    if (vatExempt) return { netVat: 0, openVatCredit: 0, openVatDue: 0, realVat: 0 };
+    const rows = Array.isArray(vatLedger?.rows) ? vatLedger.rows : [];
+    const lastRow = rows.length ? rows[rows.length - 1] : null;
+    const openVatCredit = calc.round2(lastRow ? lastRow.computed?.creditAmount : initialCredit);
+    const openVatDue = calc.round2(vatLedger?.totalDueOpen || 0);
+    return {
+      netVat: calc.round2(calc.number(salesVat) - calc.number(purchasesVat) - calc.number(initialCredit)),
+      openVatCredit,
+      openVatDue,
+      realVat: calc.round2(openVatDue - openVatCredit)
+    };
+  }
+
+  global.BastVatDeclaration = Object.freeze({ compute, ledger, openPosition });
 })(globalThis);

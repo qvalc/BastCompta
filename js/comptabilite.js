@@ -193,7 +193,7 @@ const LOSS_TYPE_OPTIONS = [
 ];
 
 function getLossType(row) {
-  return row?.type || 'cotisations_sociales';
+  return BastOperatingLedger.lossType(row);
 }
 
 function getLossTypeLabel(type) {
@@ -2230,108 +2230,17 @@ function computeVatLedger() {
 }
 
 function totals() {
-  const journalTotals = BastAccountingJournals.summarize({
-    sales: data.sales,
-    purchases: data.purchases,
-    vatExempt: isVatExempt(),
-    isPurchaseVatRecoverable
-  });
-  const {
-    salesNet,
-    salesVat,
-    purchasesNet,
-    purchasesVat,
-    purchasesMerchandiseNet,
-    purchasesGeneralNet
-  } = journalTotals;
   const currentYear = parseInt(data.company.period, 10) || new Date().getFullYear();
-  const fixedAssets = BastFixedAssets.summarize({
-    investments: data.investments,
-    assets: data.assets,
-    currentYear
-  });
-  const { investmentComputed, assetsComputed, assetsGross } = fixedAssets;
-  const yearlyAmort = fixedAssets.investmentsYearlyAmort;
-  const totalAmortized = fixedAssets.assetsTotalAmortized;
-
-  const stockValue = data.stock.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
-  const lossesTotal = data.losses.reduce((sum, row) => sum + toNumber(row.quantity) * toNumber(row.unitPrice), 0);
-  const socialContributionsTotal = data.losses.reduce((sum, row) => {
-    return sum + (getLossType(row) === 'cotisations_sociales' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
-  }, 0);
-  const financialChargesTotal = data.losses.reduce((sum, row) => {
-    return sum + (getLossType(row) === 'frais_financiers' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
-  }, 0);
-  const exceptionalChargesTotal = data.losses.reduce((sum, row) => {
-    return sum + (getLossType(row) === 'charges_exceptionnelles' ? toNumber(row.quantity) * toNumber(row.unitPrice) : 0);
-  }, 0);
-  const otherTaxesTotal = data.losses.reduce((sum, row) => {
-    const type = getLossType(row);
-    const amount = toNumber(row.quantity) * toNumber(row.unitPrice);
-    return sum + (!['cotisations_sociales', 'frais_financiers', 'charges_exceptionnelles'].includes(type) ? amount : 0);
-  }, 0);
-  const kmTotal = data.km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
-
-  // Compte exploitant : les mouvements privés n'affectent jamais le compte de résultat.
-  // Un apport/remboursement augmente les capitaux propres ; un prélèvement privé les diminue.
-  const ownerAccountCarryover = toNumber(data.settings.ownerAccountCarryover);
-  const carryover = toNumber(data.settings.vatCarryover);
-
-  // Les cotisations sociales ne sont pas reprises dans les charges du compte de résultat.
-  // Elles sont traitées uniquement dans le bloc de correction/exonération.
-  const netVat = salesVat - purchasesVat - carryover;
-
   // Le bilan doit reprendre la situation réellement ouverte du suivi TVA,
   // et non recalculer une TVA annuelle en soustrayant simplement les paiements.
-  // Une période déjà payée ne constitue plus une dette. Un crédit reporté reste
-  // une créance TVA et n'est compté qu'une seule fois, via la dernière période.
   const vatLedger = isVatExempt() ? null : computeVatLedger();
-  const lastVatRow = vatLedger?.rows?.length
-    ? vatLedger.rows[vatLedger.rows.length - 1]
-    : null;
-  const openVatCredit = isVatExempt()
-    ? 0
-    : round2(lastVatRow ? lastVatRow.computed.creditAmount : carryover);
-  const openVatDue = isVatExempt()
-    ? 0
-    : round2(vatLedger?.totalDueOpen || 0);
-
-  // Conservé comme solde net pour les usages internes/compatibilité, mais
-  // l'actif et le passif utilisent séparément la créance et la dette ouvertes.
-  const statement = BastFinancialStatements.summarize({ salesNet, purchasesNet, yearlyAmort, otherTaxesTotal,
-    financialChargesTotal, exceptionalChargesTotal, socialContributionsTotal, assetsGross, totalAmortized,
-    stockValue, privateMovements: data.privateMovements, ownerAccountCarryover,
-    socialExemptionThreshold: data.settings.socialExemptionThreshold,
-    socialContributionRate: data.settings.socialContributionRate,
-    socialContributionFeeRate: data.settings.socialContributionFeeRate,
-    bankBalance: data.settings.bankBalance, cashBalance: data.settings.cashBalance,
-    capitalStart: data.settings.capitalStart, retainedEarnings: data.settings.retainedEarnings,
-    openVatCredit, openVatDue });
-
-  return {
-    salesNet,
-    salesVat,
-    purchasesNet,
-    purchasesVat,
-    purchasesMerchandiseNet,
-    purchasesGeneralNet,
-    investmentComputed,
-    assetsComputed,
-    assetsGross,
-    yearlyAmort,
-    totalAmortized,
-    stockValue,
-    lossesTotal,
-    socialContributionsTotal,
-    otherTaxesTotal,
-    financialChargesTotal,
-    exceptionalChargesTotal,
-    kmTotal,
-    ownerAccountCarryover,
-    ...statement,
-    netVat,
-    realVat: statement.realVat
-  };
+  return BastAccountingSummary.summarize({
+    data,
+    currentYear,
+    vatExempt: isVatExempt(),
+    isPurchaseVatRecoverable,
+    vatLedger,
+  });
 }
 
 function setField(path, value) {
@@ -2883,9 +2792,9 @@ function renderPrivateMovementTypeSelect(row, index) {
 
 function renderPrivateMovements() {
   const t = totals();
-  const withdrawals = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') === 'withdrawal' ? Math.abs(toNumber(row.amount)) : 0), 0);
-  const regularizations = data.privateMovements.reduce((sum, row) => sum + ((row.type || 'withdrawal') === 'regularization' ? Math.abs(toNumber(row.amount)) : 0), 0);
-  const additions = data.privateMovements.reduce((sum, row) => sum + (['contribution', 'reimbursement'].includes(row.type || 'withdrawal') ? Math.abs(toNumber(row.amount)) : 0), 0);
+  const { withdrawals, regularizations, additions } = BastOperatingLedger.summarize({
+    privateMovements: data.privateMovements
+  });
 
   return renderTablePage({
     key: 'private',
@@ -2896,7 +2805,7 @@ function renderPrivateMovements() {
     headers: ['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif', ''],
     rows: data.privateMovements.map((row, i) => {
       const amount = Math.abs(toNumber(row.amount));
-      const effect = ['withdrawal', 'regularization'].includes(row.type || 'withdrawal') ? -amount : amount;
+      const effect = BastOperatingLedger.privateMovementEffect(row);
       return `
         <tr>
           <td><input type="date" value="${escapeAttr(row.date || '')}" onchange="updatePrivateMovementField(${i}, 'date', this.value)"></td>
