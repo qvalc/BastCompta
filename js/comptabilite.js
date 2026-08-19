@@ -969,7 +969,7 @@ async function deletePurchasePdf(fileId) {
   }
 
   if (!fileId) return;
-  if (!confirm('Supprimer définitivement cette facture PDF de Google Drive ?')) return;
+  if (!await BastUI.confirm('Supprimer définitivement cette facture PDF de Google Drive ?',{type:'danger',title:'Supprimer le PDF'})) return;
 
   try {
     const res = await googleDriveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
@@ -1491,9 +1491,9 @@ async function deleteSelectedJsonFromDrive() {
     return;
   }
 
-  if (!confirm(fileIds.length === 1
+  if (!await BastUI.confirm(fileIds.length === 1
     ? 'Supprimer cette sauvegarde définitivement ?'
-    : `Supprimer définitivement ces ${fileIds.length} sauvegardes ?`)) return;
+    : `Supprimer définitivement ces ${fileIds.length} sauvegardes ?`,{type:'danger',title:'Supprimer les sauvegardes'})) return;
 
   try {
     for (const fileId of fileIds) {
@@ -2225,8 +2225,8 @@ function syncVatDeclarationPeriod(index) {
   saveData(false);
 }
 
-function deleteVatDeclaration(index) {
-  if (!confirm('Supprimer cette déclaration TVA ?')) return;
+async function deleteVatDeclaration(index) {
+  if (!await BastUI.confirm('Supprimer cette déclaration TVA ?',{type:'danger',title:'Supprimer la déclaration TVA'})) return;
   notifyPortalBusinessChange('Déclaration TVA supprimée');
   data.vat.declarations.splice(index, 1);
   saveData(false);
@@ -2308,14 +2308,14 @@ function updateAccountingRowField(collection, index, field, value, options = {})
   return true;
 }
 
-function deleteAccountingRow(collection, index) {
+async function deleteAccountingRow(collection, index) {
   const row = data[collection]?.[index];
   const lockedDec = getClosedVatDeclarationForDate(row?.date || '');
   if (lockedDec) {
     alert(getVatLockMessage(lockedDec));
     return;
   }
-  if (!confirm('Supprimer cette ligne ?')) return;
+  if (!await BastUI.confirm('Supprimer cette ligne ?',{type:'danger',title:'Supprimer la ligne'})) return;
   notifyPortalBusinessChange('Écriture comptable supprimée');
   data[collection].splice(index, 1);
   saveData(false);
@@ -2597,12 +2597,12 @@ function addRow(key, row) {
   if (key === 'purchases') syncPurchasesToChantiers(false);
 }
 
-function deleteRow(key, index) {
+async function deleteRow(key, index) {
   if ((key === 'sales' || key === 'purchases') && getClosedVatDeclarationForDate(data[key]?.[index]?.date || '')) {
     alert(getVatLockMessage(getClosedVatDeclarationForDate(data[key]?.[index]?.date || '')));
     return;
   }
-  if (!confirm('Supprimer cette ligne ?')) return;
+  if (!await BastUI.confirm('Supprimer cette ligne ?',{type:'danger',title:'Supprimer la ligne'})) return;
   notifyPortalBusinessChange('Ligne comptable supprimée');
   data[key].splice(index, 1);
   saveData(false);

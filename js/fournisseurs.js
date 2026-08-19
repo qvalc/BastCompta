@@ -30,7 +30,7 @@ function notify(msg){const e=document.getElementById('toast');e.textContent=msg;
 function supplier(){return data.suppliers.find(s=>s.id===selectedSupplierId)||null}
 function returnToDevis(page='tarifs'){if(window.parent&&window.parent!==window){safePostToParent({type:'BASTCOMPTA_OPEN_DEVIS_PAGE',pageKey:page});return}location.href=`devis-facture.html?embedded=1&open=${encodeURIComponent(page)}`}
 function addSupplier(){const s=normalizeSupplier({name:'Nouveau fournisseur'});data.suppliers.unshift(s);selectedSupplierId=s.id;selectedTab='info';saveLocal('Fournisseur ajouté');renderAll()}
-function deleteSupplier(){const s=supplier();if(!s||!confirm(`Supprimer « ${s.name||'ce fournisseur'} » et ses articles ?`))return;data.suppliers=data.suppliers.filter(x=>x.id!==s.id);selectedSupplierId='';saveLocal('Fournisseur supprimé');renderAll()}
+async function deleteSupplier(){const s=supplier();if(!s||!await BastUI.confirm(`Supprimer « ${s.name||'ce fournisseur'} » et ses articles ?`,{type:'danger',title:'Supprimer le fournisseur'}))return;data.suppliers=data.suppliers.filter(x=>x.id!==s.id);selectedSupplierId='';saveLocal('Fournisseur supprimé');renderAll()}
 function setField(k,v){const s=supplier();if(!s)return;s[k]=v;saveLocal('Fiche fournisseur modifiée');renderSupplierList()}
 function setTab(t){selectedTab=t;renderWorkspace()}
 function addArticle(){const s=supplier();if(!s)return;s.articles.push(normalizeArticle({}));saveLocal('Article fournisseur ajouté');renderWorkspace()}

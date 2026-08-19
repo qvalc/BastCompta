@@ -140,3 +140,25 @@
     position: static;
   }
 }
+
+/* Notifications et confirmations communes. */
+.bast-ui-toasts{position:fixed;right:20px;bottom:20px;z-index:10050;display:grid;gap:10px;width:min(390px,calc(100vw - 28px));pointer-events:none}
+.bast-ui-toast{display:grid;grid-template-columns:30px minmax(0,1fr) 28px;align-items:start;gap:10px;padding:13px 12px;border:1px solid #dbe4f0;border-left:4px solid #3b82f6;border-radius:14px;background:#fff;color:var(--bast-navy);box-shadow:0 16px 45px rgba(15,23,42,.18);opacity:0;transform:translateY(12px);transition:opacity .18s ease,transform .18s ease;pointer-events:auto}
+.bast-ui-toast.is-visible{opacity:1;transform:none}
+.bast-ui-toast.is-success{border-left-color:#22c55e}.bast-ui-toast.is-warning{border-left-color:#f59e0b}.bast-ui-toast.is-error{border-left-color:#ef4444}
+.bast-ui-toast-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#eff6ff;color:#2563eb;font-weight:900}
+.bast-ui-toast.is-success .bast-ui-toast-icon{background:#ecfdf5;color:#15803d}.bast-ui-toast.is-warning .bast-ui-toast-icon{background:#fffbeb;color:#b45309}.bast-ui-toast.is-error .bast-ui-toast-icon{background:#fef2f2;color:#b91c1c}
+.bast-ui-toast-message{padding-top:3px;white-space:pre-line;font-size:14px;font-weight:650;line-height:1.4}
+.bast-ui-toast button{width:28px!important;height:28px!important;min-width:28px!important;padding:0!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#64748b!important;box-shadow:none!important;font-size:20px!important;line-height:1!important}
+.bast-ui-dialog-layer{position:fixed;inset:0;z-index:10060;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.48);backdrop-filter:blur(4px)}
+.bast-ui-dialog-layer[hidden]{display:none!important}
+.bast-ui-dialog{display:grid;grid-template-columns:48px minmax(0,1fr);gap:4px 16px;width:min(500px,100%);padding:22px;border:1px solid rgba(255,255,255,.65);border-radius:20px;background:#fff;box-shadow:0 28px 80px rgba(15,23,42,.3)}
+.bast-ui-dialog-icon{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:#fff7ed;color:#c2410c}.bast-ui-dialog-icon::before{content:'!';font-size:23px;font-weight:900}
+.bast-ui-dialog[data-type="danger"] .bast-ui-dialog-icon{background:#fef2f2;color:#b91c1c}
+.bast-ui-dialog-copy h2{margin:0 0 7px;color:var(--bast-navy);font-size:21px}.bast-ui-dialog-copy p{margin:0;color:#64748b;white-space:pre-line;line-height:1.55}
+.bast-ui-dialog-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:9px;margin-top:20px;padding-top:16px;border-top:1px solid #e5eaf1}
+.bast-ui-dialog-actions button{min-height:42px;padding:9px 16px;border:1px solid #dbe4f0;border-radius:11px;background:#fff;color:var(--bast-navy);font-weight:800;cursor:pointer}
+.bast-ui-dialog-actions .bast-ui-confirm{border-color:#2563eb;background:#2563eb;color:#fff}
+.bast-ui-dialog[data-type="danger"] .bast-ui-confirm{border-color:#dc2626;background:#dc2626}
+body.bast-ui-dialog-open{overflow:hidden!important}
+@media(max-width:560px){.bast-ui-toasts{right:14px;bottom:14px}.bast-ui-dialog{grid-template-columns:40px minmax(0,1fr);padding:18px}.bast-ui-dialog-icon{width:40px;height:40px}.bast-ui-dialog-actions{display:grid;grid-template-columns:1fr 1fr}.bast-ui-dialog-actions button{width:100%}}
