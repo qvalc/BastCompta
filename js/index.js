@@ -1306,6 +1306,26 @@ const HIDDEN_DRIVE_CATEGORIES = [
   { key: 'autres', label: 'Autres' }
 ];
 
+const HIDDEN_DRIVE_ICONS = {
+  all: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/><path d="M3 7V5h7l2 2"/></svg>',
+  devis: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6"/></svg>',
+  factures: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>',
+  rappels: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></svg>',
+  comptabilite: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M14 11h2M8 15h2M14 15h2"/></svg>',
+  clients: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20c0-4 2-6 6-6s6 2 6 6M15 15c3 0 5 2 5 5"/></svg>',
+  personnel: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M5 21c0-5 2.5-8 7-8s7 3 7 8"/></svg>',
+  impots: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/><circle cx="7" cy="7" r="2"/><circle cx="17" cy="17" r="2"/></svg>',
+  fournisseurs: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h12v10H3zM15 11h4l2 3v4h-6z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg>',
+  tarifs: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12 12 3h7l2 2v7l-9 9z"/><circle cx="16" cy="8" r="1"/></svg>',
+  terrain: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20 9 4l6 16M7 14h10M15 4l5 16"/></svg>',
+  documents: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2l-8 8a5 5 0 0 1-7.1-7.1l8-8"/></svg>',
+  sauvegardes: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>',
+  autres: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3z"/></svg>',
+  preview: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  download: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>',
+  delete: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>'
+};
+
 function detectHiddenDriveCategory(file = {}) {
   const name = normalizeSearchText(file.name || '');
   const mime = normalizeSearchText(file.mimeType || '');
@@ -1350,7 +1370,7 @@ function updateHiddenDriveTabs(files = []) {
     button.classList.toggle('active', category === hiddenDriveActiveCategory);
     const label = getHiddenDriveCategoryLabel(category);
     const count = counts[category] || 0;
-    button.innerHTML = '<span>' + escapeHtml(label) + '</span><strong>' + count + '</strong>';
+    button.innerHTML = '<span class="hidden-drive-tab-icon">' + (HIDDEN_DRIVE_ICONS[category] || HIDDEN_DRIVE_ICONS.autres) + '</span><span>' + escapeHtml(label) + '</span><strong>' + count + '</strong>';
   });
 }
 
@@ -1391,7 +1411,7 @@ function formatDriveSize(bytes) {
 
 function hiddenDriveFileIcon(file = {}) {
   const category = detectHiddenDriveCategory(file);
-  return ({ devis: 'D', factures: 'F', rappels: 'R', comptabilite: '€', clients: 'C', personnel: 'P', impots: '%', fournisseurs: 'S', tarifs: 'T', terrain: 'M', documents: '📎', sauvegardes: '↻', autres: '•' })[category] || '•';
+  return HIDDEN_DRIVE_ICONS[category] || HIDDEN_DRIVE_ICONS.autres;
 }
 
 function renderHiddenDriveOverview() {
@@ -1440,9 +1460,9 @@ function renderHiddenDriveList() {
       + '<div class="hidden-drive-file-icon" aria-hidden="true">' + hiddenDriveFileIcon(file) + '</div>'
       + '<div class="hidden-drive-file-copy"><div class="hidden-drive-name">' + name + '</div><div class="hidden-drive-meta"><span class="hidden-drive-category-badge">' + categoryLabel + '</span>' + (meta ? '<span>' + meta + '</span>' : '') + '</div></div>'
       + '<div class="hidden-drive-actions">'
-      + (isLikelyPreviewableDriveDocument(file) ? '<button class="small primary" type="button" data-preview-drive-file="' + escapeHtml(file.id) + '">Aperçu PDF</button>' : '')
-      + '<button class="small" type="button" data-download-drive-file="' + escapeHtml(file.id) + '">Télécharger</button>'
-      + '<button class="small danger" type="button" data-delete-drive-file="' + escapeHtml(file.id) + '" data-drive-file-name="' + name + '">Supprimer</button>'
+      + (isLikelyPreviewableDriveDocument(file) ? '<button class="hidden-drive-icon-button is-preview" type="button" data-preview-drive-file="' + escapeHtml(file.id) + '" aria-label="Aperçu PDF" data-tooltip="Aperçu PDF">' + HIDDEN_DRIVE_ICONS.preview + '</button>' : '')
+      + '<button class="hidden-drive-icon-button is-download" type="button" data-download-drive-file="' + escapeHtml(file.id) + '" aria-label="Télécharger" data-tooltip="Télécharger">' + HIDDEN_DRIVE_ICONS.download + '</button>'
+      + '<button class="hidden-drive-icon-button is-delete" type="button" data-delete-drive-file="' + escapeHtml(file.id) + '" data-drive-file-name="' + name + '" aria-label="Supprimer" data-tooltip="Supprimer">' + HIDDEN_DRIVE_ICONS.delete + '</button>'
       + '</div>'
       + '</div>';
   }).join('');
@@ -1467,7 +1487,7 @@ function bindHiddenDriveFileButtons() {
       if (!file) return;
       try {
         button.disabled = true;
-        button.textContent = 'Téléchargement…';
+        button.classList.add('is-loading');
         const blob = await downloadDriveFileBlob(file);
         downloadBlob(blob, file.name || 'fichier-drive-cache');
       } catch (error) {
@@ -1475,7 +1495,7 @@ function bindHiddenDriveFileButtons() {
         alert('Impossible de télécharger ce fichier Drive caché.');
       } finally {
         button.disabled = false;
-        button.textContent = 'Télécharger';
+        button.classList.remove('is-loading');
       }
     });
   });
@@ -1490,7 +1510,7 @@ function bindHiddenDriveFileButtons() {
 
       try {
         button.disabled = true;
-        button.textContent = 'Suppression…';
+        button.classList.add('is-loading');
         await deleteHiddenDriveFile(file);
         hiddenDriveStatus.textContent = 'Fichier supprimé : ' + label;
         await refreshHiddenDriveList();
@@ -1499,7 +1519,7 @@ function bindHiddenDriveFileButtons() {
         alert('Impossible de supprimer ce fichier Drive caché. Vérifie la connexion Google Drive puis réessaie.');
       } finally {
         button.disabled = false;
-        button.textContent = 'Supprimer';
+        button.classList.remove('is-loading');
       }
     });
   });
@@ -1882,11 +1902,10 @@ function isLikelyPreviewableDriveDocument(file) {
 }
 
 async function previewHiddenDriveDocumentPdf(file, button = null) {
-  const previousText = button?.textContent;
   try {
     if (button) {
       button.disabled = true;
-      button.textContent = 'Aperçu…';
+      button.classList.add('is-loading');
     }
 
     const parsed = await readDriveJsonFile(file);
@@ -1905,7 +1924,7 @@ async function previewHiddenDriveDocumentPdf(file, button = null) {
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = previousText || 'Aperçu PDF';
+      button.classList.remove('is-loading');
     }
   }
 }
