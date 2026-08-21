@@ -40,6 +40,7 @@ const $ = selector => document.querySelector(selector);
 const loadingScreen = $('#terrainLoading');
 const authScreen = $('#terrainAuth');
 const appScreen = $('#terrainApp');
+const subscriptionScreen = $('#terrainSubscription');
 const viewRoot = $('#viewRoot');
 const pageTitle = $('#pageTitle');
 const backBtn = $('#backBtn');
@@ -664,7 +665,7 @@ async function connectAndSyncDrive(interactive = true) {
 }
 
 function showOnly(screen) {
-  [loadingScreen, authScreen, appScreen].forEach(item => item.classList.add('hidden'));
+  [loadingScreen, authScreen, subscriptionScreen, appScreen].forEach(item => item.classList.add('hidden'));
   screen.classList.remove('hidden');
 }
 
@@ -1397,6 +1398,7 @@ const accountMenu = $('#terrainAccountMenu');
 $('#terrainAccountBtn').addEventListener('click', () => { updateAccountPermissionsUi(); accountMenu.classList.remove('hidden'); });
 $('#closeAccountBtn').addEventListener('click', () => accountMenu.classList.add('hidden'));
 $('#terrainLogoutBtn').addEventListener('click', async () => { accountMenu.classList.add('hidden'); await signOut(auth); });
+$('#terrainSubscriptionLogoutBtn')?.addEventListener('click', async () => { await signOut(auth); });
 $('#reloadDataBtn').addEventListener('click', async () => { await loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
 $('#connectDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); await connectAndSyncDrive(true); });
 $('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
@@ -1412,14 +1414,18 @@ onAuthStateChanged(auth, async user => {
   try {
     if (user) {
       await checkSubscription(user);
+      if (!hasPremiumAccess()) {
+        showOnly(subscriptionScreen);
+        return;
+      }
       await loadAllData();
-      $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · ${hasPremiumAccess() ? 'Suivi client actif' : 'Gratuit'}`;
+      $('#terrainUserEmail').textContent = `${user.email || 'Compte BastCompta'} · Suivi client actif`;
       setAuthMessage('');
       showOnly(appScreen);
       state.view = 'home'; state.history = []; state.activeDraft = null;
       render();
       updateAccountPermissionsUi();
-      updateSyncLine(hasPremiumAccess() ? 'Données locales BastCompta chargées' : 'Mode gratuit — devis et Drive disponibles', 'ok');
+      updateSyncLine('Données locales BastCompta chargées', 'ok');
       if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
     } else {
       passwordInput.value = '';

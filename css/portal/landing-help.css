@@ -1200,6 +1200,21 @@ html {
     vertical-align: middle;
 }
 
+.feature-pack-label {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    padding: 3px 8px;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 900;
+    vertical-align: middle;
+}
+
 
 /* Entrée autonome Terrain dans la navigation principale. */
 .sidebar-nav-scroll > .sidebar-standalone {

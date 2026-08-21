@@ -101,8 +101,8 @@ let activateTrialBtn = null;
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
-const FREE_MAIN_TABS = ['devis', 'tarifs', 'terrain'];
-const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'client', chantier: 'client' };
+const FREE_MAIN_TABS = ['devis', 'tarifs'];
+const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'client', chantier: 'client', terrain: 'client' };
 const SUBSCRIPTION_PACKS = {
   accounting: { label: 'Pack Comptabilité', shortLabel: 'Comptabilité', code: 'COMPTA' },
   client: { label: 'Pack Suivi client', shortLabel: 'Suivi client', code: 'CLIENT' },
@@ -2846,7 +2846,7 @@ function showSubscriptionModal(result = currentSubscriptionState) {
     </div>
     <div class="subscription-pack-grid">
       ${renderPlanCard('accounting', 'Pack Comptabilité', 'Pour la gestion comptable et fiscale.', ['Comptabilité complète', 'TVA', 'IPP', 'Peppol / Doccle', 'Résultats et investissements'])}
-      ${renderPlanCard('client', 'Pack Suivi client - Personnel', 'Pour organiser les clients, les chantiers et le personnel.', ['Fiches et historique client', 'Notes et rappels', 'Chantiers et suivi commercial', 'Personnel : salaires, contrats, prestations, absences, etc...'])}
+      ${renderPlanCard('client', 'Pack Suivi client - Personnel', 'Pour organiser les clients, les chantiers, le travail sur le terrain et le personnel.', ['Fiches et historique client', 'Notes, rappels et chantiers', 'Mode Terrain sur smartphone et tablette', 'Personnel : salaires, contrats, prestations, absences, etc...'])}
       ${renderPlanCard('premium', 'Premium complet', 'Tous les modules dans une seule formule.', ['Pack Comptabilité', 'Pack Suivi client', 'Toutes les futures fonctions Premium'])}
     </div>
     <div id="subscriptionChoiceNotice" class="subscription-choice-notice">Sélectionnez une formule pour générer la communication de paiement et enregistrer votre demande dans Firebase.</div>`;
@@ -3227,11 +3227,12 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   function updateSidebarState(tabName, sourceButton = null) {
-    document.querySelectorAll('.sidebar-module').forEach(button => button.classList.toggle('active', button.dataset.mainTab === tabName));
+    const navigationGroup = tabName === 'terrain' ? 'chantier' : tabName;
+    document.querySelectorAll('.sidebar-module').forEach(button => button.classList.toggle('active', button.dataset.mainTab === navigationGroup));
     document.querySelectorAll('.sidebar-home').forEach(button => button.classList.toggle('active', button === sourceButton));
     document.querySelectorAll('.sidebar-submenu button').forEach(button => button.classList.toggle('active', button === sourceButton));
-    openGroup(tabName);
-    if (moduleTitle) moduleTitle.textContent = labels[tabName] || 'BastCompta';
+    openGroup(navigationGroup);
+    if (moduleTitle) moduleTitle.textContent = labels[navigationGroup] || 'BastCompta';
     if (pageTitle) pageTitle.textContent = sourceButton?.textContent?.trim() || labels[tabName] || '';
   }
 

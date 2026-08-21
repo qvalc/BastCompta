@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#173f35">
-  <meta name="description" content="BastCompta Terrain — devis rapides reliés à BastCompta.">
+  <meta name="description" content="BastCompta Terrain — visites, photos, remarques et brouillons reliés au Suivi client.">
   <title>BastCompta Terrain</title>
   <link rel="icon" href="logo.png">
   <link rel="stylesheet" href="css/base.css?v=4">
@@ -44,6 +44,19 @@
         </form>
         <p id="terrainAuthMessage" class="message" role="status" aria-live="polite"></p>
         <a class="back-link" href="index.html">Ouvrir BastCompta complet</a>
+      </div>
+    </section>
+
+    <section id="terrainSubscription" class="screen screen-centered hidden">
+      <div class="auth-panel">
+        <div class="brand-block">
+          <img src="logo.png" alt="BastCompta" class="brand-logo">
+          <span class="terrain-badge">Mode Terrain</span>
+        </div>
+        <h1>Pack Suivi client requis</h1>
+        <p>Le Mode Terrain est inclus dans le Pack Suivi client et dans Premium.</p>
+        <a class="primary-button terrain-portal-link" href="index.html" target="_top">Voir mon abonnement dans BastCompta</a>
+        <button id="terrainSubscriptionLogoutBtn" class="text-button" type="button">Se déconnecter</button>
       </div>
     </section>
 
