@@ -56,4 +56,4 @@ assert.equal(calc.structuredCommunication('23', '2026', '7').formatted, '+++123/
 assert.equal(calc.isValidBelgianEnterpriseNumber('BE 0123.456.749'), true);
 assert.equal(calc.isValidBelgianEnterpriseNumber('BE 0123.456.748'), false);
 
-console.log('Calculs Devis & Facture valides.');
+console.log('Calculs de la Gestion commerciale valides.');

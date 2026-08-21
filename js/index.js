@@ -675,7 +675,7 @@ function getFrameModuleSaveApi(frame) {
 
 function getLoadedModuleFrames() {
   return [
-    { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+    { key: 'devis-facture', label: 'Gestion commerciale', frame: devisFrame },
     { key: 'fournisseurs', label: 'Fournisseurs', frame: supplierFrame },
     { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
     { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
@@ -1083,7 +1083,7 @@ async function saveAllModulesFromPortal() {
 
 // Mise en place du suivi pour les modules chargés maintenant ou plus tard.
 [
-  { key: 'devis-facture', label: 'Devis & Facture', frame: devisFrame },
+  { key: 'devis-facture', label: 'Gestion commerciale', frame: devisFrame },
   { key: 'fournisseurs', label: 'Fournisseurs', frame: supplierFrame },
   { key: 'tarifs', label: 'Tarifs', frame: tarifsFrame },
   { key: 'comptabilite', label: 'Comptabilité', frame: comptaFrame },
@@ -1177,7 +1177,7 @@ async function sendInvoiceToAccounting() {
   const importRows = getFrameApi(comptaFrame, 'importInvoiceSalesRowsFromPortal');
 
   if (!getRows || !importRows) {
-    alert('Les modules Devis/Facture et Comptabilité ne sont pas encore prêts.');
+    alert('Les modules Gestion commerciale et Comptabilité ne sont pas encore prêts.');
     return;
   }
 
@@ -1239,7 +1239,7 @@ async function openInvoicePrintPreviewFromAccounting(invoiceNumber, invoiceFileI
 
   const openPreview = getFrameApi(devisFrame, 'openInvoicePreviewByNumberFromDrive');
   if (!openPreview) {
-    alert('Le module Devis & Facture n’est pas encore prêt.');
+    alert('Le module Gestion commerciale n’est pas encore prêt.');
     return false;
   }
 
@@ -1705,7 +1705,7 @@ async function makeRenderedDocumentPdfBlob(parsed, docKey) {
 
   // Important : html2canvas ne capture pas correctement une iframe cachée.
   // Comme la sauvegarde se lance depuis l’onglet Sauvegarde, on affiche temporairement
-  // l’onglet Devis & Facture avant de capturer le document PDF.
+  // l’onglet Gestion commerciale avant de capturer le document PDF.
   const previousTab = document.querySelector(".main-tab.active")?.dataset.mainTab || "backup";
   if (previousTab !== "devis") {
     switchMainTab("devis");
@@ -1984,7 +1984,7 @@ function backupZipPathForDriveFile(file, parsed = null, registry = null) {
 }
 
 async function addApplicationSourceFiles(zip) {
-  for (const fileName of ['index.html', 'devis-facture.html', 'comptabilite.html', 'suivi-client.html', 'personnel.html']) {
+  for (const fileName of ['index.html', 'gestion-commerciale.html', 'comptabilite.html', 'suivi-client.html', 'personnel.html']) {
     try {
       const res = await fetch(fileName, { cache: 'no-store' });
       if (res.ok) zip.file('Application/' + fileName, await res.text());
@@ -3192,7 +3192,7 @@ onAuthStateChanged(auth, async (user) => {
   const groups = Array.from(document.querySelectorAll('#portalScreen .sidebar-group'));
 
   const labels = {
-    devis: 'Devis & Factures',
+    devis: 'Gestion commerciale',
     compta: 'Comptabilité',
     chantier: 'Suivi client',
     personnel: 'Personnel',

@@ -1332,7 +1332,7 @@ viewRoot.addEventListener('click', async event => {
       catch (error) { console.error(error); showToast(error.message || 'Suppression impossible.'); }
     }
   }
-  else if (action === 'open-full-prices') window.location.href = 'devis-facture.html';
+  else if (action === 'open-full-prices') window.location.href = 'gestion-commerciale.html';
 });
 
 document.addEventListener('change', event => {

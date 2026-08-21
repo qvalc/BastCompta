@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <script src="js/core/storage-keys.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/formatters.js"></script>
+  <script src="js/core/file-utils.js"></script>
+  <script src="js/core/drive-client.js"></script>
+  <script src="js/modules/documents/calculations.js"></script>
+  <script src="js/modules/documents/document-transfer.js"></script>
+  <script src="js/modules/documents/credit-note.js"></script>
+  <script src="js/modules/documents/peppol.js"></script>
+  <script src="js/modules/documents/pdf-service.js"></script>
+  <script src="js/modules/documents/mail-service.js"></script>
+  <script src="js/modules/documents/mail-history.js"></script>
+  <script src="js/modules/documents/mail-attachments.js"></script>
+  <script src="js/modules/documents/numbering.js"></script>
+  <script src="js/modules/documents/tariffs-model.js"></script>
+  <script src="js/modules/documents/tariffs-ui.js"></script>
+  <script src="js/modules/clients/crm-model.js"></script>
+  <script src="js/modules/clients/project-links.js"></script>
+  <script src="js/core/access-control.js"></script>
+  <script>window.BastComptaAccess.requirePortalAccess();</script>
+  <script src="js/storage.js"></script>
+  <script src="js/trash.js?v=1"></script>
+  <script src="js/ui-feedback.js?v=1"></script>
+  <script src="js/keyboard-navigation.js?v=1"></script>
+  <script src="js/date-inputs.js?v=1"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestion commerciale | BastCompta</title>
+  <link rel="stylesheet" href="css/base.css?v=4">
+  <link rel="stylesheet" href="css/gestion-commerciale.css?v=1">
+  <link rel="stylesheet" href="css/action-icons.css?v=3">
+</head>
+
+<body>
+  <div class="app">
+    <div class="tabs" id="tabs"></div>
+    <div id="pages"></div>
+    <input id="localJsonImportInput" type="file" accept="application/json" style="display:none"
+      onchange="handleLocalJsonImport(event)">
+    <input id="localJsonToDriveInput" type="file" accept="application/json" multiple style="display:none"
+      onchange="uploadLocalJsonToDrive(event)">
+  </div>
+
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script src="js/gestion-commerciale.js?v=1"></script>
+  <script src="js/action-icons.js?v=3"></script>
+</body>
+
+</html>

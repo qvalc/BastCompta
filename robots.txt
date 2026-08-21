@@ -12,7 +12,7 @@ Allow: /
 
 Bloquer les vues internes de l’application
 
-Disallow: /devis-facture.html Disallow: /comptabilite.html Disallow:
+Disallow: /devis-facture.html Disallow: /gestion-commerciale.html Disallow: /comptabilite.html Disallow:
 /suivi-client.html Disallow: /impots.html
 
 Dossiers techniques (si présents)

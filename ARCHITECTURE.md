@@ -31,7 +31,7 @@
 - `modules/clients/project-links.js` : rapprochement client–suivi et déduplication des documents liés.
 - `modules/clients/project-finance.js` : chiffres d’affaires, coûts, fournitures et marges par suivi.
 - `modules/clients/project-model.js` : normalisation, fusion des doublons et déduplication des documents.
-- `devis-facture.js` : orchestration et interface, à réduire progressivement.
+- `gestion-commerciale.js` : orchestration et interface du module Gestion commerciale, à réduire progressivement.
 
 ## Comptabilité
 

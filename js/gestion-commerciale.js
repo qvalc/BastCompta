@@ -1,5 +1,5 @@
 if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
-// BastCompta - module Devis & Facture
+// BastCompta - module Gestion commerciale
 
 const STORAGE_KEY = window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document';
 const DRIVE_SYNC_FILE_NAME = 'bastcompta-crm-sync.json';
@@ -17,7 +17,7 @@ function notifyPortalBusinessChange(detail, beforeSnapshot = null) {
   }
 }
 
-function saveBusinessData(detail = 'Donnée Devis & Facture modifiée') {
+function saveBusinessData(detail = 'Donnée de Gestion commerciale modifiée') {
   notifyPortalBusinessChange(detail);
   return saveData(false);
 }
@@ -3141,12 +3141,12 @@ function scheduleFullRenderAfterInvoiceOpen() {
 
     try {
       // Une fois la facture visible, on charge normalement toutes les autres pages
-      // afin de conserver l'ensemble des fonctions du module Devis & Factures.
+      // afin de conserver l'ensemble des fonctions du module Gestion commerciale.
       render();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       scheduleDriveIndexInBackground();
     } catch (error) {
-      console.error('Erreur pendant le chargement différé du module Devis & Factures :', error);
+      console.error('Erreur pendant le chargement différé du module Gestion commerciale :', error);
     } finally {
       isOpeningInvoiceFromAccounting = false;
     }
@@ -3647,7 +3647,7 @@ async function openDevisPage(pageKey) {
   activePage = pageKey;
   render();
 
-  // Le CRM reste entièrement accessible dans Devis & Factures.
+  // Le CRM reste entièrement accessible dans la Gestion commerciale.
   // Son index Drive est simplement construit au premier accès au lieu de ralentir
   // l'ouverture initiale d'une facture.
   if (pageKey === 'crm') {
@@ -4693,7 +4693,7 @@ function addTarifToDocument(docKey) {
   saveData(false);
   activePage = targetKey;
 
-  // Important : dans cette page, le module Tarifs est déjà intégré à Devis/Facture.
+  // Important : dans cette page, le module Tarifs est déjà intégré à la Gestion commerciale.
   // On ne renvoie donc pas le même ajout par postMessage au parent, sinon le message
   // peut être réécouté et la ligne est ajoutée une seconde fois.
   render();
@@ -5014,7 +5014,7 @@ async function saveFromPortalGlobal(options = {}) {
   if (options?.silent) {
     window.alert = message => {
       interceptedAlerts.push(String(message || ''));
-      console.info('Alerte Devis & Facture interceptée pendant la sauvegarde globale:', message);
+      console.info('Alerte Gestion commerciale interceptée pendant la sauvegarde globale:', message);
     };
   }
 
@@ -5033,7 +5033,7 @@ async function saveFromPortalGlobal(options = {}) {
         driveSyncSaved = await saveSyncToDrive(false);
       } catch (error) {
         driveError = error?.message || String(error);
-        console.error('Sauvegarde Drive Devis/Facture impossible.', error);
+        console.error('Sauvegarde Drive Gestion commerciale impossible.', error);
       }
 
       try {
@@ -5075,7 +5075,7 @@ function getDevisFactureChangeSnapshot() {
 }
 
 window.BastComptaModule = {
-  name: 'Devis & Facture',
+  name: 'Gestion commerciale',
   save: saveFromPortalGlobal,
   saveData,
   getChangeSnapshot: getDevisFactureChangeSnapshot,
@@ -5305,6 +5305,6 @@ window.addEventListener('focus', async () => {
 
     render();
   } catch (err) {
-    console.error('Erreur rafraîchissement CRM Devis & Facture :', err);
+    console.error('Erreur rafraîchissement CRM Gestion commerciale :', err);
   }
 });

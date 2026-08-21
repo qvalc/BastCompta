@@ -441,7 +441,7 @@ function openCrmClientModal(client = {}) {
         <div class="modal-head">
           <div>
             <h2>${normalized.id || normalized.name ? 'Modifier client CRM' : 'Nouveau client CRM'}</h2>
-            <div class="hint">Ce formulaire écrit dans le CRM officiel utilisé par Devis & Facture (<strong>${escapeHtml(CRM_DRIVE_SYNC_FILE_NAME)}</strong> si Drive est connecté).</div>
+            <div class="hint">Ce formulaire écrit dans le CRM officiel utilisé par la Gestion commerciale (<strong>${escapeHtml(CRM_DRIVE_SYNC_FILE_NAME)}</strong> si Drive est connecté).</div>
           </div>
           <button class="small ghost" onclick="closeGenericModal()">✕</button>
         </div>
@@ -1585,7 +1585,7 @@ async function convertTerrainDraftToQuote(draftId) {
   }
 
   renderMain();
-  notify(`Devis ${number} créé et chargé dans Devis & Facture.`);
+  notify(`Devis ${number} créé et chargé dans la Gestion commerciale.`);
   openQuoteInFullModule(number);
 }
 
@@ -1813,7 +1813,7 @@ async function previewCrmLinkedDocument(type, itemId) {
         </div>
         ${supplies.length ? `<div class="form-card"><h3 class="section-title">Fournitures</h3><div class="table-wrap"><table><thead><tr><th>Description</th><th class="num">Qté</th><th class="num">Vente</th><th class="num">Revient</th></tr></thead><tbody>${supplies.map(line => `<tr><td>${escapeHtml(line.description || '')}</td><td class="num">${escapeHtml(line.qty ?? line.quantity ?? '')}</td><td class="num">${formatMoney(moneyLineHtva(line))}</td><td class="num">${formatMoney(moneyLineCostHtva(line))}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
         <div class="modal-actions document-actions">
-          <button onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')">Charger dans Devis & Facture</button>
+          <button onclick="loadCrmLinkedDocumentInDevis('${type}', '${escapeAttr(item.id)}')">Charger dans la Gestion commerciale</button>
           <details class="download-menu">
             <summary>Télécharger</summary>
             <div class="download-menu-panel">
@@ -2261,9 +2261,9 @@ async function loadCrmLinkedDocumentInDevis(type, itemId) {
       ref: item.ref || ''
     }, targetOrigin);
 
-    notify(`${moneyTypeLabel(type)} ${item.ref || ''} chargé dans Devis & Facture.`);
+    notify(`${moneyTypeLabel(type)} ${item.ref || ''} chargé dans la Gestion commerciale.`);
   } catch (error) {
-    console.warn('Ouverture Devis & Facture impossible.', error);
+    console.warn('Ouverture Gestion commerciale impossible.', error);
     notify(`${moneyTypeLabel(type)} ${item.ref || ''} chargé, mais ouverture automatique impossible.`);
   }
 }
@@ -2546,7 +2546,7 @@ function loadDevisFactureData() {
     const raw = localStorage.getItem(DEVIS_FACTURE_STORAGE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch (error) {
-    console.error('Impossible de lire Devis & Facture.', error);
+    console.error('Impossible de lire les données de Gestion commerciale.', error);
     return {};
   }
 }
@@ -2888,7 +2888,7 @@ async function toggleCrmDocumentLink(type, ref, checked, targetProjectId = selec
 
 async function linkAllClientCrmDocuments() {
   for (const doc of crmDocumentLinkCache) {
-    // Met aussi à jour les documents déjà liés si une facture a été modifiée dans Devis & Facture.
+    // Met aussi à jour les documents déjà liés si une facture a été modifiée dans la Gestion commerciale.
     await toggleCrmDocumentLink(doc.key, doc.ref, true);
   }
   closeGenericModal();
@@ -2902,11 +2902,11 @@ async function openCrmDocumentLinkModal() {
         <div class="modal-head">
           <div>
             <h2>Charger les documents du client</h2>
-            <div class="hint">Recherche automatique dans Devis & Facture${googleAccessToken ? ' et Google Drive' : ''} pour ${escapeHtml(project.clientName || project.clientRef || '')}...</div>
+            <div class="hint">Recherche automatique dans la Gestion commerciale${googleAccessToken ? ' et Google Drive' : ''} pour ${escapeHtml(project.clientName || project.clientRef || '')}...</div>
           </div>
           <button class="small ghost" onclick="closeGenericModal()">✕</button>
         </div>
-        <div class="hint">Lecture du CRM / module Devis & Facture…</div>
+        <div class="hint">Lecture du CRM / module Gestion commerciale…</div>
       `);
   const localDocs = getLocalCrmDocumentsForProject(project);
   const driveDocs = await getDriveCrmDocumentsForProject(project);
@@ -3148,7 +3148,7 @@ function openMoneyModal(type) {
         <div class="modal-head">
           <div>
             <h2>${labels[type]}</h2>
-            <div class="hint">Ajoutez un lien manuel. La connexion automatique avec Devis/Facture pourra être ajoutée ensuite.</div>
+            <div class="hint">Ajoutez un lien manuel. La connexion automatique avec la Gestion commerciale pourra être ajoutée ensuite.</div>
           </div>
           <button class="small ghost" onclick="closeGenericModal()">✕</button>
         </div>

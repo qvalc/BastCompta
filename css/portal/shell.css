@@ -809,66 +809,135 @@ body.portal-active .app {
     }
 }
 
-/* ===== Page de connexion modernisée - v16 ===== */
+/* ===== Page de connexion BastCompta - présentation Gestion commerciale ===== */
+#authScreen .auth-layout {
+    grid-template-columns: minmax(0, 1.18fr) minmax(430px, .92fr);
+    gap: 22px;
+}
+
 #authScreen .showcase {
-    padding: 38px;
+    padding: clamp(30px, 3vw, 48px);
     justify-content: flex-start;
+    border-color: rgba(96, 165, 250, .22);
+    border-radius: 26px;
+    background:
+        radial-gradient(circle at 88% 10%, rgba(37, 99, 235, .28), transparent 26%),
+        linear-gradient(145deg, #102b50 0%, #0a1d36 56%, #07182e 100%);
+    box-shadow: 0 24px 70px rgba(8, 27, 51, .22);
+    color: #fff;
+}
+
+#authScreen .showcase::before {
+    background: linear-gradient(135deg, rgba(255,255,255,.035), transparent 48%);
+}
+
+#authScreen .showcase-eyebrow {
+    display: inline-flex;
+    margin-bottom: 16px;
+    color: #7dd3fc;
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: .14em;
+    text-transform: uppercase;
 }
 
 #authScreen .brand h1 {
     margin: 0 0 14px;
-    max-width: 650px;
-    font-size: clamp(34px, 3.2vw, 52px);
-    line-height: 1.05;
+    max-width: 620px;
+    color: #fff;
+    font-size: clamp(35px, 3.5vw, 55px);
+    line-height: 1.04;
     letter-spacing: -0.045em;
 }
 
 #authScreen .brand p {
-    max-width: 680px;
+    max-width: 590px;
+    color: #bfd0e5;
     font-size: 17px;
     line-height: 1.6;
 }
 
 #authScreen .feature-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    margin-top: 30px;
+    grid-template-columns: 1fr;
+    gap: 11px;
+    margin-top: 28px;
 }
 
 #authScreen .feature-card {
     min-height: 0;
-    padding: 18px;
-    border-radius: 18px;
+    padding: 16px 18px;
+    border-color: rgba(148, 180, 219, .2);
+    border-radius: 15px;
+    background: rgba(10, 32, 59, .52);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+    box-shadow: none;
     transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 
 #authScreen .feature-card:hover {
-    transform: translateY(-3px);
-    border-color: #bfd4ff;
-    box-shadow: 0 16px 34px rgba(15, 23, 42, .10);
+    transform: translateX(3px);
+    border-color: rgba(125, 211, 252, .5);
+    box-shadow: 0 12px 28px rgba(2, 12, 27, .16);
 }
 
 #authScreen .feature-icon {
-    width: 42px;
-    height: 42px;
-    margin-bottom: 12px;
-    border-radius: 13px;
-    font-size: 20px;
-    line-height: 1;
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    margin: 0;
+    border: 1px solid rgba(125, 211, 252, .22);
+    border-radius: 12px;
+    background: rgba(37, 99, 235, .14);
+    color: #93c5fd;
+}
+
+#authScreen .feature-icon svg {
+    width: 25px;
+    height: 25px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#authScreen .feature-copy {
+    min-width: 0;
 }
 
 #authScreen .feature-card h3 {
-    margin: 0 0 7px;
-    font-size: 16px;
+    margin: 0 0 5px;
+    color: #fff;
+    font-size: 16.5px;
     line-height: 1.25;
 }
 
 #authScreen .feature-card p {
     margin: 0;
+    color: #b9cbe0;
     font-size: 13.5px;
     line-height: 1.45;
+}
+
+#authScreen .feature-free-label,
+#authScreen .feature-pack-label {
+    margin-left: 7px;
+    vertical-align: 2px;
+}
+
+#authScreen .feature-free-label {
+    border-color: rgba(134, 239, 172, .22);
+    background: rgba(22, 163, 74, .17);
+    color: #86efac;
+}
+
+#authScreen .feature-pack-label {
+    border-color: rgba(147, 197, 253, .24);
+    background: rgba(37, 99, 235, .2);
+    color: #bfdbfe;
 }
 
 #authScreen .showcase-footer {
@@ -881,18 +950,31 @@ body.portal-active .app {
 #authScreen .benefit-list {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px 18px;
-    padding: 14px 16px;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, .82);
-    color: var(--text);
+    gap: 10px 26px;
+    padding: 14px 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #d6e3f2;
     font-size: 13px;
     font-weight: 700;
 }
 
 #authScreen .benefit-list span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     white-space: nowrap;
+}
+
+#authScreen .benefit-list svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: #7dd3fc;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 #authScreen .bottom-note {
@@ -901,14 +983,59 @@ body.portal-active .app {
     border: 0;
     border-radius: 0;
     background: transparent;
+    color: #8fa6bf;
     font-size: 12px;
     line-height: 1.4;
-    text-align: center;
+    text-align: left;
 }
 
-@media (max-width: 1150px) and (min-width: 701px) {
-    #authScreen .feature-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+#authScreen .auth-card {
+    justify-content: center;
+    padding: clamp(32px, 4vw, 58px);
+    border-radius: 26px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .11);
+}
+
+#authScreen .auth-logo {
+    margin-bottom: 28px;
+}
+
+#authScreen .auth-logo img {
+    width: 230px;
+}
+
+#authScreen .auth-head h2 {
+    color: #0b1f3a;
+    font-size: clamp(27px, 2.3vw, 34px);
+}
+
+#authScreen .auth-tabs {
+    border-radius: 14px;
+}
+
+#authScreen .field-group input {
+    min-height: 56px;
+    border-radius: 13px;
+}
+
+#authScreen button.primary {
+    min-height: 54px;
+    border-radius: 13px;
+}
+
+@media (max-width: 1050px) and (min-width: 701px) {
+    #authScreen .auth-layout {
+        display: block;
+    }
+
+    #authScreen .showcase {
+        display: none;
+    }
+
+    #authScreen .auth-card {
+        width: min(680px, 100%);
+        min-height: calc(100vh - 56px);
+        margin: 0 auto;
     }
 }
 

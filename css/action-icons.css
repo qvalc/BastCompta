@@ -39,7 +39,7 @@
 .bast-action-icon .bast-icon-solid{fill:currentColor;stroke:none}
 .bast-action-icon input[type="file"]{position:absolute !important;inset:0 !important;width:100% !important;height:100% !important;opacity:0 !important;cursor:pointer !important}
 
-/* Infobulle identique à la barre Devis/Factures */
+/* Infobulle identique à la barre Gestion commerciale */
 .bast-action-icon::after{
   content:attr(data-tooltip);
   position:absolute;

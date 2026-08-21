@@ -1,6 +1,6 @@
 if (new URLSearchParams(window.location.search).get("embedded") === "1") document.body.classList.add("bast-embedded");
 // BastCompta - module Impôts IPP belge
-// Module indépendant : lit les données existantes sans modifier Devis/Facture, Comptabilité ou Suivi client.
+// Module indépendant : lit les données existantes sans modifier la Gestion commerciale, la Comptabilité ou le Suivi client.
 
 (function () {
   'use strict';
@@ -457,7 +457,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
           <div class="card">
             <div class="section-head"><h2>Sources lues</h2></div>
             <div class="kv"><span>Comptabilité</span><span class="badge ${snapshot.sourceStatus.compta ? 'ok' : 'danger'}">${snapshot.sourceStatus.compta ? 'OK' : 'Absent'}</span></div>
-            <div class="kv"><span>Devis & Facture / CRM</span><span class="badge ${snapshot.sourceStatus.devis ? 'ok' : 'warn'}">${snapshot.clientCount} client(s)</span></div>
+            <div class="kv"><span>Gestion commerciale / CRM</span><span class="badge ${snapshot.sourceStatus.devis ? 'ok' : 'warn'}">${snapshot.clientCount} client(s)</span></div>
             <div class="kv"><span>Suivi client</span><span class="badge ${snapshot.sourceStatus.chantiers ? 'ok' : 'warn'}">${snapshot.projectCount} fiche(s)</span></div>
             <div class="kv"><span>Achats comptables</span><strong>${snapshot.purchases.length}</strong></div>
             <div class="kv"><span>Investissements suivis</span><strong>${snapshot.investments.length}</strong></div>
