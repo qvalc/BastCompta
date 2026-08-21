@@ -15,6 +15,8 @@
     refresh:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6v6h-6"/><path d="M4 18v-6h6"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></svg>',
     settings:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.2v4H21a1.7 1.7 0 0 0-1.6 1z"/></svg>',
     drive:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 3h9L22 12l-4.5 9h-11L2 12z"/><path d="m7.5 3 5 9M16.5 3 12 12M2 12h20"/></svg>',
+    'drive-import':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l4 7-5 8H8l-5-8z"/><path d="m7 4 5 8 5-8M3 11h18"/><path d="M12 8v8m-3-3 3 3 3-3"/></svg>',
+    'drive-export':'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10l4 7-5 8H8l-5-8z"/><path d="m7 4 5 8 5-8M3 11h18"/><path d="M12 16V8m-3 3 3-3 3 3"/></svg>',
     copy:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
     file:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/></svg>',
     xml:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 9-3 3 3 3M16 9l3 3-3 3M14 6l-4 12"/></svg>',
@@ -78,7 +80,8 @@
   function iconify(el){
     if (!shouldIconify(el)) return;
     const label = normalizedText(el);
-    const [icon,kind] = classify(label);
+    const forcedIcon = String(el.dataset.bastIcon || '');
+    const [icon,kind] = forcedIcon && ICONS[forcedIcon] ? [forcedIcon, forcedIcon] : classify(label);
     const inputs = el.matches('label') ? Array.from(el.querySelectorAll('input')) : [];
     inputs.forEach(input=>input.remove());
     el.innerHTML = ICONS[icon] || ICONS.generic;
