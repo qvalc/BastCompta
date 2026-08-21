@@ -25,6 +25,7 @@
     open:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>',
     link:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/></svg>',
     accounting:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2M8 18h2M14 18h2"/></svg>',
+    intervat:'<svg class="bast-intervat-mark" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="bastIntervatOrb" cx="34%" cy="26%" r="72%"><stop offset="0" stop-color="#60a5fa"/><stop offset=".42" stop-color="#1755a5"/><stop offset="1" stop-color="#071a4b"/></radialGradient></defs><circle cx="32" cy="32" r="25" fill="url(#bastIntervatOrb)" stroke="#8ec5ff" stroke-width="1.5"/><path d="M17 23c6-9 20-13 31-4" fill="none" stroke="rgba(255,255,255,.58)" stroke-width="3" stroke-linecap="round"/><text x="32" y="37" fill="#fff" stroke="none" text-anchor="middle" font-family="Georgia,serif" font-size="12" font-style="italic" font-weight="700">Intervat</text></svg>',
     check:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>',
     generic:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2" class="bast-icon-solid"/><circle cx="5" cy="12" r="2" class="bast-icon-solid"/><circle cx="19" cy="12" r="2" class="bast-icon-solid"/></svg>'
   };

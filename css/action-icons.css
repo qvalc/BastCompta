@@ -96,6 +96,8 @@
 .bast-action-delete,.bast-action-clear{--bast-action-bg-1:#fb7185;--bast-action-bg-2:#ef4444}
 .bast-action-edit,.bast-action-refresh,.bast-action-view,.bast-action-open,.bast-action-search{--bast-action-bg-1:#3b82f6;--bast-action-bg-2:#2563eb}
 .bast-action-settings,.bast-action-copy,.bast-action-accounting,.bast-action-xml{--bast-action-bg-1:#8b5cf6;--bast-action-bg-2:#6d28d9}
+.bast-action-intervat{--bast-action-bg-1:#7566d9;--bast-action-bg-2:#4030a5}
+.bast-action-icon .bast-intervat-mark{width:38px;height:38px;overflow:visible;stroke:none}
 .bast-action-file,.bast-action-link,.bast-action-generic{--bast-action-bg-1:#64748b;--bast-action-bg-2:#475569}
 
 /* Les zones d'actions gardent une mise en page légère et régulière. */
