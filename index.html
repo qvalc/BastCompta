@@ -92,8 +92,8 @@
 <link href="css/base.css?v=4" rel="stylesheet"/>
 <link href="css/index.css?v=46" rel="stylesheet"/>
 <link href="css/portal/modals.css?v=1" rel="stylesheet"/>
-<link href="css/portal/shell.css?v=2" rel="stylesheet"/>
-<link href="css/portal/landing-help.css?v=2" rel="stylesheet"/>
+<link href="css/portal/shell.css?v=3" rel="stylesheet"/>
+<link href="css/portal/landing-help.css?v=3" rel="stylesheet"/>
 <script src="js/core/storage-keys.js"></script>
 <script src="js/core/utils.js"></script>
 <script src="js/storage.js"></script>
@@ -135,22 +135,22 @@
 <p>Devis, facturation, comptabilité et suivi client, simplement.</p>
 </div>
 <div class="feature-grid">
-<div class="feature-card">
+<a class="feature-card" href="#feature-gestion-commerciale">
 <div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M6 2.75h8l4 4V21.25H6zM14 2.75v4h4M9 11h6M9 15h6"/></svg></div>
 <div class="feature-copy"><h3>Gestion commerciale <span class="feature-free-label">Gratuit</span></h3><p>Créez vos devis et factures, gérez vos tarifs et suivez vos paiements.</p></div>
-</div>
-<div class="feature-card">
+</a>
+<a class="feature-card" href="#feature-suivi-client">
 <div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><path d="M2.75 19c.4-3.3 2.15-5 5.25-5s4.85 1.7 5.25 5M17 7v10M14.5 9.5 17 7l2.5 2.5"/></svg></div>
-<div class="feature-copy"><h3>Suivi client + Mode Terrain <span class="feature-pack-label">Suivi client</span></h3><p>Suivez vos clients, chantiers, remarques et photos, au bureau comme sur le terrain.</p></div>
-</div>
-<div class="feature-card">
+<div class="feature-copy"><h3>Mode Terrain &amp; suivi de la clientèle</h3><p>Suivez vos clients, chantiers, remarques et photos, au bureau comme sur le terrain.</p></div>
+</a>
+<a class="feature-card" href="#feature-comptabilite">
 <div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M5 20.5V14h3.5v6.5M10.25 20.5V9h3.5v11.5M15.5 20.5V4h3.5v16.5"/></svg></div>
-<div class="feature-copy"><h3>Comptabilité</h3><p>Suivez vos ventes, achats, investissements et résultats.</p></div>
-</div>
-<div class="feature-card">
+<div class="feature-copy"><h3>Comptabilité</h3><p>Ventes, achats, investissements, TVA et résultats réunis dans un même espace.</p></div>
+</a>
+<a class="feature-card" href="#feature-declarations">
 <div aria-hidden="true" class="feature-icon"><svg viewBox="0 0 24 24"><path d="M6 2.75h8l4 4V21.25H6zM14 2.75v4h4M9 11h6M9 15h4"/><path d="M16.5 13.5v5M14 16h5"/></svg></div>
 <div class="feature-copy"><h3>Déclarations</h3><p>Préparez les informations utiles à vos déclarations IPP et TVA.</p></div>
-</div>
+</a>
 </div>
 <div class="showcase-footer">
 <div aria-label="Avantages BastCompta" class="benefit-list">
@@ -263,7 +263,7 @@
               </p>
 </div>
 <div class="landing-feature-grid">
-<article class="landing-feature-card landing-reveal">
+<article class="landing-feature-card landing-reveal" id="feature-gestion-commerciale">
 <span class="landing-card-icon">📄</span>
 <h3>Gestion commerciale — gratuit</h3>
 <p>Le module Gestion commerciale reste gratuit, sans limite de durée. Créez vos documents, préparez vos prix et suivez vos paiements depuis un même espace.</p>
@@ -274,7 +274,7 @@
 <li>PDF, communications structurées et préparation Peppol / Doccle</li>
 </ul>
 </article>
-<article class="landing-feature-card landing-reveal">
+<article class="landing-feature-card landing-reveal" id="feature-comptabilite">
 <span class="landing-card-icon">📊</span>
 <h3>Comptabilité simplifiée</h3>
 <p>Suivez les mouvements utiles à la gestion de votre activité sans transformer votre quotidien en cours de comptabilité.</p>
@@ -285,7 +285,7 @@
 <li>Résultat et bilan simplifié</li>
 </ul>
 </article>
-<article class="landing-feature-card landing-reveal">
+<article class="landing-feature-card landing-reveal" id="feature-suivi-client">
 <span class="landing-card-icon">👥</span>
 <h3>Suivi client, chantiers et terrain</h3>
 <p>Centralisez les informations importantes, conservez l'historique de vos chantiers et complétez les dossiers directement sur place.</p>
@@ -297,7 +297,7 @@
 <li>Mode Terrain inclus pour les visites et interventions</li>
 </ul>
 </article>
-<article class="landing-feature-card landing-reveal">
+<article class="landing-feature-card landing-reveal" id="feature-declarations">
 <span class="landing-card-icon">📑</span>
 <h3>Préparation TVA</h3>
 <p>Regroupez vos ventes, achats et montants de TVA par période pour préparer plus sereinement vos contrôles.</p>

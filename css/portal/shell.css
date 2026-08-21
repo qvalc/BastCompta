@@ -811,18 +811,21 @@ body.portal-active .app {
 
 /* ===== Page de connexion BastCompta - présentation Gestion commerciale ===== */
 #authScreen .auth-layout {
+    height: calc(100dvh - 24px);
+    min-height: 680px;
     grid-template-columns: minmax(0, 1.18fr) minmax(430px, .92fr);
     gap: 22px;
 }
 
 #authScreen .showcase {
-    padding: clamp(30px, 3vw, 48px);
+    padding: clamp(26px, 2.6vw, 42px);
     justify-content: flex-start;
     border-color: rgba(96, 165, 250, .22);
     border-radius: 26px;
     background:
-        radial-gradient(circle at 88% 10%, rgba(37, 99, 235, .28), transparent 26%),
-        linear-gradient(145deg, #102b50 0%, #0a1d36 56%, #07182e 100%);
+        radial-gradient(circle at 86% 8%, rgba(72, 187, 255, .34), transparent 29%),
+        radial-gradient(circle at 8% 92%, rgba(37, 99, 235, .28), transparent 25%),
+        linear-gradient(145deg, #19578f 0%, #123f72 48%, #0c2b50 100%);
     box-shadow: 0 24px 70px rgba(8, 27, 51, .22);
     color: #fff;
 }
@@ -833,8 +836,8 @@ body.portal-active .app {
 
 #authScreen .showcase-eyebrow {
     display: inline-flex;
-    margin-bottom: 16px;
-    color: #7dd3fc;
+    margin-bottom: 12px;
+    color: #b9e8ff;
     font-size: 12px;
     font-weight: 850;
     letter-spacing: .14em;
@@ -842,10 +845,10 @@ body.portal-active .app {
 }
 
 #authScreen .brand h1 {
-    margin: 0 0 14px;
+    margin: 0 0 11px;
     max-width: 620px;
     color: #fff;
-    font-size: clamp(35px, 3.5vw, 55px);
+    font-size: clamp(34px, 3.25vw, 52px);
     line-height: 1.04;
     letter-spacing: -0.045em;
 }
@@ -859,16 +862,18 @@ body.portal-active .app {
 
 #authScreen .feature-grid {
     grid-template-columns: 1fr;
-    gap: 11px;
-    margin-top: 28px;
+    gap: 9px;
+    margin-top: 22px;
 }
 
 #authScreen .feature-card {
     min-height: 0;
-    padding: 16px 18px;
-    border-color: rgba(148, 180, 219, .2);
+    padding: 13px 16px;
+    border-color: rgba(191, 219, 254, .24);
     border-radius: 15px;
-    background: rgba(10, 32, 59, .52);
+    background: rgba(7, 35, 67, .34);
+    color: inherit;
+    text-decoration: none;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -878,15 +883,23 @@ body.portal-active .app {
 }
 
 #authScreen .feature-card:hover {
-    transform: translateX(3px);
-    border-color: rgba(125, 211, 252, .5);
-    box-shadow: 0 12px 28px rgba(2, 12, 27, .16);
+    transform: translateX(4px);
+    border-color: rgba(186, 230, 253, .78);
+    background: rgba(30, 100, 165, .62);
+    box-shadow: 0 12px 28px rgba(2, 12, 27, .2);
+}
+
+#authScreen .feature-card:focus-visible {
+    outline: 3px solid rgba(186, 230, 253, .9);
+    outline-offset: 2px;
+    border-color: transparent;
+    background: rgba(30, 100, 165, .7);
 }
 
 #authScreen .feature-icon {
-    width: 46px;
-    min-width: 46px;
-    height: 46px;
+    width: 43px;
+    min-width: 43px;
+    height: 43px;
     margin: 0;
     border: 1px solid rgba(125, 211, 252, .22);
     border-radius: 12px;
@@ -944,14 +957,14 @@ body.portal-active .app {
     position: relative;
     z-index: 1;
     margin-top: auto;
-    padding-top: 24px;
+    padding-top: 14px;
 }
 
 #authScreen .benefit-list {
     display: flex;
     flex-wrap: wrap;
     gap: 10px 26px;
-    padding: 14px 0 0;
+    padding: 8px 0 0;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -978,7 +991,7 @@ body.portal-active .app {
 }
 
 #authScreen .bottom-note {
-    margin-top: 11px;
+    margin-top: 7px;
     padding: 0 4px;
     border: 0;
     border-radius: 0;
@@ -991,17 +1004,17 @@ body.portal-active .app {
 
 #authScreen .auth-card {
     justify-content: center;
-    padding: clamp(32px, 4vw, 58px);
+    padding: clamp(28px, 3.5vw, 52px);
     border-radius: 26px;
     box-shadow: 0 24px 70px rgba(15, 23, 42, .11);
 }
 
 #authScreen .auth-logo {
-    margin-bottom: 28px;
+    margin-bottom: 20px;
 }
 
 #authScreen .auth-logo img {
-    width: 230px;
+    width: 220px;
 }
 
 #authScreen .auth-head h2 {
@@ -1034,7 +1047,7 @@ body.portal-active .app {
 
     #authScreen .auth-card {
         width: min(680px, 100%);
-        min-height: calc(100vh - 56px);
+        min-height: calc(100dvh - 28px);
         margin: 0 auto;
     }
 }
@@ -1042,6 +1055,7 @@ body.portal-active .app {
 /* Sur téléphone, afficher directement l'identification. */
 @media (max-width: 700px) {
     #authScreen .auth-layout {
+        height: auto;
         min-height: calc(100dvh - 28px);
         display: block;
     }
