@@ -175,7 +175,7 @@ function hasPremiumAccess() {
 
 function requirePremium(feature = 'Cette fonction') {
   if (hasPremiumAccess()) return true;
-  showToast(`${feature} nécessite le Pack Suivi client ou Premium.`);
+  showToast(`${feature} nécessite le Pack Gestion d’activité ou Premium.`);
   return false;
 }
 
@@ -908,7 +908,7 @@ function renderHome() {
       <button class="primary-button" type="button" data-action="start-quote">＋ Nouveau devis</button>
     </section>
     <section class="quick-grid">
-      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Pack Suivi client'}</small></div></button>
+      <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Pack Gestion d’activité'}</small></div></button>
       <button class="quick-card" type="button" data-action="nav-prices"><span>🏷️</span><div><strong>${prices} tarif${prices === 1 ? '' : 's'}</strong><small>Prestations disponibles</small></div></button>
       <button class="quick-card" type="button" data-action="nav-drafts"><span>📄</span><div><strong>${state.drafts.length} brouillon${state.drafts.length === 1 ? '' : 's'}</strong><small>Reprendre un devis</small></div></button>
       <a class="quick-card link-button" href="index.html"><span>🖥️</span><div><strong>Version complète</strong><small>Gestion BastCompta</small></div></a>
@@ -921,7 +921,7 @@ function renderClients() {
   if (!hasPremiumAccess()) {
     viewRoot.innerHTML = `
       <section class="form-card premium-lock-page">
-        <div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>La liste générale des clients, les fiches, notes, chantiers et l’historique font partie du module Suivi client.</span></div>
+        <div class="premium-lock"><strong>🔒 Pack Gestion d’activité</strong><span>La liste générale des clients, les fiches, notes, chantiers et l’historique font partie du module Suivi client.</span></div>
         <p class="muted">La création d’un devis reste gratuite : la sélection ou l’ajout d’un client reste disponible uniquement pendant la création du devis.</p>
         <button class="primary-button" type="button" data-action="start-quote">Créer un devis gratuit</button>
         <a class="secondary-button link-button" href="index.html">Voir les abonnements dans BastCompta</a>
@@ -955,7 +955,7 @@ function renderClientForm() {
       <div class="field"><label for="cfAddress">Adresse</label><textarea id="cfAddress" rows="2">${escapeHtml(client.address || '')}</textarea></div>
       <div class="field-row"><div class="field"><label for="cfNumber">N° client</label><input id="cfNumber" value="${escapeHtml(client.clientNumber || '')}"></div><div class="field"><label for="cfVat">TVA</label><input id="cfVat" value="${escapeHtml(client.vat || '')}"></div></div>
       <div class="field"><label for="cfContact">Personne de contact</label><input id="cfContact" value="${escapeHtml(client.contact || '')}"></div>
-      ${hasPremiumAccess() ? `<div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>` : `<div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>Les notes et chantiers restent réservés au module Suivi client.</span></div>`}
+      ${hasPremiumAccess() ? `<div class="field"><label for="cfNotes">Notes / suivi</label><textarea id="cfNotes" rows="4">${escapeHtml(client.notes || '')}</textarea></div>` : `<div class="premium-lock"><strong>🔒 Pack Gestion d’activité</strong><span>Les notes et chantiers restent réservés au module Suivi client.</span></div>`}
       <label class="field"><span>Favori</span><select id="cfFavorite"><option value="0" ${!client.favorite ? 'selected' : ''}>Non</option><option value="1" ${client.favorite ? 'selected' : ''}>Oui</option></select></label>
       <div class="form-actions"><button class="secondary-button" type="button" data-action="cancel-client">Annuler</button><button class="primary-button" type="button" data-action="save-client">Enregistrer</button></div>
     </div>`;
@@ -983,7 +983,7 @@ function renderClientDetail() {
       ${client.email ? `<a href="mailto:${escapeHtml(client.email)}">✉️ ${escapeHtml(client.email)}</a>` : ''}
       ${client.address ? `<div>📍 ${escapeHtml(client.address)}</div>` : ''}
       ${client.vat ? `<div>TVA : ${escapeHtml(client.vat)}</div>` : ''}
-      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}${renderClientPhotos(client)}` : `<div class="premium-lock"><strong>🔒 Pack Suivi client</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
+      ${hasPremiumAccess() ? `${client.notes ? `<div><strong>Notes</strong><div class="client-note">${escapeHtml(client.notes)}</div></div>` : ''}${renderClientProjects(client)}${renderClientPhotos(client)}` : `<div class="premium-lock"><strong>🔒 Pack Gestion d’activité</strong><span>Coordonnées accessibles gratuitement. Notes, chantiers et historique nécessitent le module Suivi client.</span></div>`}
       <div class="form-actions"><button class="secondary-button" type="button" data-action="edit-client" data-id="${escapeHtml(client.id)}">Modifier</button><button class="primary-button" type="button" data-action="quote-for-client" data-id="${escapeHtml(client.id)}">Nouveau devis</button></div>
     </article>
     <div class="section-head"><h2>Devis terrain (${drafts.length})</h2></div>
