@@ -693,8 +693,8 @@ function goBack() {
 function updateNavigation() {
   const titles = {
     home: 'Accueil', clients: 'Clients', 'client-form': 'Fiche client', 'client-detail': 'Suivi client',
-    prices: 'Tarifs', drafts: 'Brouillons', 'new-quote': 'Nouveau devis', 'quote-client': 'Choisir un client',
-    'quote-lines': 'Composer le devis', 'quote-final': 'Finaliser le devis'
+    prices: 'Tarifs', drafts: 'Visites', 'new-quote': 'Nouvelle visite', 'quote-client': 'Choisir un client',
+    'quote-lines': 'Relevé de visite', 'quote-final': 'Résumé du devis'
   };
   pageTitle.textContent = titles[state.view] || 'BastCompta Terrain';
   backBtn.classList.toggle('hidden', state.view === 'home');
@@ -876,6 +876,7 @@ function makeBlankDraft(client = null) {
     date: today,
     validity: '',
     notes: '',
+    observations: [],
     lines: [],
     photos: []
   };
@@ -885,6 +886,33 @@ function ensureActiveDraft() {
   if (!state.activeDraft) state.activeDraft = makeBlankDraft();
   if (!Array.isArray(state.activeDraft.lines)) state.activeDraft.lines = [];
   if (!Array.isArray(state.activeDraft.photos)) state.activeDraft.photos = [];
+  if (!Array.isArray(state.activeDraft.observations)) state.activeDraft.observations = [];
+}
+
+function observationLabel(type = 'note') {
+  return ({ note: 'Note', measure: 'Mesure', question: 'À vérifier' })[type] || 'Note';
+}
+
+function renderVisitFeed(draft) {
+  const events = [
+    ...(draft.observations || []).map(item => ({ ...item, kind: 'observation', at: item.createdAt || draft.createdAt })),
+    ...(draft.lines || []).map(item => ({ ...item, kind: 'line', at: item.createdAt || draft.createdAt })),
+    ...(draft.photos || []).map(item => ({ ...item, kind: 'photo', at: item.takenAt || draft.createdAt }))
+  ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  if (!events.length) return '<div class="empty visit-empty">Commence le relevé avec une note, une mesure, une photo ou une prestation.</div>';
+  return `<div class="visit-feed">${events.map(event => {
+    if (event.kind === 'observation') return `<article class="visit-event visit-event-${escapeHtml(event.type || 'note')}">
+      <span class="visit-event-icon">${event.type === 'measure' ? '📐' : event.type === 'question' ? '❓' : '📝'}</span>
+      <div><small>${escapeHtml(observationLabel(event.type))}</small><strong>${escapeHtml(event.text || '')}</strong></div>
+      <button type="button" data-action="delete-observation" data-id="${escapeHtml(event.id)}" aria-label="Supprimer">×</button>
+    </article>`;
+    if (event.kind === 'photo') return `<article class="visit-event visit-event-photo">
+      <span class="visit-event-icon">📷</span><div><small>Photo</small><strong>${escapeHtml(event.note || event.fileName || 'Photo du relevé')}</strong></div>
+    </article>`;
+    return `<article class="visit-event visit-event-line">
+      <span class="visit-event-icon">🏷️</span><div><small>Prestation · ${escapeHtml(String(event.qty ?? 1))} ${escapeHtml(event.unit || 'p')}</small><strong>${escapeHtml(event.description || 'Ligne à compléter')}</strong></div><span class="visit-event-price">${money((Number(event.qty)||0) * (Number(event.unitPrice)||0))}</span>
+    </article>`;
+  }).join('')}</div>`;
 }
 
 async function persistActiveDraft(message = '') {
@@ -903,9 +931,10 @@ function renderHome() {
   const prices = state.data.tarifs.items.length;
   viewRoot.innerHTML = `
     <section class="hero">
-      <h2>Devis rapide sur le terrain</h2>
-      <p>Choisis un client, ajoute tes prestations et transfère le devis dans BastCompta.</p>
-      <button class="primary-button" type="button" data-action="start-quote">＋ Nouveau devis</button>
+      <span class="hero-kicker">Visite commerciale</span>
+      <h2>Préparer un devis sur place</h2>
+      <p>Relève les besoins, les mesures et les photos pendant la visite. Finalise ensuite le devis dans BastCompta.</p>
+      <button class="primary-button" type="button" data-action="start-quote">＋ Commencer une visite</button>
     </section>
     <section class="quick-grid">
       <button class="quick-card" type="button" data-action="nav-clients"><span>👥</span><div><strong>${hasPremiumAccess() ? `${currentClient} client${currentClient === 1 ? '' : 's'}` : 'Suivi client 🔒'}</strong><small>${hasPremiumAccess() ? 'Recherche et suivi' : 'Pack Gestion d’activité'}</small></div></button>
@@ -913,7 +942,7 @@ function renderHome() {
       <button class="quick-card" type="button" data-action="nav-drafts"><span>📄</span><div><strong>${state.drafts.length} brouillon${state.drafts.length === 1 ? '' : 's'}</strong><small>Reprendre un devis</small></div></button>
       <a class="quick-card link-button" href="index.html"><span>🖥️</span><div><strong>Version complète</strong><small>Gestion BastCompta</small></div></a>
     </section>
-    ${recentDrafts.length ? `<div class="section-head"><h2>Derniers brouillons</h2></div><div class="list">${recentDrafts.map(renderDraftCard).join('')}</div>` : ''}
+    ${recentDrafts.length ? `<div class="section-head"><h2>Visites récentes</h2></div><div class="list">${recentDrafts.map(renderDraftCard).join('')}</div>` : ''}
   `;
 }
 
@@ -1002,12 +1031,12 @@ function renderPrices() {
 
 function renderDraftCard(draft) {
   const totals = draftTotals(draft);
-  return `<article class="list-card"><div class="list-main" data-action="open-draft" data-id="${escapeHtml(draft.id)}"><strong>${escapeHtml(draft.clientName || 'Client à choisir')}</strong><small>${escapeHtml(draft.siteName || 'Sans chantier')} · ${new Date(draft.updatedAt || draft.createdAt).toLocaleDateString('fr-BE')}</small></div><div class="list-actions"><span class="draft-status">Brouillon</span><strong class="price">${money(totals.tvac)}</strong><button class="mini-btn danger" type="button" data-action="delete-draft" data-id="${escapeHtml(draft.id)}" title="Supprimer" aria-label="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div></article>`;
+  return `<article class="list-card"><div class="list-main" data-action="open-draft" data-id="${escapeHtml(draft.id)}"><strong>${escapeHtml(draft.clientName || 'Client à choisir')}</strong><small>${escapeHtml(draft.siteName || 'Sans objet')} · ${new Date(draft.updatedAt || draft.createdAt).toLocaleDateString('fr-BE')}</small></div><div class="list-actions"><span class="draft-status">${draft.status === 'transferred' ? 'Transféré' : 'Visite'}</span><strong class="price">${money(totals.tvac)}</strong><button class="mini-btn danger" type="button" data-action="delete-draft" data-id="${escapeHtml(draft.id)}" title="Supprimer" aria-label="Supprimer"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div></article>`;
 }
 
 function renderDrafts() {
   const drafts = state.drafts.slice().sort((a,b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
-  viewRoot.innerHTML = `<div class="section-head"><h2>${drafts.length} brouillon${drafts.length === 1 ? '' : 's'}</h2><button type="button" data-action="start-quote">＋ Nouveau</button></div><div class="list">${drafts.length ? drafts.map(renderDraftCard).join('') : '<div class="empty">Aucun brouillon. Crée ton premier devis.</div>'}</div>`;
+  viewRoot.innerHTML = `<div class="section-head"><h2>${drafts.length} visite${drafts.length === 1 ? '' : 's'}</h2><button type="button" data-action="start-quote">＋ Nouvelle</button></div><div class="list">${drafts.length ? drafts.map(renderDraftCard).join('') : '<div class="empty">Aucune visite enregistrée.</div>'}</div>`;
 }
 
 function renderQuoteClient() {
@@ -1017,8 +1046,8 @@ function renderQuoteClient() {
     return clientDisplay(a).localeCompare(clientDisplay(b), 'fr', { sensitivity: 'base' });
   });
   viewRoot.innerHTML = `
-    <div class="confirm-box"><strong>Étape 1 sur 3</strong><br><span class="muted">Choisis le client ou crée-le directement.</span></div>
-    <div class="section-head"><h2>Client du devis</h2><button type="button" data-action="new-client-from-quote">＋ Nouveau</button></div>
+    <div class="confirm-box"><strong>Nouvelle visite</strong><br><span class="muted">Pour qui prépares-tu le devis ?</span></div>
+    <div class="section-head"><h2>Choisir le client</h2><button type="button" data-action="new-client-from-quote">＋ Nouveau</button></div>
     <div class="quote-client-picker" id="quoteClientPicker">
       <button class="quote-client-picker-trigger" type="button" data-action="toggle-client-picker" aria-expanded="false">
         <span><strong>Choisir un client</strong><small>Cliquer pour afficher la liste</small></span><span class="picker-chevron">⌄</span>
@@ -1060,12 +1089,20 @@ function renderQuoteLines() {
   const favoriteItems = state.favorites.map(id => state.data.tarifs.items.find(item => item.id === id)).filter(Boolean).slice(0,10);
   const totals = draftTotals(draft);
   viewRoot.innerHTML = `
-    <div class="confirm-box"><strong>Étape 2 sur 3</strong><br><span class="muted">Ajoute les prestations et adapte les quantités.</span></div>
+    <div class="visit-progress"><span class="is-done">1 Client</span><span class="is-active">2 Relevé</span><span>3 Résumé</span></div>
     <div class="quote-client"><div><strong>${escapeHtml(clientDisplay(client || draft))}</strong><small class="muted">${escapeHtml(draft.address || 'Adresse non renseignée')}</small></div><button type="button" data-action="change-client">Changer</button></div>
     <div class="field"><label for="siteName">Nom du chantier / objet</label><input id="siteName" placeholder="Ex. Taille de haie et évacuation" value="${escapeHtml(draft.siteName || '')}"></div>
+    <section class="visit-capture">
+      <div class="section-head"><h2>Relevé de visite</h2><span class="category-chip">${(draft.observations || []).length + draft.lines.length + draft.photos.length} élément(s)</span></div>
+      <div class="visit-composer"><textarea id="visitObservation" rows="2" placeholder="Ex. Haie de 18 m, accès étroit, évacuation nécessaire…"></textarea>
+        <div class="visit-composer-actions"><button type="button" data-action="add-observation" data-type="note">📝 Note</button><button type="button" data-action="add-observation" data-type="measure">📐 Mesure</button><button type="button" data-action="add-observation" data-type="question">❓ À vérifier</button></div>
+      </div>
+      ${renderVisitFeed(draft)}
+    </section>
+    <div class="visit-quick-actions"><button type="button" data-action="take-quote-photo">📷<span>Photo</span></button><button type="button" data-action="browse-prices">🏷️<span>Prestation</span></button><button type="button" data-action="add-custom-line">＋<span>Ligne libre</span></button></div>
+    <div class="section-head"><h2>Prestations du devis</h2><button type="button" data-action="browse-prices">Voir les tarifs</button></div>
     ${favoriteItems.length ? `<div class="section-head"><h2>Favoris</h2><button type="button" data-action="browse-prices">Tous les tarifs</button></div><div class="favorite-strip">${favoriteItems.map(item => `<button type="button" data-action="add-tarif" data-id="${escapeHtml(item.id)}">＋ ${escapeHtml(item.poste)}</button>`).join('')}</div>` : `<button class="add-line-btn" type="button" data-action="browse-prices">🏷 Choisir dans les tarifs</button>`}
     <div id="quoteLines" class="quote-lines">${draft.lines.length ? draft.lines.map(lineMarkup).join('') : '<div class="empty">Aucune prestation ajoutée.</div>'}</div>
-    <button class="add-line-btn" type="button" data-action="add-custom-line">＋ Ligne libre</button>
     ${renderQuotePhotos(draft)}
     <div class="totals compact-totals">
       <div class="compact-total-copy">
@@ -1083,12 +1120,13 @@ function renderQuoteFinal() {
   const totals = draftTotals(state.activeDraft);
   const d = state.activeDraft;
   viewRoot.innerHTML = `
-    <div class="confirm-box"><strong>Étape 3 sur 3</strong><br><span class="muted">Vérifie les dernières informations avant le transfert.</span></div>
+    <div class="visit-progress"><span class="is-done">1 Client</span><span class="is-done">2 Relevé</span><span class="is-active">3 Résumé</span></div>
     <div class="form-card">
       <div class="field-row"><div class="field"><label for="qDate">Date</label><input id="qDate" type="date" value="${escapeHtml(d.date || '')}"></div><div class="field"><label for="qValidity">Validité</label><input id="qValidity" placeholder="30 jours" value="${escapeHtml(d.validity || '')}"></div></div>
       <div class="field"><label for="qAddress">Adresse du chantier</label><textarea id="qAddress" rows="2">${escapeHtml(d.address || '')}</textarea></div>
       <div class="field"><label for="qNotes">Remarques du devis</label><textarea id="qNotes" rows="4" placeholder="Conditions, délai, détails…">${escapeHtml(d.notes || '')}</textarea></div>
-      <div class="summary-card"><strong>${escapeHtml(d.clientName || 'Client')}</strong><div>${escapeHtml(d.siteName || 'Devis sans objet')}</div><div class="totals-row grand"><span>Total TVAC</span><span>${money(totals.tvac)}</span></div></div>
+      <div class="summary-card visit-summary"><strong>${escapeHtml(d.clientName || 'Client')}</strong><div>${escapeHtml(d.siteName || 'Devis sans objet')}</div><small>${d.lines.length} prestation(s) · ${(d.observations || []).length} note(s) · ${d.photos.length} photo(s)</small><div class="totals-row grand"><span>Total TVAC</span><span>${money(totals.tvac)}</span></div></div>
+      ${(d.observations || []).length ? `<div><strong>Relevé à reprendre dans le devis</strong><div class="visit-summary-notes">${d.observations.map(item => `<div><span>${escapeHtml(observationLabel(item.type))}</span>${escapeHtml(item.text)}</div>`).join('')}</div></div>` : ''}
       <button class="secondary-button" type="button" data-action="save-final-draft">Enregistrer comme brouillon</button>
       <button class="primary-button" type="button" data-action="transfer-quote">Transférer vers BastCompta</button>
       <p class="footer-note">Le devis sera placé dans le module Devis complet. Tu pourras ensuite générer le PDF ou l’envoyer comme d’habitude.</p>
@@ -1202,7 +1240,7 @@ function addTarifToDraft(id) {
   if (!item) return;
   state.activeDraft.lines.push({
     description: item.poste || '', qty: 1, unit: tarifUnit(item), unitPrice: tarifPrice(item),
-    costPrice: 0, discount: 0, vatRate: Number(item.tva) || 21, tarifId: item.id
+    costPrice: 0, discount: 0, vatRate: Number(item.tva) || 21, tarifId: item.id, createdAt: new Date().toISOString()
   });
   showToast(`${item.poste || 'Prestation'} ajouté`);
 }
@@ -1257,13 +1295,15 @@ async function transferQuoteToMain() {
     clientNumber: d.clientNumber || '', clientVat: d.clientVat || '', clientId: d.clientId || '',
     clientName: d.clientName || '', clientEmail: d.clientEmail || '', address: d.address || '', date: d.date || '',
     validity: d.validity || '', siteName: d.siteName || '', chantierId: '',
-    lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [], notes: d.notes || '',
+    lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [],
+    notes: [d.notes || '', ...(d.observations || []).map(item => `${observationLabel(item.type)} : ${item.text}`)].filter(Boolean).join('\n'),
+    terrainObservations: clone(d.observations || []),
     photos: clone(Array.isArray(d.photos) ? d.photos : [])
   };
   await saveMainData(true);
   d.status = 'transferred';
   d.transferredAt = new Date().toISOString();
-  persistActiveDraft();
+  await persistActiveDraft();
   showToast('Devis transféré dans BastCompta.');
   setTimeout(() => { window.location.href = 'index.html?terrain=1'; }, 650);
 }
@@ -1302,11 +1342,26 @@ viewRoot.addEventListener('click', async event => {
   }
   else if (action === 'add-tarif') { addTarifToDraft(id); if (state.view === 'prices') setView('quote-lines', { push: false }); else renderQuoteLines(); }
   else if (action === 'browse-prices') setView('prices');
-  else if (action === 'add-custom-line') { ensureActiveDraft(); state.activeDraft.lines.push({ description:'', qty:1, unit:'p', unitPrice:0, costPrice:0, discount:0, vatRate:21 }); renderQuoteLines(); }
+  else if (action === 'add-custom-line') { ensureActiveDraft(); state.activeDraft.lines.push({ description:'', qty:1, unit:'p', unitPrice:0, costPrice:0, discount:0, vatRate:21, createdAt:new Date().toISOString() }); renderQuoteLines(); }
+  else if (action === 'add-observation') {
+    ensureActiveDraft();
+    const input = $('#visitObservation');
+    const text = String(input?.value || '').trim();
+    if (!text) { input?.focus(); return showToast('Écris d’abord ton relevé.'); }
+    state.activeDraft.observations.unshift({ id: uid('obs'), type: target.dataset.type || 'note', text, createdAt: new Date().toISOString() });
+    await persistActiveDraft();
+    renderQuoteLines();
+  }
+  else if (action === 'delete-observation') {
+    ensureActiveDraft();
+    state.activeDraft.observations = state.activeDraft.observations.filter(item => item.id !== id);
+    await persistActiveDraft();
+    renderQuoteLines();
+  }
   else if (action === 'remove-line') { state.activeDraft.lines.splice(Number(target.dataset.index),1); renderQuoteLines(); }
-  else if (action === 'save-draft') { state.activeDraft.siteName = $('#siteName')?.value || state.activeDraft.siteName; persistActiveDraft('Brouillon enregistré.'); }
-  else if (action === 'quote-next') { state.activeDraft.siteName = $('#siteName')?.value || state.activeDraft.siteName; if (!state.activeDraft.lines.length) return showToast('Ajoute au moins une ligne.'); persistActiveDraft(); setView('quote-final'); }
-  else if (action === 'save-final-draft') { persistActiveDraft('Brouillon enregistré.'); setView('drafts'); }
+  else if (action === 'save-draft') { state.activeDraft.siteName = $('#siteName')?.value || state.activeDraft.siteName; await persistActiveDraft('Visite enregistrée.'); }
+  else if (action === 'quote-next') { state.activeDraft.siteName = $('#siteName')?.value || state.activeDraft.siteName; if (!state.activeDraft.lines.length) return showToast('Ajoute au moins une prestation.'); await persistActiveDraft(); setView('quote-final'); }
+  else if (action === 'save-final-draft') { await persistActiveDraft('Visite enregistrée.'); setView('drafts'); }
   else if (action === 'transfer-quote') transferQuoteToMain();
   else if (action === 'open-draft') { const draft = state.drafts.find(d => d.id === id); if (draft) { state.activeDraft = clone(draft); setView('quote-lines'); } }
   else if (action === 'delete-draft') { if (confirm('Supprimer ce brouillon ?')) { state.drafts = state.drafts.filter(d => d.id !== id); saveDrafts(); render(); } }
