@@ -61,7 +61,9 @@ let state = {
   chantiers: { projects: [] },
   drive: { token: '', expiresAt: 0, client: null, syncing: false },
   photoBusy: false,
-  photoTarget: 'client'
+  photoTarget: 'client',
+  activeZoneId: '',
+  pendingMeasureId: ''
 };
 
 const photoObjectUrls = new Map();
@@ -513,7 +515,7 @@ async function uploadQuotePhoto(draft, file, note = '') {
   const photo = {
     id: uid('photo'), driveFileId: driveFile.id, fileName: driveFile.name || fileName,
     takenAt: new Date().toISOString(), note: String(note || '').trim(), scope: 'quote',
-    draftId: draft.id || '', clientId: draft.clientId || '',
+    draftId: draft.id || '', clientId: draft.clientId || '', zoneId: state.activeZoneId || '',
     width: compressed.width, height: compressed.height,
     size: Number(driveFile.size || compressed.blob.size), mimeType: 'image/jpeg'
   };
@@ -876,6 +878,7 @@ function makeBlankDraft(client = null) {
     date: today,
     validity: '',
     notes: '',
+    zones: [],
     observations: [],
     lines: [],
     photos: []
@@ -887,10 +890,30 @@ function ensureActiveDraft() {
   if (!Array.isArray(state.activeDraft.lines)) state.activeDraft.lines = [];
   if (!Array.isArray(state.activeDraft.photos)) state.activeDraft.photos = [];
   if (!Array.isArray(state.activeDraft.observations)) state.activeDraft.observations = [];
+  if (!Array.isArray(state.activeDraft.zones)) state.activeDraft.zones = [];
+  if (state.activeZoneId && !state.activeDraft.zones.some(zone => zone.id === state.activeZoneId)) state.activeZoneId = '';
 }
 
 function observationLabel(type = 'note') {
-  return ({ note: 'Note', measure: 'Mesure', question: 'À vérifier' })[type] || 'Note';
+  return ({ note: 'Note', measure: 'Mesure', question: 'À vérifier', structuredMeasure: 'Mesure calculée' })[type] || 'Note';
+}
+
+function zoneName(draft, zoneId = '') {
+  return (draft.zones || []).find(zone => zone.id === zoneId)?.name || 'Général';
+}
+
+function formatMeasureNumber(value) {
+  return new Intl.NumberFormat('fr-BE', { maximumFractionDigits: 3 }).format(Number(value) || 0);
+}
+
+function buildStructuredMeasure(type, a, b, c) {
+  const first = Number(a) || 0;
+  const second = Number(b) || 0;
+  const third = Number(c) || 0;
+  if (type === 'surface') return { result: first * second, unit: 'm²', formula: `${formatMeasureNumber(first)} m × ${formatMeasureNumber(second)} m` };
+  if (type === 'volume') return { result: first * second * third, unit: 'm³', formula: `${formatMeasureNumber(first)} m × ${formatMeasureNumber(second)} m × ${formatMeasureNumber(third)} m` };
+  if (type === 'quantity') return { result: first, unit: 'p', formula: `${formatMeasureNumber(first)} pièce(s)` };
+  return { result: first, unit: 'm', formula: `${formatMeasureNumber(first)} m` };
 }
 
 function renderVisitFeed(draft) {
@@ -902,15 +925,15 @@ function renderVisitFeed(draft) {
   if (!events.length) return '<div class="empty visit-empty">Commence le relevé avec une note, une mesure, une photo ou une prestation.</div>';
   return `<div class="visit-feed">${events.map(event => {
     if (event.kind === 'observation') return `<article class="visit-event visit-event-${escapeHtml(event.type || 'note')}">
-      <span class="visit-event-icon">${event.type === 'measure' ? '📐' : event.type === 'question' ? '❓' : '📝'}</span>
-      <div><small>${escapeHtml(observationLabel(event.type))}</small><strong>${escapeHtml(event.text || '')}</strong></div>
-      <button type="button" data-action="delete-observation" data-id="${escapeHtml(event.id)}" aria-label="Supprimer">×</button>
+      <span class="visit-event-icon">${['measure','structuredMeasure'].includes(event.type) ? '📐' : event.type === 'question' ? '❓' : '📝'}</span>
+      <div><small>${escapeHtml(zoneName(draft, event.zoneId))} · ${escapeHtml(observationLabel(event.type))}</small><strong>${escapeHtml(event.text || '')}</strong></div>
+      <div class="visit-event-actions">${event.type === 'structuredMeasure' ? `<button type="button" data-action="measure-to-line" data-id="${escapeHtml(event.id)}" title="Créer une ligne de devis">→ Ligne</button>` : ''}<button type="button" data-action="delete-observation" data-id="${escapeHtml(event.id)}" aria-label="Supprimer">×</button></div>
     </article>`;
     if (event.kind === 'photo') return `<article class="visit-event visit-event-photo">
-      <span class="visit-event-icon">📷</span><div><small>Photo</small><strong>${escapeHtml(event.note || event.fileName || 'Photo du relevé')}</strong></div>
+      <span class="visit-event-icon">📷</span><div><small>${escapeHtml(zoneName(draft, event.zoneId))} · Photo</small><strong>${escapeHtml(event.note || event.fileName || 'Photo du relevé')}</strong></div>
     </article>`;
     return `<article class="visit-event visit-event-line">
-      <span class="visit-event-icon">🏷️</span><div><small>Prestation · ${escapeHtml(String(event.qty ?? 1))} ${escapeHtml(event.unit || 'p')}</small><strong>${escapeHtml(event.description || 'Ligne à compléter')}</strong></div><span class="visit-event-price">${money((Number(event.qty)||0) * (Number(event.unitPrice)||0))}</span>
+      <span class="visit-event-icon">🏷️</span><div><small>${escapeHtml(zoneName(draft, event.zoneId))} · Prestation · ${escapeHtml(String(event.qty ?? 1))} ${escapeHtml(event.unit || 'p')}</small><strong>${escapeHtml(event.description || 'Ligne à compléter')}</strong></div><span class="visit-event-price">${money((Number(event.qty)||0) * (Number(event.unitPrice)||0))}</span>
     </article>`;
   }).join('')}</div>`;
 }
@@ -1022,7 +1045,11 @@ function renderClientDetail() {
 
 function renderPrices() {
   const items = filteredTarifs();
+  const pendingMeasure = state.pendingMeasureId && state.activeDraft
+    ? (state.activeDraft.observations || []).find(item => item.id === state.pendingMeasureId)
+    : null;
   viewRoot.innerHTML = `
+    ${pendingMeasure ? `<div class="measure-price-context"><span>📐</span><div><strong>Choisir la prestation à chiffrer</strong><small>${escapeHtml(pendingMeasure.text || '')}</small></div><button type="button" data-action="cancel-measure-price">Annuler</button></div>` : ''}
     <div class="section-head"><h2>${state.data.tarifs.items.length} prestation${state.data.tarifs.items.length === 1 ? '' : 's'}</h2><button type="button" data-action="open-full-prices">Gérer</button></div>
     <div class="search-row"><input id="priceSearch" class="search-input" type="search" placeholder="Rechercher un poste, une catégorie…" value="${escapeHtml(state.query)}"></div>
     <div class="terrain-tarif-groups">${items.length ? renderTarifGroups(items) : '<div class="empty">Aucun tarif trouvé. Ajoute d’abord tes prestations dans la version complète.</div>'}</div>`;
@@ -1082,6 +1109,29 @@ function lineMarkup(row, index) {
   </article>`;
 }
 
+function renderVisitZones(draft) {
+  const zones = Array.isArray(draft.zones) ? draft.zones : [];
+  return `<div class="visit-zones" aria-label="Zones de la visite">
+    <button type="button" data-action="select-zone" data-id="" class="${!state.activeZoneId ? 'is-active' : ''}">Général</button>
+    ${zones.map(zone => `<button type="button" data-action="select-zone" data-id="${escapeHtml(zone.id)}" class="${state.activeZoneId === zone.id ? 'is-active' : ''}">${escapeHtml(zone.name)}</button>`).join('')}
+    <button type="button" data-action="add-zone" class="visit-zone-add">＋ Zone</button>
+  </div>`;
+}
+
+function renderZoneQuoteSummary(draft) {
+  const groups = new Map();
+  (draft.lines || []).forEach(line => {
+    const key = line.zoneId || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(line);
+  });
+  if (!groups.size) return '';
+  return `<div class="zone-quote-summary">${[...groups.entries()].map(([zoneId, lines]) => `<section>
+    <div class="zone-summary-head"><strong>${escapeHtml(zoneName(draft, zoneId))}</strong><span>${lines.length} ligne(s)</span></div>
+    ${lines.map(line => `<div class="zone-summary-line"><span>${escapeHtml(line.description || 'Prestation')}</span><small>${escapeHtml(formatMeasureNumber(line.qty))} ${escapeHtml(line.unit || 'p')}</small><strong>${money((Number(line.qty)||0) * (Number(line.unitPrice)||0) * (1 - (Number(line.discount)||0) / 100))}</strong></div>`).join('')}
+  </section>`).join('')}</div>`;
+}
+
 function renderQuoteLines() {
   ensureActiveDraft();
   const draft = state.activeDraft;
@@ -1092,11 +1142,22 @@ function renderQuoteLines() {
     <div class="visit-progress"><span class="is-done">1 Client</span><span class="is-active">2 Relevé</span><span>3 Résumé</span></div>
     <div class="quote-client"><div><strong>${escapeHtml(clientDisplay(client || draft))}</strong><small class="muted">${escapeHtml(draft.address || 'Adresse non renseignée')}</small></div><button type="button" data-action="change-client">Changer</button></div>
     <div class="field"><label for="siteName">Nom du chantier / objet</label><input id="siteName" placeholder="Ex. Taille de haie et évacuation" value="${escapeHtml(draft.siteName || '')}"></div>
+    <div class="section-head visit-zone-head"><h2>Zone du relevé</h2><span class="category-chip">${escapeHtml(zoneName(draft, state.activeZoneId))}</span></div>
+    ${renderVisitZones(draft)}
     <section class="visit-capture">
       <div class="section-head"><h2>Relevé de visite</h2><span class="category-chip">${(draft.observations || []).length + draft.lines.length + draft.photos.length} élément(s)</span></div>
       <div class="visit-composer"><textarea id="visitObservation" rows="2" placeholder="Ex. Haie de 18 m, accès étroit, évacuation nécessaire…"></textarea>
         <div class="visit-composer-actions"><button type="button" data-action="add-observation" data-type="note">📝 Note</button><button type="button" data-action="add-observation" data-type="measure">📐 Mesure</button><button type="button" data-action="add-observation" data-type="question">❓ À vérifier</button></div>
       </div>
+      <details class="measure-builder">
+        <summary>📐 Ajouter une mesure calculée</summary>
+        <div class="measure-builder-body">
+          <label>Calcul<select id="measureType"><option value="length">Longueur</option><option value="surface">Surface</option><option value="volume">Volume</option><option value="quantity">Quantité</option></select></label>
+          <div class="measure-inputs"><label>A<input id="measureA" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></label><label data-measure-extra="surface">B<input id="measureB" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></label><label data-measure-extra="volume">C<input id="measureC" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0"></label></div>
+          <input id="measureLabel" placeholder="Objet, ex. Terrasse arrière">
+          <button class="secondary-button" type="button" data-action="add-structured-measure">Calculer et ajouter</button>
+        </div>
+      </details>
       ${renderVisitFeed(draft)}
     </section>
     <div class="visit-quick-actions"><button type="button" data-action="take-quote-photo">📷<span>Photo</span></button><button type="button" data-action="browse-prices">🏷️<span>Prestation</span></button><button type="button" data-action="add-custom-line">＋<span>Ligne libre</span></button></div>
@@ -1126,7 +1187,8 @@ function renderQuoteFinal() {
       <div class="field"><label for="qAddress">Adresse du chantier</label><textarea id="qAddress" rows="2">${escapeHtml(d.address || '')}</textarea></div>
       <div class="field"><label for="qNotes">Remarques du devis</label><textarea id="qNotes" rows="4" placeholder="Conditions, délai, détails…">${escapeHtml(d.notes || '')}</textarea></div>
       <div class="summary-card visit-summary"><strong>${escapeHtml(d.clientName || 'Client')}</strong><div>${escapeHtml(d.siteName || 'Devis sans objet')}</div><small>${d.lines.length} prestation(s) · ${(d.observations || []).length} note(s) · ${d.photos.length} photo(s)</small><div class="totals-row grand"><span>Total TVAC</span><span>${money(totals.tvac)}</span></div></div>
-      ${(d.observations || []).length ? `<div><strong>Relevé à reprendre dans le devis</strong><div class="visit-summary-notes">${d.observations.map(item => `<div><span>${escapeHtml(observationLabel(item.type))}</span>${escapeHtml(item.text)}</div>`).join('')}</div></div>` : ''}
+      ${renderZoneQuoteSummary(d)}
+      ${(d.observations || []).length ? `<div><strong>Relevé à reprendre dans le devis</strong><div class="visit-summary-notes">${d.observations.map(item => `<div><span>${escapeHtml(zoneName(d, item.zoneId))} · ${escapeHtml(observationLabel(item.type))}</span>${escapeHtml(item.text)}</div>`).join('')}</div></div>` : ''}
       <button class="secondary-button" type="button" data-action="save-final-draft">Enregistrer comme brouillon</button>
       <button class="primary-button" type="button" data-action="transfer-quote">Transférer vers BastCompta</button>
       <p class="footer-note">Le devis sera placé dans le module Devis complet. Tu pourras ensuite générer le PDF ou l’envoyer comme d’habitude.</p>
@@ -1217,6 +1279,14 @@ function refreshLineTotal(card, row) {
 function bindQuoteFields() {
   const siteName = $('#siteName');
   siteName?.addEventListener('input', () => { state.activeDraft.siteName = siteName.value; });
+  const measureType = $('#measureType');
+  const refreshMeasureFields = () => {
+    const type = measureType?.value || 'length';
+    document.querySelector('[data-measure-extra="surface"]')?.classList.toggle('hidden', !['surface','volume'].includes(type));
+    document.querySelector('[data-measure-extra="volume"]')?.classList.toggle('hidden', type !== 'volume');
+  };
+  measureType?.addEventListener('change', refreshMeasureFields);
+  refreshMeasureFields();
   document.querySelectorAll('[data-line-index]').forEach(card => {
     const index = Number(card.dataset.lineIndex);
     card.querySelectorAll('[data-line-field]').forEach(input => {
@@ -1238,11 +1308,20 @@ function addTarifToDraft(id) {
   ensureActiveDraft();
   const item = state.data.tarifs.items.find(t => t.id === id);
   if (!item) return;
+  const measure = state.pendingMeasureId
+    ? state.activeDraft.observations.find(entry => entry.id === state.pendingMeasureId && entry.type === 'structuredMeasure')
+    : null;
+  const targetZoneId = measure?.zoneId || state.activeZoneId || '';
+  const description = measure
+    ? `${item.poste || 'Prestation'} — ${zoneName(state.activeDraft, targetZoneId)}`
+    : (item.poste || '');
   state.activeDraft.lines.push({
-    description: item.poste || '', qty: 1, unit: tarifUnit(item), unitPrice: tarifPrice(item),
-    costPrice: 0, discount: 0, vatRate: Number(item.tva) || 21, tarifId: item.id, createdAt: new Date().toISOString()
+    description, qty: measure ? (Number(measure.result) || 0) : 1, unit: measure?.unit || tarifUnit(item), unitPrice: tarifPrice(item),
+    costPrice: 0, discount: 0, vatRate: Number(item.tva) || 21, tarifId: item.id, zoneId: targetZoneId,
+    sourceMeasureId: measure?.id || '', createdAt: new Date().toISOString()
   });
-  showToast(`${item.poste || 'Prestation'} ajouté`);
+  state.pendingMeasureId = '';
+  showToast(measure ? `${item.poste || 'Prestation'} chiffré avec la mesure.` : `${item.poste || 'Prestation'} ajouté`);
 }
 
 function saveClientFromForm(returnToQuote = false) {
@@ -1296,7 +1375,8 @@ async function transferQuoteToMain() {
     clientName: d.clientName || '', clientEmail: d.clientEmail || '', address: d.address || '', date: d.date || '',
     validity: d.validity || '', siteName: d.siteName || '', chantierId: '',
     lines: clone(d.lines), suppliesEnabled: false, suppliesLines: [],
-    notes: [d.notes || '', ...(d.observations || []).map(item => `${observationLabel(item.type)} : ${item.text}`)].filter(Boolean).join('\n'),
+    notes: [d.notes || '', ...(d.observations || []).map(item => `${zoneName(d, item.zoneId)} — ${observationLabel(item.type)} : ${item.text}`)].filter(Boolean).join('\n'),
+    terrainZones: clone(d.zones || []),
     terrainObservations: clone(d.observations || []),
     photos: clone(Array.isArray(d.photos) ? d.photos : [])
   };
@@ -1340,15 +1420,27 @@ viewRoot.addEventListener('click', async event => {
     state.favorites = state.favorites.includes(id) ? state.favorites.filter(x => x !== id) : [...state.favorites, id];
     writeJson(FAVORITES_KEY, state.favorites); render();
   }
-  else if (action === 'add-tarif') { addTarifToDraft(id); if (state.view === 'prices') setView('quote-lines', { push: false }); else renderQuoteLines(); }
-  else if (action === 'browse-prices') setView('prices');
-  else if (action === 'add-custom-line') { ensureActiveDraft(); state.activeDraft.lines.push({ description:'', qty:1, unit:'p', unitPrice:0, costPrice:0, discount:0, vatRate:21, createdAt:new Date().toISOString() }); renderQuoteLines(); }
+  else if (action === 'add-tarif') { addTarifToDraft(id); await persistActiveDraft(); if (state.view === 'prices') setView('quote-lines', { push: false }); else renderQuoteLines(); }
+  else if (action === 'browse-prices') { state.pendingMeasureId = ''; setView('prices'); }
+  else if (action === 'cancel-measure-price') { state.pendingMeasureId = ''; setView('quote-lines', { push: false }); }
+  else if (action === 'add-zone') {
+    ensureActiveDraft();
+    const name = String(prompt('Nom de la zone (ex. Terrasse arrière) :', '') || '').trim();
+    if (!name) return;
+    const zone = { id: uid('zone'), name, createdAt: new Date().toISOString() };
+    state.activeDraft.zones.push(zone);
+    state.activeZoneId = zone.id;
+    await persistActiveDraft();
+    renderQuoteLines();
+  }
+  else if (action === 'select-zone') { state.activeZoneId = id || ''; renderQuoteLines(); }
+  else if (action === 'add-custom-line') { ensureActiveDraft(); state.activeDraft.lines.push({ description:'', qty:1, unit:'p', unitPrice:0, costPrice:0, discount:0, vatRate:21, zoneId:state.activeZoneId || '', createdAt:new Date().toISOString() }); renderQuoteLines(); }
   else if (action === 'add-observation') {
     ensureActiveDraft();
     const input = $('#visitObservation');
     const text = String(input?.value || '').trim();
     if (!text) { input?.focus(); return showToast('Écris d’abord ton relevé.'); }
-    state.activeDraft.observations.unshift({ id: uid('obs'), type: target.dataset.type || 'note', text, createdAt: new Date().toISOString() });
+    state.activeDraft.observations.unshift({ id: uid('obs'), type: target.dataset.type || 'note', text, zoneId: state.activeZoneId || '', createdAt: new Date().toISOString() });
     await persistActiveDraft();
     renderQuoteLines();
   }
@@ -1357,6 +1449,27 @@ viewRoot.addEventListener('click', async event => {
     state.activeDraft.observations = state.activeDraft.observations.filter(item => item.id !== id);
     await persistActiveDraft();
     renderQuoteLines();
+  }
+  else if (action === 'add-structured-measure') {
+    ensureActiveDraft();
+    const type = $('#measureType')?.value || 'length';
+    const a = Number($('#measureA')?.value);
+    const b = Number($('#measureB')?.value);
+    const c = Number($('#measureC')?.value);
+    if (!(a > 0) || (['surface','volume'].includes(type) && !(b > 0)) || (type === 'volume' && !(c > 0))) return showToast('Complète les dimensions nécessaires.');
+    const calculated = buildStructuredMeasure(type, a, b, c);
+    const label = String($('#measureLabel')?.value || '').trim();
+    const text = `${label ? `${label} : ` : ''}${calculated.formula} = ${formatMeasureNumber(calculated.result)} ${calculated.unit}`;
+    state.activeDraft.observations.unshift({ id: uid('measure'), type: 'structuredMeasure', measureType: type, a, b, c, result: calculated.result, unit: calculated.unit, text, zoneId: state.activeZoneId || '', createdAt: new Date().toISOString() });
+    await persistActiveDraft();
+    renderQuoteLines();
+  }
+  else if (action === 'measure-to-line') {
+    ensureActiveDraft();
+    const measure = state.activeDraft.observations.find(item => item.id === id && item.type === 'structuredMeasure');
+    if (!measure) return;
+    state.pendingMeasureId = measure.id;
+    setView('prices');
   }
   else if (action === 'remove-line') { state.activeDraft.lines.splice(Number(target.dataset.index),1); renderQuoteLines(); }
   else if (action === 'save-draft') { state.activeDraft.siteName = $('#siteName')?.value || state.activeDraft.siteName; await persistActiveDraft('Visite enregistrée.'); }
