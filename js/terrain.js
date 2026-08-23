@@ -101,6 +101,22 @@ function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+function mergeRecordsById(localItems = [], remoteItems = []) {
+  const merged = new Map();
+  const withoutId = [];
+  [...remoteItems, ...localItems].forEach((item, index) => {
+    if (!item || typeof item !== 'object') return;
+    const id = String(item.id || '').trim();
+    if (!id) { withoutId.push(item); return; }
+    const existing = merged.get(id);
+    if (!existing) { merged.set(id, item); return; }
+    const existingTime = Date.parse(existing.updatedAt || existing.createdAt || '') || 0;
+    const itemTime = Date.parse(item.updatedAt || item.createdAt || '') || 0;
+    if (itemTime >= existingTime || index >= remoteItems.length && itemTime === existingTime) merged.set(id, item);
+  });
+  return [...merged.values(), ...withoutId];
+}
+
 async function loadAllData() {
   const fallback = { company: {}, quote: {}, clients: [], tarifs: { categories: [], subcategories: [], items: [] } };
   state.data = window.BastStorage ? await BastStorage.getJson(STORAGE_KEY, fallback) : readJson(STORAGE_KEY, fallback);
@@ -628,13 +644,13 @@ async function syncFromDrive() {
     const crm = await loadJsonFromDrive(CRM_DRIVE_FILE);
     if (crm && typeof crm === 'object') {
       if (crm.company) state.data.company = crm.company;
-      if (Array.isArray(crm.clients)) state.data.clients = crm.clients;
+      if (Array.isArray(crm.clients)) state.data.clients = mergeRecordsById(state.data.clients, crm.clients);
       if (crm.mail) state.data.mail = crm.mail;
       if (crm.tarifs) state.data.tarifs = crm.tarifs;
       await saveMainData(false);
     }
     const drafts = await loadJsonFromDrive(DRAFTS_DRIVE_FILE);
-    if (Array.isArray(drafts)) { state.drafts = drafts; await saveDrafts(false); }
+    if (Array.isArray(drafts)) { state.drafts = mergeRecordsById(state.drafts, drafts); await saveDrafts(false); }
     if (hasPremiumAccess()) {
       const chantiers = await loadJsonFromDrive(CHANTIERS_DRIVE_FILE);
       if (chantiers && typeof chantiers === 'object') {
@@ -642,6 +658,13 @@ async function syncFromDrive() {
         if (window.BastStorage) await BastStorage.setJson(CHANTIERS_KEY, chantiers); else writeJson(CHANTIERS_KEY, chantiers);
       }
     }
+    await Promise.all([
+      saveJsonToDrive(CRM_DRIVE_FILE, {
+        company: state.data.company || {}, clients: state.data.clients || [], mail: state.data.mail || {},
+        tarifs: state.data.tarifs || { categories: [], subcategories: [], items: [] }
+      }, false),
+      saveJsonToDrive(DRAFTS_DRIVE_FILE, state.drafts, false)
+    ]);
     updateSyncLine('Synchronisé avec Google Drive', 'ok');
     render();
     return true;
@@ -669,6 +692,38 @@ async function connectAndSyncDrive(interactive = true) {
 function showOnly(screen) {
   [loadingScreen, authScreen, subscriptionScreen, appScreen].forEach(item => item.classList.add('hidden'));
   screen.classList.remove('hidden');
+}
+
+function setDriveGate(visible, message = '') {
+  const gate = $('#terrainDriveGate');
+  const button = $('#terrainDriveGateBtn');
+  const copy = $('#driveGateMessage');
+  gate?.classList.toggle('hidden', !visible);
+  if (copy && message) copy.textContent = message;
+  if (button) button.disabled = false;
+}
+
+async function waitForGoogleDriveSdk(timeoutMs = 5000) {
+  const startedAt = Date.now();
+  while (!window.google?.accounts?.oauth2 && Date.now() - startedAt < timeoutMs) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return !!window.google?.accounts?.oauth2;
+}
+
+async function requireDriveAtLaunch() {
+  const wasConnected = localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1';
+  setDriveGate(true, wasConnected
+    ? 'Reconnexion à Google Drive et synchronisation des visites…'
+    : 'Google Drive est nécessaire pour sécuriser les visites, photos et brouillons du Mode Terrain.');
+  await waitForGoogleDriveSdk();
+  const connected = await connectAndSyncDrive(!wasConnected);
+  if (connected) {
+    setDriveGate(false);
+    return true;
+  }
+  setDriveGate(true, 'La connexion à Google Drive est nécessaire pour ouvrir le Mode Terrain.');
+  return false;
 }
 
 let toastTimer;
@@ -1335,7 +1390,8 @@ function saveClientFromForm(returnToQuote = false) {
     name,
     phone: $('#cfPhone').value.trim(), email: $('#cfEmail').value.trim(), address: $('#cfAddress').value.trim(),
     clientNumber: $('#cfNumber').value.trim(), vat: $('#cfVat').value.trim(), contact: $('#cfContact').value.trim(),
-    notes: hasPremiumAccess() ? ($('#cfNotes')?.value.trim() || existing.notes || '') : (existing.notes || ''), favorite: $('#cfFavorite').value === '1', createdAt: existing.createdAt || new Date().toISOString()
+    notes: hasPremiumAccess() ? ($('#cfNotes')?.value.trim() || existing.notes || '') : (existing.notes || ''),
+    favorite: $('#cfFavorite').value === '1', createdAt: existing.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString()
   };
   if (existingIndex >= 0) state.data.clients[existingIndex] = client;
   else state.data.clients.push(client);
@@ -1570,6 +1626,14 @@ $('#terrainSubscriptionLogoutBtn')?.addEventListener('click', async () => { awai
 $('#reloadDataBtn').addEventListener('click', async () => { await loadAllData(); accountMenu.classList.add('hidden'); render(); showToast('Données BastCompta rechargées.'); });
 $('#connectDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); await connectAndSyncDrive(true); });
 $('#syncDriveBtn')?.addEventListener('click', async () => { accountMenu.classList.add('hidden'); if (!isDriveConnected()) await connectAndSyncDrive(true); else await syncFromDrive(); });
+$('#terrainDriveGateBtn')?.addEventListener('click', async () => {
+  const button = $('#terrainDriveGateBtn');
+  button.disabled = true;
+  $('#driveGateMessage').textContent = 'Connexion et synchronisation avec Google Drive…';
+  const connected = await connectAndSyncDrive(true);
+  if (connected) setDriveGate(false);
+  else setDriveGate(true, 'Connexion impossible ou annulée. Google Drive est requis pour continuer.');
+});
 
 window.addEventListener('storage', event => {
   if ([STORAGE_KEY, DRAFTS_KEY, FAVORITES_KEY].includes(event.key)) { loadAllData(); render(); }
@@ -1594,7 +1658,7 @@ onAuthStateChanged(auth, async user => {
       render();
       updateAccountPermissionsUi();
       updateSyncLine('Données locales BastCompta chargées', 'ok');
-      if (localStorage.getItem(GOOGLE_WAS_CONNECTED_KEY) === '1') setTimeout(() => connectAndSyncDrive(false), 700);
+      await requireDriveAtLaunch();
     } else {
       passwordInput.value = '';
       showOnly(authScreen);
