@@ -84,6 +84,7 @@ const fullRestoreInput = document.getElementById('fullRestoreInput');
 const backupOverlay = document.getElementById('backupOverlay');
 const backupOverlayTitle = document.getElementById('backupOverlayTitle');
 const backupOverlayText = document.getElementById('backupOverlayText');
+const dashboardFrame = document.getElementById('dashboardFrame');
 const devisFrame = document.getElementById('devisFrame');
 const supplierFrame = document.getElementById('supplierFrame');
 const terrainFrame = document.getElementById('terrainFrame');
@@ -101,7 +102,7 @@ let activateTrialBtn = null;
 const authTabs = Array.from(document.querySelectorAll('.auth-tab'));
 const mainTabs = Array.from(document.querySelectorAll('.main-tab'));
 
-const FREE_MAIN_TABS = ['devis', 'tarifs'];
+const FREE_MAIN_TABS = ['dashboard', 'devis', 'tarifs'];
 const MODULE_PACK_BY_TAB = { compta: 'accounting', impots: 'accounting', personnel: 'client', chantier: 'client', terrain: 'client' };
 const SUBSCRIPTION_PACKS = {
   accounting: { label: 'Pack Comptabilité', shortLabel: 'Comptabilité', code: 'COMPTA' },
@@ -416,7 +417,7 @@ function switchAuthTab(tabName) {
 function switchMainTab(tabName) {
   if (!hasModuleAccess(tabName)) {
     showLockedPaidFeatureMessage();
-    tabName = 'devis';
+    tabName = 'dashboard';
   }
 
   mainTabs.forEach(btn => {
@@ -432,6 +433,7 @@ function switchMainTab(tabName) {
       : '';
   });
 
+  document.getElementById('panel-dashboard')?.classList.toggle('active', tabName === 'dashboard');
   document.getElementById('panel-devis').classList.toggle('active', tabName === 'devis');
   document.getElementById('panel-fournisseurs')?.classList.remove('active');
   document.getElementById('panel-terrain')?.classList.toggle('active', tabName === 'terrain');
@@ -439,6 +441,7 @@ function switchMainTab(tabName) {
   document.getElementById('panel-chantier').classList.toggle('active', tabName === 'chantier');
   document.getElementById('panel-personnel')?.classList.toggle('active', tabName === 'personnel');
   document.getElementById('panel-impots').classList.toggle('active', tabName === 'impots');
+  return tabName;
 }
 
 function humanizeAuthError(error) {
@@ -556,6 +559,7 @@ function revokePortalModuleAccess() {
 function loadProtectedFrames(subscription = currentSubscriptionState) {
   try { sessionStorage.setItem('bastcompta_subscription_access', JSON.stringify(subscription?.access || {})); } catch (error) {}
   [
+    { tab: 'dashboard', frame: dashboardFrame },
     { tab: 'devis', frame: devisFrame },
     { tab: 'devis', frame: supplierFrame },
     { tab: 'terrain', frame: terrainFrame },
@@ -582,7 +586,7 @@ function loadProtectedFrames(subscription = currentSubscriptionState) {
 }
 
 function unloadProtectedFrames() {
-  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
+  [dashboardFrame, devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, impotsFrame, tarifsFrame].forEach(frame => {
     if (!frame) return;
     frame.setAttribute('src', 'about:blank');
   });
@@ -608,7 +612,7 @@ function showPortal(user, subscription = currentSubscriptionState) {
   }, 150);
 
   updateCurrentUserDisplay(user, currentSubscriptionState);
-  switchMainTab('devis');
+  switchMainTab('dashboard');
 
   sendVerificationBtn.style.display = user.emailVerified ? 'none' : 'inline-flex';
   updateDriveButtons();
@@ -2508,7 +2512,7 @@ function broadcastDriveDisconnected() {
 }
 
 function bindIframeMessaging() {
-  [devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, tarifsFrame].forEach(frame => {
+  [dashboardFrame, devisFrame, supplierFrame, terrainFrame, comptaFrame, chantierFrame, personnelFrame, tarifsFrame].forEach(frame => {
     frame?.addEventListener('load', () => {
       if (isTokenFresh()) broadcastDriveConnected();
       else broadcastDriveDisconnected();
@@ -2518,6 +2522,13 @@ function bindIframeMessaging() {
 
 window.addEventListener('message', event => {
   if (event.origin !== window.location.origin) return;
+  if (event.data?.type === 'BASTCOMPTA_DASHBOARD_NAVIGATE') {
+    const tab = String(event.data.tab || 'dashboard');
+    const page = String(event.data.page || '');
+    const button = document.querySelector(`[data-main-tab="${tab}"][data-page-key="${page}"]`) || document.querySelector(`.sidebar-module[data-main-tab="${tab}"]`);
+    button?.click();
+    return;
+  }
   if (event.data?.type === 'BASTCOMPTA_OPEN_DEVIS_PAGE') {
     const pageKey = ['quote','invoice','tarifs','reminder','sent','communication','peppol','settings'].includes(event.data.pageKey) ? event.data.pageKey : 'quote';
     switchMainTab('devis');
@@ -3192,6 +3203,7 @@ onAuthStateChanged(auth, async (user) => {
   const groups = Array.from(document.querySelectorAll('#portalScreen .sidebar-group'));
 
   const labels = {
+    dashboard: 'Tableau de bord',
     devis: 'Gestion commerciale',
     compta: 'Comptabilité',
     chantier: 'Suivi client',
@@ -3200,7 +3212,7 @@ onAuthStateChanged(auth, async (user) => {
     impots: 'Impôts IPP'
   };
   const defaults = { devis: 'quote', compta: 'sales', personnel: 'summary', impots: 'summary' };
-  const frames = { devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, personnel: personnelFrame, impots: impotsFrame };
+  const frames = { dashboard: dashboardFrame, devis: devisFrame, terrain: terrainFrame, compta: comptaFrame, chantier: chantierFrame, personnel: personnelFrame, impots: impotsFrame };
 
   function showDevisSubpage(pageKey) {
     const suppliers = pageKey === 'suppliers';
@@ -3220,7 +3232,7 @@ onAuthStateChanged(auth, async (user) => {
 
   function openGroup(tabName) {
     groups.forEach(group => {
-      const open = group.dataset.sidebarGroup === tabName;
+      const open = tabName !== 'dashboard' && group.dataset.sidebarGroup === tabName;
       group.classList.toggle('open', open);
       group.querySelector('.sidebar-module')?.setAttribute('aria-expanded', String(open));
     });
@@ -3268,9 +3280,8 @@ onAuthStateChanged(auth, async (user) => {
         return;
       }
 
-      switchMainTab(tabName);
-      if (tabName === 'devis') showDevisSubpage(pageKey);
-      const actualTab = document.querySelector('.sidebar-module.active')?.dataset.mainTab || tabName;
+      const actualTab = switchMainTab(tabName);
+      if (actualTab === 'devis') showDevisSubpage(pageKey);
       if (actualTab !== tabName) {
         const fallback = document.querySelector(`.sidebar-submenu [data-main-tab="${actualTab}"][data-page-key="${defaults[actualTab] || ''}"]`);
         updateSidebarState(actualTab, fallback);
@@ -3321,7 +3332,7 @@ onAuthStateChanged(auth, async (user) => {
   syncResponsiveNavigation();
   requestAnimationFrame(syncResponsiveNavigation);
   setTimeout(syncResponsiveNavigation, 150);
-  updateSidebarState('devis', document.querySelector('.sidebar-submenu [data-main-tab="devis"][data-page-key="quote"]'));
+  updateSidebarState('dashboard', document.querySelector('.sidebar-home[data-main-tab="dashboard"]'));
 })();
 
 /* Le défilement reste interne à chaque module. */

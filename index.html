@@ -585,8 +585,11 @@
 </div>
 <nav class="sidebar-nav">
 <div class="sidebar-nav-scroll">
+<button class="sidebar-home active" data-main-tab="dashboard" type="button">
+<span class="sidebar-icon">⌂</span><span>Tableau de bord</span>
+</button>
 <div class="sidebar-group open" data-sidebar-group="devis">
-<button aria-expanded="true" class="main-tab sidebar-module active" data-main-tab="devis" type="button">
+<button aria-expanded="true" class="main-tab sidebar-module" data-main-tab="devis" type="button">
 <span class="sidebar-icon">▤</span><span>Gestion commerciale</span><span class="sidebar-chevron">⌄</span>
 </button>
 <div class="sidebar-submenu">
@@ -686,8 +689,8 @@
 <div class="portal-topbar">
 <button aria-controls="portalSidebar" aria-expanded="false" aria-label="Ouvrir le menu" class="sidebar-toggle" id="sidebarToggleBtn" type="button">☰</button>
 <div class="topbar-context">
-<strong id="topbarModuleTitle">Gestion commerciale</strong>
-<span id="topbarPageTitle">Devis</span>
+<strong id="topbarModuleTitle">Tableau de bord</strong>
+<span id="topbarPageTitle">Vue d’ensemble</span>
 </div>
 <input accept="application/zip,.zip" class="hidden" id="fullRestoreInput" type="file"/>
 <div class="user-actions">
@@ -700,7 +703,10 @@
 </div>
 </div>
 <div class="workspace">
-<div class="tab-panel active" id="panel-devis">
+<div class="tab-panel active" id="panel-dashboard">
+<iframe data-src="tableau-de-bord.html?embedded=1" id="dashboardFrame" scrolling="yes" src="about:blank" title="Tableau de bord"></iframe>
+</div>
+<div class="tab-panel" id="panel-devis">
 <iframe data-src="gestion-commerciale.html?embedded=1" id="devisFrame" scrolling="yes" src="about:blank" title="Gestion commerciale"></iframe>
 </div>
 <div class="tab-panel" id="panel-fournisseurs">

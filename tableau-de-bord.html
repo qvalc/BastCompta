@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tableau de bord · BastCompta</title>
+  <link rel="icon" href="logo.png" type="image/png">
+  <link rel="stylesheet" href="css/base.css?v=4">
+  <link rel="stylesheet" href="css/tableau-de-bord.css?v=1">
+  <script src="js/core/storage-keys.js"></script>
+</head>
+<body>
+  <main class="dashboard-shell">
+    <header class="dashboard-heading">
+      <div>
+        <p class="eyebrow">Vue d’ensemble</p>
+        <h1 id="welcomeTitle">Bonjour</h1>
+        <p id="dashboardSubtitle">Voici l’essentiel de votre activité.</p>
+      </div>
+      <button class="refresh-button" id="refreshDashboard" type="button" title="Actualiser les données">↻ Actualiser</button>
+    </header>
+
+    <section class="quick-actions" aria-label="Actions rapides">
+      <button class="quick-action primary" data-tab="devis" data-page="quote" type="button"><span>＋</span>Nouveau devis</button>
+      <button class="quick-action" data-tab="devis" data-page="invoice" type="button"><span>＋</span>Nouvelle facture</button>
+      <button class="quick-action" data-tab="devis" data-page="tarifs" type="button"><span>▤</span>Mes tarifs</button>
+      <button class="quick-action premium-action" data-tab="compta" data-page="purchases" data-pack="accounting" type="button"><span>＋</span>Ajouter un achat</button>
+    </section>
+
+    <section class="section-block" aria-labelledby="commercialTitle">
+      <div class="section-title">
+        <div><p class="eyebrow">Inclus gratuitement</p><h2 id="commercialTitle">Activité commerciale</h2></div>
+        <button class="text-button" data-tab="devis" data-page="invoice" type="button">Ouvrir la gestion commerciale →</button>
+      </div>
+      <div class="metric-grid" id="commercialMetrics"></div>
+    </section>
+
+    <section class="section-block" aria-labelledby="accountingTitle">
+      <div class="section-title">
+        <div><p class="eyebrow">Pack Comptabilité</p><h2 id="accountingTitle">Situation comptable</h2></div>
+        <button class="text-button accounting-link" data-tab="compta" data-page="dashboard" type="button">Ouvrir la comptabilité →</button>
+      </div>
+      <div class="metric-grid" id="accountingMetrics"></div>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="activity-card">
+        <div class="section-title compact"><div><p class="eyebrow">À surveiller</p><h2>Priorités</h2></div></div>
+        <div id="priorityList"></div>
+      </article>
+      <article class="activity-card">
+        <div class="section-title compact"><div><p class="eyebrow">Données</p><h2>État de votre espace</h2></div></div>
+        <div id="dataStatus"></div>
+      </article>
+    </section>
+  </main>
+  <script src="js/tableau-de-bord.js?v=1"></script>
+</body>
+</html>
