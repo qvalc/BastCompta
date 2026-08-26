@@ -2525,7 +2525,8 @@ window.addEventListener('message', event => {
   if (event.data?.type === 'BASTCOMPTA_DASHBOARD_NAVIGATE') {
     const tab = String(event.data.tab || 'dashboard');
     const page = String(event.data.page || '');
-    const button = document.querySelector(`[data-main-tab="${tab}"][data-page-key="${page}"]`) || document.querySelector(`.sidebar-module[data-main-tab="${tab}"]`);
+    const action = String(event.data.action || '');
+    const button = (action && document.querySelector(`[data-main-tab="${tab}"][data-client-action="${action}"]`)) || document.querySelector(`[data-main-tab="${tab}"][data-page-key="${page}"]`) || document.querySelector(`.sidebar-module[data-main-tab="${tab}"]`);
     button?.click();
     return;
   }

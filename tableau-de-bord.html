@@ -8,6 +8,15 @@
   <link rel="stylesheet" href="css/base.css?v=4">
   <link rel="stylesheet" href="css/tableau-de-bord.css?v=1">
   <script src="js/core/storage-keys.js"></script>
+  <script src="js/modules/accounting/calculations.js"></script>
+  <script src="js/modules/accounting/journals.js"></script>
+  <script src="js/modules/accounting/fixed-assets.js"></script>
+  <script src="js/modules/accounting/operating-ledger.js"></script>
+  <script src="js/modules/accounting/vat-declaration.js"></script>
+  <script src="js/modules/accounting/financial-statements.js"></script>
+  <script src="js/modules/accounting/summary.js"></script>
+  <script src="js/modules/clients/project-finance.js"></script>
+  <script src="js/modules/personnel/calculations.js"></script>
 </head>
 <body>
   <main class="dashboard-shell">
@@ -19,6 +28,13 @@
       </div>
       <button class="refresh-button" id="refreshDashboard" type="button" title="Actualiser les données">↻ Actualiser</button>
     </header>
+
+    <div class="dashboard-toolbar">
+      <label for="dashboardYear">Période des indicateurs
+        <select id="dashboardYear"></select>
+      </label>
+      <span class="access-summary" id="accessSummary"></span>
+    </div>
 
     <section class="quick-actions" aria-label="Actions rapides">
       <button class="quick-action primary" data-tab="devis" data-page="quote" type="button"><span>＋</span>Nouveau devis</button>
@@ -41,6 +57,22 @@
         <button class="text-button accounting-link" data-tab="compta" data-page="dashboard" type="button">Ouvrir la comptabilité →</button>
       </div>
       <div class="metric-grid" id="accountingMetrics"></div>
+    </section>
+
+    <section class="section-block" aria-labelledby="clientsTitle">
+      <div class="section-title">
+        <div><p class="eyebrow">Pack Gestion d’activité</p><h2 id="clientsTitle">Clients et chantiers</h2></div>
+        <button class="text-button client-link" data-tab="chantier" data-action="overview" type="button">Ouvrir le suivi client →</button>
+      </div>
+      <div class="metric-grid metric-grid-five" id="clientMetrics"></div>
+    </section>
+
+    <section class="section-block" aria-labelledby="personnelTitle">
+      <div class="section-title">
+        <div><p class="eyebrow">Pack Gestion d’activité</p><h2 id="personnelTitle">Personnel aujourd’hui</h2></div>
+        <button class="text-button personnel-link" data-tab="personnel" data-page="summary" type="button">Ouvrir le personnel →</button>
+      </div>
+      <div class="metric-grid metric-grid-five personnel-metrics" id="personnelMetrics"></div>
     </section>
 
     <section class="bottom-grid">

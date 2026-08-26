@@ -1,120 +1,46 @@
 (function () {
   'use strict';
-
   const keys = window.BastComptaStorageKeys || {};
   const access = readJson(sessionStorage.getItem('bastcompta_subscription_access'), {});
   const hasAccounting = access.accounting === true || access.premium === true;
+  const hasClient = access.client === true || access.premium === true;
   const documents = readJson(localStorage.getItem(keys.documents || 'devis-facture-style-vrai-document'), {});
   const accounting = hasAccounting ? readJson(localStorage.getItem(keys.accounting || 'comptabilite-local-v1'), {}) : {};
-  const clients = readJson(localStorage.getItem(keys.clients || 'bastcompta-chantiers-v1'), {});
-
+  const clientData = hasClient ? readJson(localStorage.getItem(keys.clients || 'bastcompta-chantiers-v1'), {}) : {};
+  const personnel = hasClient ? readJson(localStorage.getItem(keys.personnel || 'bastcompta-personnel-v1'), {}) : {};
+  let selectedYear = String(new Date().getFullYear());
   function readJson(raw, fallback) { try { return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } }
   function number(value) { const parsed = Number(String(value ?? 0).replace(',', '.')); return Number.isFinite(parsed) ? parsed : 0; }
   function money(value) { return new Intl.NumberFormat('fr-BE', { style: 'currency', currency: 'EUR' }).format(number(value)); }
-  function linesTotal(doc) {
-    const total = [...(doc?.lines || []), ...(doc?.suppliesEnabled ? doc?.suppliesLines || [] : [])].reduce((sum, line) => {
-      const base = number(line.qty) * number(line.unitPrice) * (1 - number(line.discount) / 100);
-      return sum + base * (1 + number(line.vatRate) / 100);
-    }, 0);
-    return Math.round(total * 100) / 100;
-  }
-  function allLinked(name) {
-    const projects = Array.isArray(clients) ? clients : (clients.projects || clients.chantiers || []);
-    return projects.flatMap(project => Array.isArray(project?.[name]) ? project[name] : []);
-  }
-  function currentDocument(type) {
-    const doc = documents?.[type];
-    return doc?.documentNumber ? [{ ...doc, tvac: linesTotal(doc), type }] : [];
-  }
-  function uniqueDocs(items) {
-    const seen = new Set();
-    return items.filter(item => { const id = String(item.id || item.fileId || item.documentNumber || item.ref || Math.random()); if (seen.has(id)) return false; seen.add(id); return true; });
-  }
+  function itemYear(item) { return window.BastProjectFinance?.itemYear(item) || String(item?.date || item?.startDate || item?.month || '').slice(0, 4); }
+  function matchesYear(item) { return selectedYear === 'all' || itemYear(item) === selectedYear; }
+  function linesTotal(doc) { const rows = [...(doc?.lines || []), ...(doc?.suppliesEnabled ? doc?.suppliesLines || [] : [])]; return Math.round(rows.reduce((sum, line) => { const base = number(line.qty) * number(line.unitPrice) * (1 - number(line.discount) / 100); return sum + base * (1 + number(line.vatRate) / 100); }, 0) * 100) / 100; }
+  function projects() { return Array.isArray(clientData) ? clientData : (clientData.projects || clientData.chantiers || []); }
+  function allLinked(name) { return projects().flatMap(project => Array.isArray(project?.[name]) ? project[name] : []); }
+  function currentDocument(type) { const doc = documents?.[type]; return doc?.documentNumber ? [{ ...doc, tvac: linesTotal(doc), type }] : []; }
+  function uniqueDocs(items) { const seen = new Set(); return items.filter((item, index) => { const id = String(item.id || item.fileId || item.documentNumber || item.ref || `row-${index}`); if (seen.has(id)) return false; seen.add(id); return true; }); }
   function docAmount(doc) { return number(doc.tvac ?? doc.amount ?? doc.totalTTC ?? doc.total); }
   function isPaid(doc) { return doc.status === 'paid' || (docAmount(doc) > 0 && number(doc.paidAmount) >= docAmount(doc)); }
   function isLate(doc) { if (isPaid(doc) || !doc.dueDate) return false; const date = new Date(doc.dueDate); return !Number.isNaN(date.getTime()) && date < new Date(new Date().toDateString()); }
-
-  const quotes = uniqueDocs([...allLinked('linkedQuotes'), ...currentDocument('quote')]);
-  const invoices = uniqueDocs([...allLinked('linkedInvoices'), ...currentDocument('invoice')]);
-  const unpaid = invoices.filter(doc => !isPaid(doc));
-  const late = unpaid.filter(isLate);
-  const billed = invoices.reduce((sum, doc) => sum + docAmount(doc), 0);
-  const outstanding = unpaid.reduce((sum, doc) => sum + Math.max(0, docAmount(doc) - number(doc.paidAmount)), 0);
-
-  function metric(label, value, detail, options = {}) {
-    return `<article class="metric-card ${options.tone || ''}" data-tab="${options.tab || 'devis'}" data-page="${options.page || 'invoice'}"><span class="metric-label">${label}</span><strong class="metric-value">${value}</strong><span class="metric-detail">${detail}</span></article>`;
-  }
-  function lockedMetric(label, detail) {
-    return `<article class="metric-card locked"><span class="lock-icon">🔒</span><span class="metric-label">${label}</span><span class="metric-detail">${detail}</span><button class="unlock-button" data-subscription type="button">Découvrir</button></article>`;
-  }
-  function renderCommercial() {
-    document.getElementById('commercialMetrics').innerHTML = [
-      metric('Total facturé', money(billed), `${invoices.length} facture${invoices.length === 1 ? '' : 's'} enregistrée${invoices.length === 1 ? '' : 's'}`),
-      metric('À encaisser', money(outstanding), `${unpaid.length} facture${unpaid.length === 1 ? '' : 's'} non soldée${unpaid.length === 1 ? '' : 's'}`, { tone: outstanding ? 'warning' : 'good' }),
-      metric('Factures en retard', String(late.length), late.length ? 'Une relance peut être nécessaire' : 'Aucun retard détecté', { tone: late.length ? 'warning' : 'good', page: 'reminder' }),
-      metric('Devis suivis', String(quotes.length), 'Devis courants et liés aux clients', { page: 'quote' })
-    ].join('');
-  }
-  function sumRows(rows, fields) { return (rows || []).reduce((sum, row) => sum + number(fields.map(field => row?.[field]).find(value => value !== undefined)), 0); }
-  function renderAccounting() {
-    const root = document.getElementById('accountingMetrics');
-    if (!hasAccounting) {
-      root.innerHTML = [
-        lockedMetric('Résultat estimé', 'Revenus et charges de l’exercice.'),
-        lockedMetric('Achats et frais', 'Suivi des dépenses professionnelles.'),
-        lockedMetric('Situation TVA', 'TVA due, déductible et déclarations.'),
-        lockedMetric('Trésorerie', 'Banque et caisse de votre activité.')
-      ].join('');
-      document.querySelectorAll('.accounting-link').forEach(el => el.textContent = 'Découvrir le pack →');
-      return;
-    }
-    const sales = sumRows(accounting.sales, ['totalExcl', 'amountExcl', 'htva', 'amount']);
-    const purchases = sumRows(accounting.purchases, ['professionalCost', 'totalExcl', 'amountExcl', 'amount']);
-    const losses = sumRows(accounting.losses, ['amount', 'total']);
-    const result = sales - purchases - losses;
-    const declarations = accounting.vat?.declarations || [];
-    const openVat = declarations.filter(item => !item.closed && item.status !== 'closed');
-    const treasury = number(accounting.settings?.bankBalance) + number(accounting.settings?.cashBalance);
-    root.innerHTML = [
-      metric('Résultat estimé', money(result), 'Ventes moins achats et charges', { tone: result >= 0 ? 'good' : 'warning', tab: 'compta', page: 'result' }),
-      metric('Achats et frais', money(purchases + losses), 'Montants de l’exercice', { tab: 'compta', page: 'purchases' }),
-      metric('Déclarations TVA ouvertes', String(openVat.length), declarations.length ? `${declarations.length} déclaration${declarations.length === 1 ? '' : 's'} au total` : 'Aucune déclaration enregistrée', { tab: 'compta', page: 'vat' }),
-      metric('Trésorerie renseignée', money(treasury), 'Solde banque et caisse', { tab: 'compta', page: 'balance' })
-    ].join('');
-  }
+  function commercialData() { const quotes = uniqueDocs([...allLinked('linkedQuotes'), ...currentDocument('quote')]).filter(matchesYear); const invoices = uniqueDocs([...allLinked('linkedInvoices'), ...currentDocument('invoice')]).filter(matchesYear); const unpaid = invoices.filter(doc => !isPaid(doc)); return { quotes, invoices, unpaid, late: unpaid.filter(isLate), billed: invoices.reduce((sum, doc) => sum + docAmount(doc), 0), outstanding: unpaid.reduce((sum, doc) => sum + Math.max(0, docAmount(doc) - number(doc.paidAmount)), 0) }; }
+  function metric(label, value, detail, options = {}) { return `<article class="metric-card ${options.tone || ''}" data-tab="${options.tab || 'devis'}" data-page="${options.page || 'invoice'}" ${options.action ? `data-action="${options.action}"` : ''}>${options.icon ? `<span class="metric-icon">${options.icon}</span>` : ''}<span class="metric-label">${label}</span><strong class="metric-value">${value}</strong><span class="metric-detail">${detail}</span></article>`; }
+  function lockedMetric(label, detail) { return `<article class="metric-card locked"><span class="lock-icon">🔒</span><span class="metric-label">${label}</span><span class="metric-detail">${detail}</span><button class="unlock-button" data-subscription type="button">Découvrir</button></article>`; }
+  function lockedSet(labels) { return labels.map(([label, detail]) => lockedMetric(label, detail)).join(''); }
+  function getYears() { const years = new Set([String(new Date().getFullYear())]); [documents.quote, documents.invoice, ...allLinked('linkedQuotes'), ...allLinked('linkedInvoices'), ...allLinked('costs'), ...allLinked('documents'), ...(accounting.sales || []), ...(accounting.purchases || [])].forEach(item => { const year = itemYear(item); if (/^\d{4}$/.test(year)) years.add(year); }); (personnel.workers || []).forEach(worker => ['salaries', 'bonuses', 'leaves', 'absences', 'timeEntries'].forEach(key => (worker[key] || []).forEach(item => { const year = itemYear(item); if (/^\d{4}$/.test(year)) years.add(year); }))); return [...years].sort((a, b) => b.localeCompare(a)); }
+  function renderYearFilter() { const select = document.getElementById('dashboardYear'); const years = getYears(); if (!years.includes(selectedYear)) selectedYear = years[0]; select.innerHTML = years.map(year => `<option value="${year}">${year}</option>`).join('') + '<option value="all">Toutes années</option>'; select.value = selectedYear; const labels = ['Gestion commerciale']; if (hasAccounting) labels.push('Comptabilité'); if (hasClient) labels.push('Gestion d’activité'); document.getElementById('accessSummary').textContent = labels.join(' · '); }
+  function renderCommercial() { const c = commercialData(); document.getElementById('commercialMetrics').innerHTML = [metric('Total facturé', money(c.billed), `${c.invoices.length} facture${c.invoices.length === 1 ? '' : 's'} enregistrée${c.invoices.length === 1 ? '' : 's'}`), metric('À encaisser', money(c.outstanding), `${c.unpaid.length} facture${c.unpaid.length === 1 ? '' : 's'} non soldée${c.unpaid.length === 1 ? '' : 's'}`, { tone: c.outstanding ? 'warning' : 'good' }), metric('Factures en retard', String(c.late.length), c.late.length ? 'Une relance peut être nécessaire' : 'Aucun retard détecté', { tone: c.late.length ? 'warning' : 'good', page: 'reminder' }), metric('Devis suivis', String(c.quotes.length), 'Devis courants et liés aux clients', { page: 'quote' })].join(''); }
+  function accountingForYear() { const year = selectedYear === 'all' ? (parseInt(accounting.company?.period, 10) || new Date().getFullYear()) : Number(selectedYear); const filterRows = rows => selectedYear === 'all' ? (rows || []) : (rows || []).filter(matchesYear); const scoped = { ...accounting, sales: filterRows(accounting.sales), purchases: filterRows(accounting.purchases), losses: filterRows(accounting.losses), km: filterRows(accounting.km), privateMovements: filterRows(accounting.privateMovements), stock: filterRows(accounting.stock), investments: (accounting.investments || []).filter(item => !itemYear(item) || Number(itemYear(item)) <= year) }; const regime = accounting.settings?.vatRegime || 'taxable'; return window.BastAccountingSummary.summarize({ data: scoped, currentYear: year, vatExempt: regime === 'exempt_article_44', isPurchaseVatRecoverable: row => regime !== 'exempt_article_44' && row?.deductible !== false }); }
+  function renderAccounting() { const root = document.getElementById('accountingMetrics'); if (!hasAccounting) { root.innerHTML = lockedSet([['Ventes HTVA', 'Journal des ventes de la période.'], ['Achats HTVA', 'Dépenses professionnelles.'], ['Situation TVA', 'TVA à payer ou à recevoir.'], ['Résultat estimé', 'Résultat de l’exercice.']]); document.querySelector('.accounting-link').textContent = 'Découvrir le pack →'; return; } const t = accountingForYear(); const vatLabel = t.netVat > 0 ? 'TVA à payer' : t.netVat < 0 ? 'TVA à recevoir' : 'TVA nette'; const vatValue = Math.abs(t.netVat); root.innerHTML = [metric('Ventes HTVA', money(t.salesNet), 'Journal des ventes', { tab: 'compta', page: 'sales' }), metric('Achats HTVA', money(t.purchasesNet), 'Journal des achats', { tab: 'compta', page: 'purchases' }), metric(vatLabel, money(vatValue), 'Situation de la période', { tab: 'compta', page: 'vat', tone: t.netVat > 0 ? 'warning' : 'good' }), metric('Résultat estimé', money(t.estimatedProfit), 'Compte de résultat', { tab: 'compta', page: 'result', tone: t.estimatedProfit >= 0 ? 'good' : 'warning' })].join(''); }
+  function clientTotals() { const totals = projects().reduce((acc, project) => { const value = window.BastProjectFinance.totals(project, selectedYear); acc.invoices += value.invoices; acc.costs += value.costs; acc.margin += value.margin; acc.docs += (project.documents || []).filter(matchesYear).length; return acc; }, { invoices: 0, costs: 0, margin: 0, docs: 0 }); totals.rate = totals.invoices > 0 ? totals.margin / totals.invoices * 100 : 0; totals.crm = Array.isArray(documents.clients) ? documents.clients.length : projects().length; return totals; }
+  function renderClients() { const root = document.getElementById('clientMetrics'); if (!hasClient) { root.innerHTML = lockedSet([['Clients CRM', 'Base clients centralisée.'], ['Montant facturé', 'Factures liées aux clients.'], ['Coûts client', 'Fournitures et coûts manuels.'], ['Marge globale', 'Rentabilité des chantiers.'], ['Documents', 'Fichiers liés aux clients.']]); document.querySelector('.client-link').textContent = 'Découvrir le pack →'; return; } const t = clientTotals(); root.innerHTML = [metric('Clients CRM', String(t.crm), 'base officielle', { tab: 'chantier', action: 'overview' }), metric('Montant facturé', money(t.invoices), 'factures client', { tab: 'chantier', action: 'overview' }), metric('Coûts client', money(t.costs), 'fournitures + coûts manuels', { tab: 'chantier', action: 'overview' }), metric('Marge globale', money(t.margin), `${t.rate.toFixed(1).replace('.', ',')}% · ${selectedYear === 'all' ? 'toutes années' : selectedYear}`, { tone: t.margin >= 0 ? 'good' : 'warning', tab: 'chantier', action: 'overview' }), metric('Documents', String(t.docs), 'fichiers client', { tab: 'chantier', action: 'overview' })].join(''); }
+  function personnelState(worker) { return window.BastPersonnelCalculations.currentState(worker, new Date().toISOString().slice(0, 10)); }
+  function renderPersonnel() { const root = document.getElementById('personnelMetrics'); if (!hasClient) { root.innerHTML = lockedSet([['Total personnel', 'Travailleurs actifs.'], ['Actifs', 'Personnel au travail.'], ['En congé', 'Congés aujourd’hui.'], ['En maladie', 'Maladies aujourd’hui.'], ['Autres absences', 'Accidents, formations et RTT.']]); document.querySelector('.personnel-link').textContent = 'Découvrir le pack →'; return; } const employed = (personnel.workers || []).filter(worker => worker.active); const workers = employed.filter(worker => worker.type === 'worker').length; const employees = employed.filter(worker => worker.type === 'employee').length; const counts = { active: 0, leave: 0, illness: 0, other: 0 }; employed.forEach(worker => { const state = personnelState(worker); if (state in counts) counts[state]++; }); root.innerHTML = [metric('Total personnel', String(employed.length), `${workers} ouvrier${workers === 1 ? '' : 's'} · ${employees} employé${employees === 1 ? '' : 's'}`, { icon: '👥', tab: 'personnel', page: 'workers' }), metric('Actifs', String(counts.active), 'Réellement au travail', { icon: '✓', tone: 'good', tab: 'personnel', page: 'workers' }), metric('En congé', String(counts.leave), 'Aujourd’hui', { icon: '☂', tab: 'personnel', page: 'leave' }), metric('En maladie', String(counts.illness), 'Aujourd’hui', { icon: '✚', tone: counts.illness ? 'warning' : '', tab: 'personnel', page: 'absence' }), metric('Autres absences', String(counts.other), 'Accident, formation, RTT…', { icon: '◷', tab: 'personnel', page: 'absence' })].join(''); }
   function listRow(title, detail, tone, tab, page) { return `<div class="list-row"><span class="status-dot ${tone}"></span><div class="list-copy"><strong>${title}</strong><span>${detail}</span></div>${tab ? `<button data-tab="${tab}" data-page="${page}" type="button">Voir</button>` : ''}</div>`; }
-  function renderPriorities() {
-    const items = [];
-    if (late.length) items.push(listRow(`${late.length} facture${late.length === 1 ? '' : 's'} en retard`, `${money(outstanding)} restent à vérifier ou encaisser.`, 'warning', 'devis', 'reminder'));
-    if (documents.quote?.documentNumber) items.push(listRow(`Devis ${documents.quote.documentNumber}`, 'Le document courant est prêt à être repris.', '', 'devis', 'quote'));
-    if (hasAccounting && !(accounting.vat?.declarations || []).length) items.push(listRow('Aucune déclaration TVA', 'Vous pouvez préparer votre première période.', '', 'compta', 'vat'));
-    document.getElementById('priorityList').innerHTML = items.join('') || '<div class="empty-state">Aucune priorité détectée pour le moment.</div>';
-  }
-  function renderStatus() {
-    const lastSave = localStorage.getItem(keys.documentsLastSave || 'devis-facture-style-vrai-document-last-save');
-    const driveExpected = localStorage.getItem(keys.googleWasConnected || 'bastcompta_google_was_connected') === '1';
-    const saveText = lastSave ? new Intl.DateTimeFormat('fr-BE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(lastSave)) : 'Pas encore enregistrée';
-    document.getElementById('dataStatus').innerHTML = [
-      listRow('Données commerciales', `Dernière sauvegarde : ${saveText}`, lastSave ? 'good' : ''),
-      listRow('Google Drive', driveExpected ? 'Connexion configurée dans le portail' : 'Non connecté', driveExpected ? 'good' : 'warning'),
-      listRow('Accès comptabilité', hasAccounting ? 'Pack actif' : 'Module verrouillé', hasAccounting ? 'good' : '')
-    ].join('');
-  }
-  function navigate(tab, page) { window.parent.postMessage({ type: 'BASTCOMPTA_DASHBOARD_NAVIGATE', tab, page }, window.location.origin); }
-  function bindActions() {
-    document.body.addEventListener('click', event => {
-      const subscription = event.target.closest('[data-subscription]');
-      if (subscription) return window.parent.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION' }, window.location.origin);
-      const target = event.target.closest('[data-tab]');
-      if (!target) return;
-      if (target.dataset.pack === 'accounting' && !hasAccounting) return window.parent.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION' }, window.location.origin);
-      navigate(target.dataset.tab, target.dataset.page || '');
-    });
-    document.getElementById('refreshDashboard').addEventListener('click', () => location.reload());
-  }
-  function init() {
-    renderCommercial(); renderAccounting(); renderPriorities(); renderStatus(); bindActions();
-    if (!hasAccounting) document.querySelector('.premium-action')?.classList.add('locked');
-  }
+  function renderPriorities() { const c = commercialData(); const items = []; if (c.late.length) items.push(listRow(`${c.late.length} facture${c.late.length === 1 ? '' : 's'} en retard`, `${money(c.outstanding)} restent à vérifier ou encaisser.`, 'warning', 'devis', 'reminder')); if (documents.quote?.documentNumber) items.push(listRow(`Devis ${documents.quote.documentNumber}`, 'Le document courant est prêt à être repris.', '', 'devis', 'quote')); if (hasAccounting && !(accounting.vat?.declarations || []).length) items.push(listRow('Aucune déclaration TVA', 'Vous pouvez préparer votre première période.', '', 'compta', 'vat')); document.getElementById('priorityList').innerHTML = items.join('') || '<div class="empty-state">Aucune priorité détectée pour le moment.</div>'; }
+  function renderStatus() { const lastSave = localStorage.getItem(keys.documentsLastSave || 'devis-facture-style-vrai-document-last-save'); const driveExpected = localStorage.getItem(keys.googleWasConnected || 'bastcompta_google_was_connected') === '1'; const validDate = lastSave && !Number.isNaN(new Date(lastSave).getTime()); const saveText = validDate ? new Intl.DateTimeFormat('fr-BE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(lastSave)) : 'Pas encore enregistrée'; document.getElementById('dataStatus').innerHTML = [listRow('Données commerciales', `Dernière sauvegarde : ${saveText}`, validDate ? 'good' : ''), listRow('Google Drive', driveExpected ? 'Connexion configurée dans le portail' : 'Non connecté', driveExpected ? 'good' : 'warning'), listRow('Accès comptabilité', hasAccounting ? 'Pack actif' : 'Module verrouillé', hasAccounting ? 'good' : ''), listRow('Accès gestion d’activité', hasClient ? 'Pack actif' : 'Module verrouillé', hasClient ? 'good' : '')].join(''); }
+  function renderAll() { renderCommercial(); renderAccounting(); renderClients(); renderPersonnel(); renderPriorities(); renderStatus(); }
+  function navigate(tab, page, action) { window.parent.postMessage({ type: 'BASTCOMPTA_DASHBOARD_NAVIGATE', tab, page, action }, window.location.origin); }
+  function bindActions() { document.body.addEventListener('click', event => { if (event.target.closest('[data-subscription]')) return window.parent.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION' }, window.location.origin); const target = event.target.closest('[data-tab]'); if (!target) return; if ((target.dataset.pack === 'accounting' && !hasAccounting) || (['chantier', 'personnel'].includes(target.dataset.tab) && !hasClient)) return window.parent.postMessage({ type: 'BASTCOMPTA_OPEN_SUBSCRIPTION' }, window.location.origin); navigate(target.dataset.tab, target.dataset.page || '', target.dataset.action || ''); }); document.getElementById('refreshDashboard').addEventListener('click', () => location.reload()); document.getElementById('dashboardYear').addEventListener('change', event => { selectedYear = event.target.value; renderAll(); }); }
+  function init() { renderYearFilter(); renderAll(); bindActions(); if (!hasAccounting) document.querySelector('.premium-action')?.classList.add('locked'); }
   init();
 })();
