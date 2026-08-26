@@ -2931,6 +2931,17 @@ window.BastComptaModule = {
   save: saveFromPortalGlobal,
   saveData,
   getChangeSnapshot: () => data,
+  getDashboardMetrics: () => {
+    const summary = totals();
+    return {
+      salesNet: summary.salesNet,
+      purchasesNet: summary.purchasesNet,
+      payableVat: summary.payableVat,
+      receivableVat: summary.receivableVat,
+      estimatedProfit: summary.estimatedProfit,
+      period: data.company?.period || String(new Date().getFullYear())
+    };
+  },
   getStatus: () => ({ ready: true, module: 'comptabilite' })
 };
 

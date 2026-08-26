@@ -2520,8 +2520,28 @@ function bindIframeMessaging() {
   });
 }
 
+function sendDashboardAccountingMetrics() {
+  if (!dashboardFrame?.contentWindow || !comptaFrame?.contentWindow) return false;
+  try {
+    const getMetrics = comptaFrame.contentWindow.BastComptaModule?.getDashboardMetrics;
+    if (typeof getMetrics !== 'function') return false;
+    postToFrame(dashboardFrame, { type: 'BASTCOMPTA_DASHBOARD_ACCOUNTING_METRICS', metrics: getMetrics() });
+    return true;
+  } catch (error) {
+    console.warn('Synthèse comptable indisponible pour le tableau de bord.', error);
+    return false;
+  }
+}
+
+comptaFrame?.addEventListener('load', () => setTimeout(sendDashboardAccountingMetrics, 0));
+dashboardFrame?.addEventListener('load', () => setTimeout(sendDashboardAccountingMetrics, 0));
+
 window.addEventListener('message', event => {
   if (event.origin !== window.location.origin) return;
+  if (event.data?.type === 'BASTCOMPTA_DASHBOARD_READY') {
+    sendDashboardAccountingMetrics();
+    return;
+  }
   if (event.data?.type === 'BASTCOMPTA_DASHBOARD_NAVIGATE') {
     const tab = String(event.data.tab || 'dashboard');
     const page = String(event.data.page || '');
