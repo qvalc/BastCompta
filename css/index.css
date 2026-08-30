@@ -221,6 +221,19 @@ button {
     border: none;
     background: transparent;
     text-align: center;
+    text-decoration: none;
+}
+
+.terrain-auth-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #155d49;
+}
+
+.terrain-auth-tab:hover {
+    color: #0d4939;
+    background: #e8f5f0;
 }
 
 .auth-tab.active {

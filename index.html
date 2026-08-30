@@ -173,6 +173,7 @@
 <div class="auth-tabs">
 <button class="auth-tab active" data-auth-tab="login" type="button">Connexion</button>
 <button class="auth-tab" data-auth-tab="register" type="button">Créer un compte</button>
+<a class="auth-tab terrain-auth-tab" href="terrain.html">Mode terrain</a>
 </div>
 <form class="stack" id="loginForm">
 <div class="field-group">
@@ -630,7 +631,6 @@
 <div class="sidebar-submenu">
 <button data-client-action="overview" data-main-tab="chantier" type="button">Vue clients</button>
 <button data-client-action="new" data-main-tab="chantier" type="button">Nouveau client CRM</button>
-<button data-main-tab="terrain" type="button">Mode terrain</button>
 </div>
 </div>
 <div class="sidebar-group" data-sidebar-group="personnel">
@@ -663,6 +663,9 @@
 </div>
 </div>
 </div>
+<button class="sidebar-home sidebar-terrain" data-main-tab="terrain" type="button">
+<span class="sidebar-icon">⌖</span><span>Mode terrain</span>
+</button>
 <div class="sidebar-group sidebar-settings-group">
 <button aria-expanded="false" class="sidebar-module" id="sidebarSettingsBtn" type="button">
 <span class="sidebar-icon">⚙</span><span>Paramètres &amp; sauvegardes</span><span class="sidebar-chevron">⌄</span>

@@ -3260,7 +3260,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   function updateSidebarState(tabName, sourceButton = null) {
-    const navigationGroup = tabName === 'terrain' ? 'chantier' : tabName;
+    const navigationGroup = tabName;
     document.querySelectorAll('.sidebar-module').forEach(button => button.classList.toggle('active', button.dataset.mainTab === navigationGroup));
     document.querySelectorAll('.sidebar-home').forEach(button => button.classList.toggle('active', button === sourceButton));
     document.querySelectorAll('.sidebar-submenu button').forEach(button => button.classList.toggle('active', button === sourceButton));
