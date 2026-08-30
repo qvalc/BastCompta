@@ -602,12 +602,10 @@ function showPortal(user, subscription = currentSubscriptionState) {
   document.body.classList.add('portal-active');
 
   requestAnimationFrame(() => {
-    syncResponsiveNavigation();
     window.dispatchEvent(new Event('resize'));
   });
 
   setTimeout(() => {
-    syncResponsiveNavigation();
     window.dispatchEvent(new Event('resize'));
   }, 150);
 
