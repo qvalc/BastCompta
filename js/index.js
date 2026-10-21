@@ -763,17 +763,14 @@ function evaluateModuleDifference(key, detail = '') {
     return;
   }
   if (state.baselineSnapshot === null) {
-    state.baselineSnapshot = currentSnapshot;
-    updateSyncStatusIndicator();
+    markModuleDirty(key, detail);
     return;
   }
   if (currentSnapshot === state.baselineSnapshot) {
     state.dirty = false;
-    state.error = '';
     state.changes = [];
   } else {
     state.dirty = true;
-    state.error = '';
     if (detail) addModuleChange(key, detail);
   }
   updateSyncStatusIndicator();
@@ -851,7 +848,7 @@ window.BastComptaPortal = Object.assign(window.BastComptaPortal || {}, {
     // Le module peut fournir l’état exact juste AVANT la première action de
     // l’utilisateur. Cela évite qu’un chargement asynchrone (Drive, tarifs,
     // calculs automatiques...) rende la référence du portail périmée.
-    if (!state.dirty && beforeSnapshot !== null) {
+    if (!state.dirty && state.snapshotTimer === null && beforeSnapshot !== null) {
       const candidate = stableSnapshotString(beforeSnapshot);
       if (candidate !== null) state.baselineSnapshot = candidate;
     }
@@ -880,13 +877,8 @@ function installDirtyTracking(moduleInfo) {
       if (!captureModuleBaseline(key) && attempts < 40) setTimeout(capture, 100);
     };
     setTimeout(capture, 0);
-    // Certains modules terminent ensuite un chargement Drive asynchrone.
-    // On stabilise une seconde fois la référence, uniquement si l’utilisateur
-    // n’a encore rien modifié entre-temps.
-    setTimeout(() => {
-      const state = getModuleSyncState(key);
-      if (!state.dirty && !state.syncing) captureModuleBaseline(key);
-    }, 2500);
+    // Ne pas recapturer plus tard : une édition non encore signalée pourrait
+    // alors être confondue avec la version déjà sauvegardée.
     updateSyncStatusIndicator();
   };
 
@@ -956,6 +948,9 @@ async function saveSingleModuleFromPortal(moduleInfo) {
     if (result === false || result?.ok === false) {
       return { key, label, ok: false, message: result?.message || suppressedAlerts.join(' | ') || 'échec signalé par le module', result, suppressedAlerts };
     }
+    if (key !== 'impots' && result?.drive === false) {
+      return { key, label, ok: false, message: 'Sauvegarde locale effectuée, mais la synchronisation Google Drive n’est pas confirmée. Vérifiez la connexion Drive puis relancez la sauvegarde.', result, suppressedAlerts };
+    }
     return { key, label, ok: true, result, suppressedAlerts };
   } catch (error) {
     console.error('Sauvegarde module impossible :', label, error);
@@ -1006,6 +1001,14 @@ async function saveAllModulesFromPortal() {
   const previousLabel = globalSaveBtn?.textContent || '💾';
   const loadedModules = getLoadedModuleFrames();
   loadedModules.forEach(installDirtyTracking);
+  // Vérifier les données réelles, y compris avant l’expiration du délai de 250 ms
+  // et lorsque le module n’a pas signalé une modification au portail.
+  loadedModules.forEach(({ key }) => {
+    const state = getModuleSyncState(key);
+    clearTimeout(state.snapshotTimer);
+    state.snapshotTimer = null;
+    evaluateModuleDifference(key);
+  });
   const modules = loadedModules.filter(item => {
     const state = getModuleSyncState(item.key);
     return state.dirty || !!state.error || !state.syncedOnce;

@@ -5049,7 +5049,7 @@ async function saveFromPortalGlobal(options = {}) {
       ok: true,
       module: 'devis-facture',
       local: true,
-      drive: !!googleAccessToken && (driveSyncSaved || exportedDocuments.length > 0),
+      drive: !!googleAccessToken && driveSyncSaved,
       driveSyncSaved,
       chantierLinked,
       exportedDocuments,
