@@ -2510,3 +2510,36 @@ button.small { padding:6px 8px; font-size:12px; }
 .toolbar .toolbar-action-icon.action-new {
     background: linear-gradient(145deg, #fb7185, #ef4444);
 }
+
+/* Les fournitures ont une colonne interne supplémentaire : réserver une place
+   explicite à chaque colonne, notamment au sélecteur TVA. */
+@media screen {
+  .doc-table.doc-table-supplies { min-width: 1100px; }
+  .doc-table.doc-table-supplies th:first-child,
+  .doc-table.doc-table-supplies td:first-child { width: 38%; }
+  .doc-table.doc-table-supplies th:nth-child(2),
+  .doc-table.doc-table-supplies td:nth-child(2) { width: 8%; }
+  .doc-table.doc-table-supplies th:nth-child(3),
+  .doc-table.doc-table-supplies td:nth-child(3) { width: 6%; }
+  .doc-table.doc-table-supplies th:nth-child(4),
+  .doc-table.doc-table-supplies td:nth-child(4),
+  .doc-table.doc-table-supplies th:nth-child(5),
+  .doc-table.doc-table-supplies td:nth-child(5) { width: 8%; }
+  .doc-table.doc-table-supplies th:nth-child(6),
+  .doc-table.doc-table-supplies td:nth-child(6) { width: 7%; }
+  .doc-table.doc-table-supplies th:nth-child(7),
+  .doc-table.doc-table-supplies td:nth-child(7) { width: 10%; }
+  .doc-table.doc-table-supplies th.line-vat,
+  .doc-table.doc-table-supplies td.line-vat { width: 7%; text-align: center; }
+  .doc-table.doc-table-supplies th:last-child,
+  .doc-table.doc-table-supplies td:last-child { width: 8%; }
+  .doc-table-supplies .line-vat select { padding-left: 6px; padding-right: 2px; }
+}
+@media print {
+  .doc-table.doc-table-supplies th:nth-child(6),
+  .doc-table.doc-table-supplies td:nth-child(6) { width: 10% !important; }
+  .doc-table.doc-table-supplies th:nth-child(7),
+  .doc-table.doc-table-supplies td:nth-child(7) { width: 14% !important; }
+  .doc-table.doc-table-supplies th.line-vat,
+  .doc-table.doc-table-supplies td.line-vat { width: 6% !important; text-align: center !important; }
+}

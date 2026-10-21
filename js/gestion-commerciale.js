@@ -3712,7 +3712,7 @@ function renderLinesTable(docKey, section, title = '') {
   return `
         ${title ? `<div class="section-title">${escapeHtml(title)}</div>` : ''}
         <div class="doc-table-wrap">
-          <table class="doc-table">
+          <table class="doc-table ${section === 'suppliesLines' ? 'doc-table-supplies' : ''}">
             <thead>
               <tr>
                 <th>Description</th>
@@ -3722,7 +3722,7 @@ function renderLinesTable(docKey, section, title = '') {
                 ${section === 'suppliesLines' ? '<th class="no-print">Prix de revient</th>' : ''}
                 <th>Remise</th>
                 <th>Total</th>
-                <th>TVA</th>
+                <th class="line-vat">TVA</th>
                 <th class="no-print"></th>
               </tr>
             </thead>
@@ -3741,8 +3741,8 @@ function renderLinesTable(docKey, section, title = '') {
                   ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice)}" title="Prix de revient interne, non imprimé" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"></td>` : ''}
                   <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'discount', parseFloat(this.value)||0)"></td>
                   <td>${money(lineNet(row))}</td>
-                  <td>
-                    <select onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'vatRate', parseFloat(this.value)||0)">
+                  <td class="line-vat">
+                    <select aria-label="TVA de la ${section === 'suppliesLines' ? 'fourniture' : 'ligne'} ${i + 1}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'vatRate', parseFloat(this.value)||0)">
                       <option value="0" ${toNumber(row.vatRate) === 0 ? 'selected' : ''}>0%</option>
                       <option value="6" ${toNumber(row.vatRate) === 6 ? 'selected' : ''}>6%</option>
                       <option value="12" ${toNumber(row.vatRate) === 12 ? 'selected' : ''}>12%</option>
