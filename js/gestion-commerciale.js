@@ -3761,6 +3761,14 @@ function renderLinesTable(docKey, section, title = '') {
       `;
 }
 
+function renderVatBreakdown(doc) {
+  const groups = BastDocumentCalculations.vatBreakdown(doc);
+  if (!groups.length) return '';
+  return `<div class="vat-breakdown"><h3>Détail de la TVA</h3>
+    <table><thead><tr><th>Taux</th><th>Base HTVA</th><th>TVA</th></tr></thead>
+    <tbody>${groups.map(group => `<tr><td>${escapeHtml(String(group.rate))} %</td><td>${money(group.base)}</td><td>${money(group.vat)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
 function renderCompanyBlock() {
   return `
     <div class="seller">
@@ -3994,6 +4002,8 @@ Communication : ${data.communication.formatted || '+++...+++'}`)}</div>` : ``}
       <div class="row"><div>Total TVA</div><div>${money(totals.vat)}</div></div>
       <div class="row final"><div>Total TVA incl.</div><div>${money(totals.tvac)}</div></div>
     </div>
+
+    ${renderVatBreakdown(doc)}
 
     ${!isQuote ? `
       <div class="pay-block">

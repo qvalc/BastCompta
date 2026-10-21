@@ -2543,3 +2543,10 @@ button.small { padding:6px 8px; font-size:12px; }
   .doc-table.doc-table-supplies th.line-vat,
   .doc-table.doc-table-supplies td.line-vat { width: 6% !important; text-align: center !important; }
 }
+
+.vat-breakdown { margin-top: 14px; border-top: 2px solid var(--line); padding-top: 10px; break-inside: avoid; }
+.vat-breakdown h3 { margin: 0 0 8px; font-size: 12px; }
+.vat-breakdown table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.vat-breakdown th, .vat-breakdown td { border: 1px solid var(--line); padding: 7px 8px; text-align: right; }
+.vat-breakdown th { background: var(--head); color: var(--muted); }
+.vat-breakdown th:first-child, .vat-breakdown td:first-child { text-align: left; white-space: nowrap; }

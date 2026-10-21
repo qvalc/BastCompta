@@ -15,6 +15,24 @@
   }
   function lineSupplyMargin(row = {}) { return lineNet(row) - lineCost(row); }
 
+  function vatBreakdown(doc = {}) {
+    const rows = [
+      ...(Array.isArray(doc.lines) ? doc.lines : []),
+      ...(doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [])
+    ];
+    const groups = new Map();
+    rows.forEach(row => {
+      const base = lineNet(row);
+      if (base === 0) return;
+      const rate = number(row.vatRate);
+      if (!groups.has(rate)) groups.set(rate, { rate, base: 0, vat: 0 });
+      const group = groups.get(rate);
+      group.base += base;
+      group.vat += lineVat(row);
+    });
+    return [...groups.values()].sort((a, b) => a.rate - b.rate);
+  }
+
   function totalsForDocument(doc = {}) {
     const work = Array.isArray(doc.lines) ? doc.lines : [];
     const supplies = doc.suppliesEnabled && Array.isArray(doc.suppliesLines) ? doc.suppliesLines : [];
@@ -136,7 +154,7 @@
 
   global.BastDocumentCalculations = Object.freeze({
     lineBase, lineDiscountAmount, lineNet, lineVat, lineTvac, lineCost, lineSupplyMargin,
-    totalsForDocument, invoiceStatus, paymentBalance, invoiceAccountingPayload,
+    totalsForDocument, vatBreakdown, invoiceStatus, paymentBalance, invoiceAccountingPayload,
     normalizeClientNumber, normalizeYear, normalizeInvoiceNumber,
     structuredCommunication, normalizeVatNumber, belgianEnterpriseNumber,
     isValidBelgianEnterpriseNumber
