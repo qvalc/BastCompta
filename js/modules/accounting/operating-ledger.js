@@ -17,6 +17,27 @@
     return ['withdrawal', 'regularization'].includes(row.type || 'withdrawal') ? -amount : amount;
   }
 
+  function kmDistanceTotal(row = {}) {
+    const number = global.BastAccountingCalculations.number;
+    return number(row.km) * number(row.trips || 1) * (row.roundTrip === true ? 2 : 1);
+  }
+
+  function kmGroups(rows = [], year) {
+    const groups = new Map();
+    rows.forEach((row, index) => {
+      if (String(row.date || '').slice(0, 4) !== String(year) && !(year === 'undated' && !row.date)) return;
+      const type = ['client', 'supplier', 'other'].includes(row.partyType) ? row.partyType : 'other';
+      const name = String(row.partyName || '').trim() || 'À classer';
+      const key = JSON.stringify([type, name.normalize('NFC').toLocaleLowerCase('fr').replace(/\s+/g, ' ')]);
+      if (!groups.has(key)) groups.set(key, { key, type, name, rows: [], total: 0 });
+      const group = groups.get(key);
+      group.rows.push({ row, index });
+      group.total += kmDistanceTotal(row);
+    });
+    return [...groups.values()].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name, 'fr'))
+      .map(group => ({ ...group, rows: group.rows.sort((a, b) => String(b.row.date).localeCompare(String(a.row.date))) }));
+  }
+
   function summarize({ stock = [], losses = [], km = [], privateMovements = [] } = {}) {
     const calc = global.BastAccountingCalculations;
     const stockValue = stock.reduce((sum, row) => sum + rowAmount(row), 0);
@@ -29,7 +50,7 @@
       return sum + (SPECIAL_LOSS_TYPES.includes(lossType(row)) ? 0 : rowAmount(row));
     }, 0);
     const kmTotal = km.reduce(
-      (sum, row) => sum + calc.number(row.km) * calc.number(row.trips || 1),
+      (sum, row) => sum + kmDistanceTotal(row),
       0
     );
     const withdrawals = privateMovements.reduce((sum, row) => {
@@ -57,5 +78,5 @@
     };
   }
 
-  global.BastOperatingLedger = Object.freeze({ SPECIAL_LOSS_TYPES, lossType, rowAmount, privateMovementEffect, summarize });
+  global.BastOperatingLedger = Object.freeze({ SPECIAL_LOSS_TYPES, lossType, rowAmount, privateMovementEffect, kmTotal: kmDistanceTotal, kmGroups, summarize });
 })(globalThis);

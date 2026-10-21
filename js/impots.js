@@ -261,7 +261,7 @@ if (new URLSearchParams(window.location.search).get("embedded") === "1") documen
     const lossesTotal = losses
       .filter(row => !isSocialContributionRow(row))
       .reduce((sum, row) => sum + toNumber(row.quantity || 1) * toNumber(row.unitPrice || row.amount || 0), 0);
-    const kmTotal = km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1), 0);
+    const kmTotal = km.reduce((sum, row) => sum + toNumber(row.km) * toNumber(row.trips || 1) * (row.roundTrip === true ? 2 : 1), 0);
     const kmFiscal = kmTotal * toNumber(settings.kmAllowance);
     const amortInvestments = investments.map(row => ({
       ...row,

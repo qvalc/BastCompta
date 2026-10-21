@@ -2246,27 +2246,93 @@ function renderLosses() {
   });
 }
 
+let kmYear = String(new Date().getFullYear());
+let kmEditor = null;
+const kmOpenGroups = new Set();
+const kmTypeLabels = { client: 'Client', supplier: 'Fournisseur', other: 'Autre' };
+const kmFormat = value => toNumber(value).toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function kmNames(type) {
+  const names = data.km.filter(r => (r.partyType || 'other') === type).map(r => r.partyName);
+  try {
+    const key = type === 'client' ? (window.BastComptaStorageKeys?.documents || 'devis-facture-style-vrai-document')
+      : (window.BastComptaStorageKeys?.suppliers || 'bastcompta-fournisseurs-v1');
+    const source = JSON.parse(localStorage.getItem(key) || '{}');
+    if (type !== 'other') names.push(...(source[type === 'client' ? 'clients' : 'suppliers'] || []).map(r => r.name));
+  } catch (error) { console.warn('Liste des contacts indisponible', error); }
+  return [...new Set(names.map(n => String(n || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b,'fr'));
+}
+
+function startKmEditor(index = -1) {
+  kmEditor = { index, row: index >= 0 ? { ...data.km[index] } : {
+    date: `${kmYear === 'undated' ? new Date().getFullYear() : kmYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
+    partyType: 'client', partyName: '', reason: '', km: 0, trips: 1, roundTrip: false
+  } };
+  render();
+  document.getElementById('kmPartyName')?.focus();
+}
+
+function changeKmType(type) {
+  kmEditor.row.partyType = type;
+  const input = document.getElementById('kmPartyName');
+  input.value = '';
+  document.getElementById('kmNameOptions').innerHTML = kmNames(type).map(name => `<option value="${escapeAttr(name)}"></option>`).join('');
+}
+
+function submitKmEditor(event) {
+  event.preventDefault();
+  const form = event.target.elements;
+  const row = { ...kmEditor.row, date: form.kmDate.value, partyType: form.kmType.value,
+    partyName: form.kmPartyName.value.trim(), reason: form.kmReason.value.trim(),
+    km: Math.max(0, toNumber(form.kmDistance.value)), roundTrip: form.kmRoundTrip.checked };
+  if (!row.partyName || !row.reason) return;
+  // Réutiliser l’orthographe du contact existant pour éviter des groupes en double.
+  row.partyName = kmNames(row.partyType).find(name => name.toLocaleLowerCase('fr') === row.partyName.toLocaleLowerCase('fr')) || row.partyName;
+  notifyPortalBusinessChange('Déplacement enregistré');
+  if (kmEditor.index >= 0) data.km[kmEditor.index] = row;
+  else data.km.push(row);
+  kmYear = row.date.slice(0,4);
+  kmEditor = null;
+  saveData(false);
+}
+
+function renderKmEditor() {
+  if (!kmEditor) return '';
+  const row = kmEditor.row;
+  const type = row.partyType || 'other';
+  return `<form class="km-editor" onsubmit="submitKmEditor(event)">
+    <h3>${kmEditor.index >= 0 ? 'Modifier le déplacement' : 'Nouveau déplacement'}</h3>
+    <div class="km-fields">
+      <label>Date<input name="kmDate" type="date" required value="${escapeAttr(row.date || '')}"></label>
+      <label>Catégorie<select name="kmType" onchange="changeKmType(this.value)">${Object.entries(kmTypeLabels).map(([key,label]) => `<option value="${key}" ${type === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      <label>Client, fournisseur ou autre<input id="kmPartyName" name="kmPartyName" list="kmNameOptions" required value="${escapeAttr(row.partyName || '')}" placeholder="Choisir ou saisir un nouveau nom" autocomplete="off"></label>
+      <label>Raison du déplacement<input name="kmReason" required value="${escapeAttr(row.reason ?? row.route ?? '')}"></label>
+      <label>Km aller<input name="kmDistance" type="number" min="0" step="0.01" required value="${toNumber(row.km)}"></label>
+      <label class="km-checkbox"><input name="kmRoundTrip" type="checkbox" ${row.roundTrip === true ? 'checked' : ''}> Aller-retour</label>
+    </div>
+    <datalist id="kmNameOptions">${kmNames(type).map(name => `<option value="${escapeAttr(name)}"></option>`).join('')}</datalist>
+    ${row.person ? `<p class="hint">Personne (ancien encodage) : ${escapeHtml(row.person)}</p>` : ''}
+    ${toNumber(row.trips || 1) !== 1 ? `<p class="hint">Ancien encodage : ${kmFormat(row.trips)} déplacements. Ce multiplicateur est conservé.</p>` : ''}
+    <div class="inline-actions"><button class="primary" type="submit">Enregistrer le déplacement</button><button type="button" onclick="kmEditor=null; render()">Annuler</button></div>
+  </form>`;
+}
+
 function renderKm() {
-  const t = totals();
-  return renderTablePage({
-    key: 'km',
-    title: 'Kilomètres',
-    addLabel: 'Ajouter un déplacement',
-    onAdd: `addRow('km', { date: '', person: '', route: '', km: 0, trips: 1 })`,
-    headers: ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux', ''],
-    rows: data.km.map((row, i) => `
-          <tr>
-            <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.km[${i}].date=this.value; saveData(false)"></td>
-            <td><input value="${escapeAttr(row.person)}" onchange="data.km[${i}].person=this.value; saveData(false)"></td>
-            <td><input value="${escapeAttr(row.route)}" onchange="data.km[${i}].route=this.value; saveData(false)"></td>
-            <td><input type="number" step="0.01" value="${num(row.km)}" onchange="data.km[${i}].km=parseFloat(this.value)||0; saveData(false)"></td>
-            <td><input type="number" step="0.01" value="${num(row.trips)}" onchange="data.km[${i}].trips=parseFloat(this.value)||0; saveData(false)"></td>
-            <td>${num(toNumber(row.km) * toNumber(row.trips), 2)} km</td>
-            <td><button class="delete-icon-btn" title="Supprimer" aria-label="Supprimer" onclick="deleteRow('km', ${i})"><svg class="trash-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></td>
-          </tr>
-        `).join(''),
-    footer: `<div class="kv"><span>Total kilomètres</span><span>${num(t.kmTotal, 2)} km</span></div>`
-  });
+  const years = [...new Set([String(new Date().getFullYear()), ...data.km.map(row => String(row.date || '').slice(0,4)).filter(Boolean)])].sort().reverse();
+  const groups = BastOperatingLedger.kmGroups(data.km, kmYear);
+  const total = groups.reduce((sum, group) => sum + group.total, 0);
+  return `<section class="page ${activePage === 'km' ? 'active' : ''}"><div class="card km-page">
+    <div class="section-head"><div><h2>Kilomètres</h2><p class="hint">Les déplacements sont regroupés automatiquement par client, fournisseur ou autre.</p></div>
+      <button class="primary" type="button" onclick="startKmEditor()">Ajouter un déplacement</button></div>
+    <label class="km-year">Année <select aria-label="Année des déplacements" onchange="kmYear=this.value; kmEditor=null; kmOpenGroups.clear(); render()">${years.map(year => `<option ${kmYear === year ? 'selected' : ''}>${year}</option>`).join('')}${data.km.some(row => !row.date) ? `<option value="undated" ${kmYear === 'undated' ? 'selected' : ''}>Sans date (anciens déplacements)</option>` : ''}</select></label>
+    ${renderKmEditor()}
+    ${groups.map((group, groupIndex) => `<details class="km-group" ${kmOpenGroups.has(group.key) ? 'open' : ''} ontoggle="const key=decodeURIComponent(this.dataset.group); if(this.open)kmOpenGroups.add(key);else kmOpenGroups.delete(key)" data-group="${escapeAttr(encodeURIComponent(group.key))}">
+      <summary><span><strong>${kmTypeLabels[group.type]} — ${escapeHtml(group.name)}</strong><span class="hint">${group.rows.length} déplacement${group.rows.length > 1 ? 's' : ''}</span></span><strong>${kmFormat(group.total)} km</strong></summary>
+      <div class="km-table-wrap"><table><thead><tr><th>Date</th><th>Raison du déplacement</th><th>Km aller</th><th>Aller-retour</th><th>Km totaux</th><th>Actions</th></tr></thead><tbody>
+      ${group.rows.map(({row,index}) => `<tr><td>${escapeHtml(row.date || 'Sans date')}</td><td>${escapeHtml(row.reason ?? row.route ?? '—')}${row.person ? `<div class="hint">${escapeHtml(row.person)}</div>` : ''}${toNumber(row.trips || 1) !== 1 ? `<div class="hint">${kmFormat(row.trips)} déplacements (ancien encodage)</div>` : ''}</td><td>${kmFormat(row.km)}</td><td><input type="checkbox" disabled aria-label="Aller-retour" ${row.roundTrip === true ? 'checked' : ''}></td><td>${kmFormat(BastOperatingLedger.kmTotal(row))} km</td><td><div class="inline-actions"><button type="button" onclick="startKmEditor(${index})">Modifier</button><button class="delete-icon-btn" type="button" aria-label="Supprimer le déplacement" onclick="deleteRow('km', ${index})">🗑</button></div></td></tr>`).join('')}
+      </tbody></table></div></details>`).join('') || '<p class="hint">Aucun déplacement pour cette année.</p>'}
+    <div class="kv km-total"><strong>${kmYear === 'undated' ? 'Total sans date' : `Total kilomètres ${escapeHtml(kmYear)}`}</strong><strong>${kmFormat(total)} km</strong></div>
+  </div></section>`;
 }
 
 
@@ -2703,7 +2769,7 @@ function buildPrintReportHtml() {
 
     ${BastAccountingReportTemplate.tableSection('Taxes et cotisations', ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total'], lossRows)}
 
-    ${BastAccountingReportTemplate.tableSection('Kilomètres', ['Date', 'Personne', 'Trajet', 'Km', 'Nb déplacements', 'Km totaux'], kmRows)}
+    ${BastAccountingReportTemplate.tableSection('Kilomètres', ['Date', 'Client / fournisseur / autre', 'Raison du déplacement', 'Km aller', 'Aller-retour', 'Km totaux'], kmRows)}
 
     ${BastAccountingReportTemplate.tableSection("Prélèvements de l'exploitant", ['Date', 'Type', 'Motif / justification', 'Montant', 'Effet au passif'], privateMovementRows, {}, [
         ['Solde compte exploitant reporté', money(t.ownerAccountCarryover)],

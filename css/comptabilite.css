@@ -842,3 +842,20 @@ body.bast-embedded .page.active {
 .table-purchases .delete-icon-btn {
     margin: 0;
 }
+.km-year { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.km-year select { width: auto; }
+.km-editor { padding: 20px; margin-bottom: 22px; border: 1px solid #d8e0ed; border-radius: 14px; background: #f7f9fc; }
+.km-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.km-fields label { display: flex; flex-direction: column; gap: 8px; font-weight: 600; }
+.km-fields .km-checkbox { flex-direction: row; align-items: center; }
+.km-checkbox input, .km-group input[type="checkbox"] { width: 20px; height: 20px; accent-color: #16a34a; }
+.km-group { border: 1px solid #d8e0ed; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.km-group summary { cursor: pointer; padding: 18px; display: flex; align-items: center; gap: 16px; background: #f7f9fc; }
+.km-group summary::before { content: '▶'; font-size: 12px; }
+.km-group[open] summary::before { content: '▼'; }
+.km-group summary > span { flex: 1; }
+.km-group summary .hint { display: block; margin-top: 4px; }
+.km-table-wrap { overflow-x: auto; }
+.km-table-wrap table { min-width: 700px; }
+.km-total { padding-top: 18px; margin-top: 20px; border-top: 1px solid #d8e0ed; }
+@media (max-width: 760px) { .km-fields { grid-template-columns: 1fr; } .km-group summary { flex-wrap: wrap; } }

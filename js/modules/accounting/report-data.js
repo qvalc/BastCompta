@@ -53,8 +53,10 @@
         money(amount), money(operating.privateMovementEffect(row))];
     });
     const kmRows = (data.km || []).map(row => [
-      date(row.date), escape(row.person || '—'), escape(row.route || '—'), `${num(row.km)} km`, num(row.trips),
-      `${num(calc.number(row.km) * calc.number(row.trips))} km`
+      date(row.date), escape(row.partyName ? `${({ client: 'Client', supplier: 'Fournisseur', other: 'Autre' })[row.partyType] || 'Autre'} — ${row.partyName}` : row.person || 'À classer'),
+      escape(row.reason ?? row.route ?? '—'), `${num(row.km)} km`,
+      `${row.roundTrip === true ? 'Oui' : 'Non'}${calc.number(row.trips || 1) !== 1 ? ` (× ${num(row.trips)} déplacements)` : ''}`,
+      `${num(operating.kmTotal(row))} km`
     ]);
 
     const exemptionThreshold = calc.number(settings.socialExemptionThreshold || 1881.76);
