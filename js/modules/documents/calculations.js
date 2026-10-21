@@ -10,6 +10,7 @@
   function lineVat(row = {}) { return lineNet(row) * number(row.vatRate) / 100; }
   function lineTvac(row = {}) { return lineNet(row) + lineVat(row); }
   function lineCost(row = {}) {
+    if (row.costTotal !== undefined && row.costTotal !== null && row.costTotal !== '') return number(row.costTotal);
     const costPrice = row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice ?? 0;
     return number(row.qty) * number(costPrice);
   }

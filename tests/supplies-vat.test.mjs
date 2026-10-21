@@ -10,7 +10,7 @@ const calc = globalThis.BastDocumentCalculations;
 test('TVA des fournitures sélectionnable, sauvegardée et calculée pour chaque document', () => {
   const context = vm.createContext({
     data: {}, escapeHtml: String, escapeAttr: String, num: Number,
-    toNumber: Number, lineNet: calc.lineNet, money: String,
+    toNumber: Number, lineNet: calc.lineNet, lineCost: calc.lineCost, money: String,
     getDevisFactureChangeSnapshot: () => ({}), getDocumentLabel: key => key,
     notifyPortalBusinessChange() {}, saveData() {}
   });

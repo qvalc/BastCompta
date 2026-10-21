@@ -825,6 +825,7 @@ function setDocumentLineField(docKey, section, index, field, value) {
       unit: 'unité',
       unitPrice: 'prix unitaire',
       costPrice: 'prix de revient',
+      costTotal: 'prix de revient total',
       discount: 'remise',
       vatRate: 'TVA'
     };
@@ -3719,7 +3720,7 @@ function renderLinesTable(docKey, section, title = '') {
                 <th>Quantité</th>
                 <th>Unité</th>
                 <th>Pr. unit.</th>
-                ${section === 'suppliesLines' ? '<th class="no-print">Prix de revient</th>' : ''}
+                ${section === 'suppliesLines' ? '<th class="no-print">Revient total HTVA</th>' : ''}
                 <th>Remise</th>
                 <th>Total</th>
                 <th class="line-vat">TVA</th>
@@ -3738,7 +3739,7 @@ function renderLinesTable(docKey, section, title = '') {
                   <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'qty', parseFloat(this.value)||0)"></td>
                   <td><input value="${escapeAttr(row.unit)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unit', this.value)"></td>
                   <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unitPrice', parseFloat(this.value)||0)"></td>
-                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice)}" title="Prix de revient interne, non imprimé" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"></td>` : ''}
+                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(lineCost(row))}" aria-label="Prix de revient total HTVA" title="Coût total HTVA de cette ligne, toutes les unités comprises. Interne, non imprimé." onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costTotal', parseFloat(this.value)||0)"></td>` : ''}
                   <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'discount', parseFloat(this.value)||0)"></td>
                   <td>${money(lineNet(row))}</td>
                   <td class="line-vat">

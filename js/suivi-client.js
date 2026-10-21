@@ -2564,6 +2564,7 @@ function moneyLineVat(line) {
 }
 
 function moneyLineCostHtva(line) {
+  if (line?.costTotal !== undefined && line.costTotal !== null && line.costTotal !== '') return Number(line.costTotal) || 0;
   const qty = Number(line?.qty ?? line?.quantity ?? 0) || 0;
   // Prix de revient interne. Si absent dans un ancien JSON, on reprend le prix facturé pour ne pas fausser l'ancien calcul.
   const costPrice = Number(line?.costPrice ?? line?.purchasePrice ?? line?.cost ?? line?.unitCost ?? line?.unitPrice ?? line?.price ?? 0) || 0;

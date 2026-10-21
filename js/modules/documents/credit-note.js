@@ -19,7 +19,9 @@
     const source = Array.isArray(rows) ? rows : emptyLines();
     return source.map(row => ({
       ...clone(row),
-      qty: -Math.abs(number(row.qty) || 1)
+      qty: -Math.abs(number(row.qty) || 1),
+      ...(row.costTotal !== undefined && row.costTotal !== null && row.costTotal !== ''
+        ? { costTotal: -Math.abs(number(row.costTotal)) } : {})
     }));
   }
 
