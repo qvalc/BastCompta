@@ -9,10 +9,17 @@
   function lineNet(row = {}) { return lineBase(row) - lineDiscountAmount(row); }
   function lineVat(row = {}) { return lineNet(row) * number(row.vatRate) / 100; }
   function lineTvac(row = {}) { return lineNet(row) + lineVat(row); }
+  function lineUnitCost(row = {}) {
+    // Compatibilité avec les lignes enregistrées pendant la saisie en coût total.
+    if (row.costTotal !== undefined && row.costTotal !== null && row.costTotal !== '') {
+      return number(row.qty) ? number(row.costTotal) / number(row.qty) : 0;
+    }
+    const costPrice = row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice ?? 0;
+    return number(costPrice);
+  }
   function lineCost(row = {}) {
     if (row.costTotal !== undefined && row.costTotal !== null && row.costTotal !== '') return number(row.costTotal);
-    const costPrice = row.costPrice ?? row.purchasePrice ?? row.cost ?? row.unitPrice ?? 0;
-    return number(row.qty) * number(costPrice);
+    return number(row.qty) * lineUnitCost(row);
   }
   function lineSupplyMargin(row = {}) { return lineNet(row) - lineCost(row); }
 
@@ -154,7 +161,7 @@
   }
 
   global.BastDocumentCalculations = Object.freeze({
-    lineBase, lineDiscountAmount, lineNet, lineVat, lineTvac, lineCost, lineSupplyMargin,
+    lineBase, lineDiscountAmount, lineNet, lineVat, lineTvac, lineUnitCost, lineCost, lineSupplyMargin,
     totalsForDocument, vatBreakdown, invoiceStatus, paymentBalance, invoiceAccountingPayload,
     normalizeClientNumber, normalizeYear, normalizeInvoiceNumber,
     structuredCommunication, normalizeVatNumber, belgianEnterpriseNumber,

@@ -817,8 +817,15 @@ function setDocumentLineField(docKey, section, index, field, value) {
   if (!row) return;
   const previousValue = row[field];
   const beforeSnapshot = getDevisFactureChangeSnapshot();
+  const legacyTotal = row.costTotal !== undefined && row.costTotal !== null && row.costTotal !== '';
+  if (field === 'qty' && legacyTotal) {
+    row.costPrice = BastDocumentCalculations.lineUnitCost(row);
+    delete row.costTotal;
+  }
   row[field] = value;
-  if (String(previousValue ?? '') !== String(value ?? '')) {
+  // Une nouvelle saisie unitaire remplace l’ancien champ de coût total.
+  if (field === 'costPrice') delete row.costTotal;
+  if (String(previousValue ?? '') !== String(value ?? '') || (field === 'costPrice' && legacyTotal)) {
     const fieldLabels = {
       description: 'description',
       qty: 'quantité',
@@ -3720,7 +3727,7 @@ function renderLinesTable(docKey, section, title = '') {
                 <th>Quantité</th>
                 <th>Unité</th>
                 <th>Pr. unit.</th>
-                ${section === 'suppliesLines' ? '<th class="no-print">Revient total HTVA</th>' : ''}
+                ${section === 'suppliesLines' ? '<th class="no-print">Revient unitaire HTVA</th>' : ''}
                 <th>Remise</th>
                 <th>Total</th>
                 <th class="line-vat">TVA</th>
@@ -3739,7 +3746,7 @@ function renderLinesTable(docKey, section, title = '') {
                   <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'qty', parseFloat(this.value)||0)"></td>
                   <td><input value="${escapeAttr(row.unit)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unit', this.value)"></td>
                   <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unitPrice', parseFloat(this.value)||0)"></td>
-                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(lineCost(row))}" aria-label="Prix de revient total HTVA" title="Coût total HTVA de cette ligne, toutes les unités comprises. Interne, non imprimé." onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costTotal', parseFloat(this.value)||0)"></td>` : ''}
+                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.0001" value="${num(BastDocumentCalculations.lineUnitCost(row), 4)}" aria-label="Prix de revient unitaire HTVA" title="Coût HTVA d’une unité. Le revient total est la quantité multipliée par ce coût. Interne, non imprimé." onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"><small>Revient total : ${money(lineCost(row))}</small></td>` : ''}
                   <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'discount', parseFloat(this.value)||0)"></td>
                   <td>${money(lineNet(row))}</td>
                   <td class="line-vat">

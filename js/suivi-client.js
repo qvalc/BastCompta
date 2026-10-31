@@ -596,7 +596,9 @@ async function autoLoadClientDocuments(showToast = false) {
   const hydrated = hydrateProjectWithCrm(project);
   const localDocs = getLocalCrmDocumentsForProject(hydrated);
   const driveDocs = await getDriveCrmDocumentsForProject(hydrated);
-  crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs]);
+  // Un export Drive ancien ne doit pas réécrire le montant du document local corrigé.
+  const localKeys = new Set(localDocs.map(doc => `${doc.key}:${doc.ref}`));
+  crmDocumentLinkCache = dedupeCrmDocs([...localDocs, ...driveDocs.filter(doc => !localKeys.has(`${doc.key}:${doc.ref}`))]);
   if (crmDocumentLinkCache.length) {
     for (const doc of crmDocumentLinkCache) {
       await toggleCrmDocumentLink(doc.key, doc.ref, true, project.id, doc);
@@ -1673,7 +1675,7 @@ function renderMoneyTable(items, type) {
                   <td data-label="Date">${formatDate(item.date)}</td>
                   <td data-label="Référence">${escapeHtml(item.displayRef || item.ref || '—')}</td>
                   <td data-label="Description">${escapeHtml(item.description || `${moneyTypeLabel(type)} ${item.ref || ''}`.trim() || '—')}</td>
-                  <td class="num" data-label="Montant"><strong class="money-main-value">${formatMoney(projectMoneyValue(item))}</strong>${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<small class="money-breakdown"><span>Vendu ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + '</span><span>Revient ' + formatMoney(item.suppliesCost || item.suppliesCostHtva || item.suppliesHtva || 0) + '</span></small>' : ''}</td>
+                  <td class="num" data-label="Montant"><strong class="money-main-value">${formatMoney(projectMoneyValue(item))}</strong>${type === 'invoice' && Number(item.suppliesHtva || item.suppliesSaleHtva || item.suppliesCost || 0) ? '<small class="money-breakdown"><span>Vendu ' + formatMoney(item.suppliesSaleHtva || item.suppliesHtva || 0) + '</span><span>Revient ' + formatMoney(item.suppliesCost ?? item.suppliesCostHtva ?? item.suppliesHtva ?? 0) + '</span></small>' : ''}</td>
                   <td class="no-print" data-label="Actions">
                     <div class="inline-actions document-actions">
                       ${isCrmDoc ? `<button class="crm-doc-action is-preview" type="button" title="Afficher" aria-label="Afficher" onclick="previewCrmLinkedDocument('${type}', '${escapeAttr(item.id)}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg></button>` : ''}
@@ -2837,9 +2839,9 @@ async function toggleCrmDocumentLink(type, ref, checked, targetProjectId = selec
       htva: doc.htva,
       vat: doc.vat,
       tvac: doc.tvac,
-      suppliesCost: doc.suppliesCost || doc.suppliesCostHtva || doc.suppliesHtva || 0,
-      suppliesCostHtva: doc.suppliesCostHtva || doc.suppliesCost || doc.suppliesHtva || 0,
-      costHtva: doc.costHtva || doc.suppliesCostHtva || doc.suppliesCost || doc.suppliesHtva || 0,
+      suppliesCost: doc.suppliesCost ?? doc.suppliesCostHtva ?? doc.suppliesHtva ?? 0,
+      suppliesCostHtva: doc.suppliesCostHtva ?? doc.suppliesCost ?? doc.suppliesHtva ?? 0,
+      costHtva: doc.costHtva ?? doc.suppliesCostHtva ?? doc.suppliesCost ?? doc.suppliesHtva ?? 0,
       suppliesHtva: doc.suppliesHtva || doc.suppliesSaleHtva || 0,
       suppliesSaleHtva: doc.suppliesSaleHtva || doc.suppliesHtva || 0,
       suppliesVat: doc.suppliesVat || 0,
@@ -2940,7 +2942,7 @@ function renderCrmDocumentLinkModal() {
               <label class="doc-item" style="grid-template-columns:22px 1fr; cursor:pointer;">
                 <input type="checkbox" ${isMoneyLinked(project, doc.key, doc.ref) ? 'checked' : ''} onchange="toggleCrmDocumentLink('${doc.key}', '${escapeAttr(doc.ref)}', this.checked)">
                 <div>
-                  <div class="doc-name">${escapeHtml(doc.label)} ${escapeHtml(doc.ref)} — ${formatMoney(doc.clientHtva || doc.totalClientHtva || doc.htva)} HTVA${Number(doc.suppliesHtva || doc.suppliesSaleHtva || doc.suppliesCost || 0) ? ' • Prestation : ' + formatMoney(doc.htva) + ' • Fournitures vendues : ' + formatMoney(doc.suppliesSaleHtva || doc.suppliesHtva || 0) + ' • Prix de revient : ' + formatMoney(doc.suppliesCost || doc.suppliesCostHtva || doc.suppliesHtva || 0) : ''}</div>
+                  <div class="doc-name">${escapeHtml(doc.label)} ${escapeHtml(doc.ref)} — ${formatMoney(doc.clientHtva || doc.totalClientHtva || doc.htva)} HTVA${Number(doc.suppliesHtva || doc.suppliesSaleHtva || doc.suppliesCost || 0) ? ' • Prestation : ' + formatMoney(doc.htva) + ' • Fournitures vendues : ' + formatMoney(doc.suppliesSaleHtva || doc.suppliesHtva || 0) + ' • Prix de revient : ' + formatMoney(doc.suppliesCost ?? doc.suppliesCostHtva ?? doc.suppliesHtva ?? 0) : ''}</div>
                   <div class="doc-meta">Client : ${escapeHtml(doc.clientName || '—')} • N° client : ${escapeHtml(doc.clientRef || '—')} • Client doc : ${escapeHtml(doc.siteName || '—')} • Source : ${escapeHtml(doc.source)}${doc.fileName ? ' • ' + escapeHtml(doc.fileName) : ''}</div>
                   <div class="inline-actions no-print" style="margin-top:8px;">
                     <button class="small" type="button" onclick="event.preventDefault(); previewCrmDocumentFromCache('${doc.key}', '${escapeAttr(doc.ref)}')">Afficher</button>
