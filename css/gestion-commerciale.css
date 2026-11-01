@@ -2551,9 +2551,12 @@ button.small { padding:6px 8px; font-size:12px; }
 .vat-breakdown th { background: var(--head); color: var(--muted); }
 .vat-breakdown th:first-child, .vat-breakdown td:first-child { text-align: left; white-space: nowrap; }
 
-.document-line-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
-.document-line-move { display: flex; gap: 4px; }
-.document-line-move button { flex: 1; min-width: 0; padding: 4px 6px; box-shadow: none; font-size: 16px; }
+.document-line-actions { display: flex; flex-direction: row; flex-wrap: nowrap; gap: 2px; align-items: center; justify-content: center; }
+.document-line-move { display: flex; flex-wrap: nowrap; gap: 2px; }
+.document-line-actions button { flex: 0 0 22px; width: 22px; min-width: 22px; height: 28px; min-height: 28px; margin: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: none; border-radius: 5px; font-size: 16px; }
+.document-line-actions .document-line-delete { color: #c62828; background: transparent; border: 1px solid transparent; font-size: 23px; font-weight: 600; }
+.document-line-actions .document-line-delete:hover { color: #a51414; background: #fff1f1; border-color: #fecaca; }
+.document-line-actions button:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 .document-line-move button:disabled { opacity: .35; cursor: default; }
 .document-line-position { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .document-line-position select { width: auto; max-width: 280px; }

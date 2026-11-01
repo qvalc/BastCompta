@@ -3777,7 +3777,7 @@ function renderLinesTable(docKey, section, title = '') {
                       <button type="button" title="Monter la ligne" aria-label="Monter la ligne ${i + 1}" ${i === 0 ? 'disabled' : ''} onclick="moveDocumentLine('${docKey}', '${section}', ${i}, -1)">↑</button>
                       <button type="button" title="Descendre la ligne" aria-label="Descendre la ligne ${i + 1}" ${i === rows.length - 1 ? 'disabled' : ''} onclick="moveDocumentLine('${docKey}', '${section}', ${i}, 1)">↓</button>
                     </div>
-                    <button type="button" class="danger" onclick="deleteLine('${docKey}', '${section}', ${i})">Suppr.</button>
+                    <button type="button" class="document-line-delete icon-btn" title="Supprimer la ligne" aria-label="Supprimer la ligne ${i + 1}" onclick="deleteLine('${docKey}', '${section}', ${i})">×</button>
                   </div></td>
                 </tr>
               `).join('')}
