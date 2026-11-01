@@ -1768,6 +1768,15 @@ function setField(path, value) {
   saveData(false);
 }
 
+function rowsByNewestDate(rows) {
+  // Conserver l’index de stockage pour que les actions ciblent la bonne écriture.
+  return rows.map((row, index) => ({ row, index })).sort((a, b) => {
+    const left = String(a.row.date || '');
+    const right = String(b.row.date || '');
+    return right.localeCompare(left) || a.index - b.index;
+  });
+}
+
 function sortByDate(array) {
   array.sort((a, b) => {
     if (!a.date) return 1;
@@ -2086,7 +2095,7 @@ function renderInvestments() {
   `,
     headers: ['Date achat', 'Fournisseur', 'N° facture', 'Description', 'Montant HTVA', 'Durée (mois)', 'Amorti année', 'Amorti total', 'Valeur restante', ''],
 
-    rows: t.investmentComputed.map((row, i) => `
+    rows: rowsByNewestDate(t.investmentComputed).map(({ row, index: i }) => `
       <tr>
   <tr>
   <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.investments[${i}].date=this.value; saveData(false)"></td>
@@ -2227,7 +2236,7 @@ function renderLosses() {
     addLabel: 'Ajouter une ligne',
     onAdd: `addRow('losses', { date: '', type: 'cotisations_sociales', label: '', quantity: 1, unitPrice: 0 })`,
     headers: ['Date', 'Type', 'Libellé', 'Quantité', 'Montant unitaire', 'Total', ''],
-    rows: data.losses.map((row, i) => `
+    rows: rowsByNewestDate(data.losses).map(({ row, index: i }) => `
           <tr>
             <td><input type="date" value="${escapeAttr(row.date)}" onchange="data.losses[${i}].date=this.value; saveData(false)"></td>
             <td>${renderLossTypeSelect(row, i)}</td>
