@@ -1267,9 +1267,24 @@ function createEmptyLine() {
   };
 }
 
-function addLine(docKey, section = 'lines') {
+function addLine(docKey, section = 'lines', position = null) {
+  const rows = data?.[docKey]?.[section];
+  if (!Array.isArray(rows)) return;
+  const index = position === null ? rows.length : Number(position);
+  if (!Number.isInteger(index) || index < 0 || index > rows.length) return;
   notifyPortalBusinessChange('Ligne ajoutée au document');
-  data[docKey][section].push(createEmptyLine());
+  rows.splice(index, 0, createEmptyLine());
+  saveData(false);
+}
+
+function moveDocumentLine(docKey, section, index, offset) {
+  const rows = data?.[docKey]?.[section];
+  const target = index + offset;
+  if (!Array.isArray(rows) || !Number.isInteger(index) || ![-1, 1].includes(offset)
+    || index < 0 || index >= rows.length || target < 0 || target >= rows.length) return;
+  notifyPortalBusinessChange('Ordre des lignes du document modifié');
+  const [row] = rows.splice(index, 1);
+  rows.splice(target, 0, row);
   saveData(false);
 }
 
@@ -3757,14 +3772,27 @@ function renderLinesTable(docKey, section, title = '') {
                       <option value="21" ${toNumber(row.vatRate) === 21 ? 'selected' : ''}>21%</option>
                     </select>
                   </td>
-                  <td class="no-print"><button class="danger" onclick="deleteLine('${docKey}', '${section}', ${i})">Suppr.</button></td>
+                  <td class="no-print"><div class="document-line-actions">
+                    <div class="document-line-move">
+                      <button type="button" title="Monter la ligne" aria-label="Monter la ligne ${i + 1}" ${i === 0 ? 'disabled' : ''} onclick="moveDocumentLine('${docKey}', '${section}', ${i}, -1)">↑</button>
+                      <button type="button" title="Descendre la ligne" aria-label="Descendre la ligne ${i + 1}" ${i === rows.length - 1 ? 'disabled' : ''} onclick="moveDocumentLine('${docKey}', '${section}', ${i}, 1)">↓</button>
+                    </div>
+                    <button type="button" class="danger" onclick="deleteLine('${docKey}', '${section}', ${i})">Suppr.</button>
+                  </div></td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
         </div>
         <div class="line-add-actions no-print">
-          <button type="button" class="line-add-button" onclick="addLine('${docKey}', '${section}')">+ ${section === 'suppliesLines' ? 'Fourniture' : 'Ligne'}</button>
+          <label class="document-line-position">Emplacement
+            <select id="${docKey}-${section}-insert-position" aria-label="Emplacement de la nouvelle ${section === 'suppliesLines' ? 'fourniture' : 'ligne'}">
+              <option value="0">Au début</option>
+              ${rows.slice(0, -1).map((row, index) => `<option value="${index + 1}">Après la ligne ${index + 1}${row.description ? ` — ${escapeHtml(String(row.description).slice(0, 45))}` : ''}</option>`).join('')}
+              ${rows.length ? `<option value="${rows.length}" selected>À la fin</option>` : ''}
+            </select>
+          </label>
+          <button type="button" class="line-add-button" onclick="addLine('${docKey}', '${section}', Number(document.getElementById('${docKey}-${section}-insert-position').value))">+ ${section === 'suppliesLines' ? 'Fourniture' : 'Ligne'}</button>
         </div>
       `;
 }

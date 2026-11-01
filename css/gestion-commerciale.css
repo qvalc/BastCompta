@@ -2550,3 +2550,12 @@ button.small { padding:6px 8px; font-size:12px; }
 .vat-breakdown th, .vat-breakdown td { border: 1px solid var(--line); padding: 7px 8px; text-align: right; }
 .vat-breakdown th { background: var(--head); color: var(--muted); }
 .vat-breakdown th:first-child, .vat-breakdown td:first-child { text-align: left; white-space: nowrap; }
+
+.document-line-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.document-line-move { display: flex; gap: 4px; }
+.document-line-move button { flex: 1; min-width: 0; padding: 4px 6px; box-shadow: none; font-size: 16px; }
+.document-line-move button:disabled { opacity: .35; cursor: default; }
+.document-line-position { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.document-line-position select { width: auto; max-width: 280px; }
+.line-add-actions { gap: 12px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 600px) { .document-line-position { flex-wrap: wrap; } .document-line-position select { max-width: 220px; } }
