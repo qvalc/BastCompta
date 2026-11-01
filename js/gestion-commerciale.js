@@ -3238,13 +3238,47 @@ async function openInvoicePreviewByNumberFromDrive(invoiceNumber, preferredFileI
 
 window.openInvoicePreviewByNumberFromDrive = openInvoicePreviewByNumberFromDrive;
 
+let restoreDocumentPrint = null;
+
+function prepareDocumentPrint() {
+  if (restoreDocumentPrint) return;
+  const page = document.querySelector(`.page[data-page="${activePage}"]`);
+  if (!page) return;
+  page.classList.add('print-include');
+  const replacements = [];
+  page.querySelectorAll('.sheet input, .sheet textarea, .sheet select').forEach(control => {
+    if (control.closest('.no-print') || ['hidden', 'checkbox', 'radio', 'file', 'button', 'submit'].includes(control.type)) return;
+    const text = document.createElement('div');
+    text.className = 'document-print-value';
+    text.textContent = getBackupControlText(control);
+    control.classList.add('document-print-control');
+    control.after(text);
+    replacements.push({ control, text });
+  });
+  restoreDocumentPrint = () => {
+    replacements.forEach(({control, text}) => {
+      control.classList.remove('document-print-control');
+      text.remove();
+    });
+    page.classList.remove('print-include');
+    restoreDocumentPrint = null;
+  };
+}
+
+window.addEventListener('beforeprint', prepareDocumentPrint);
+window.addEventListener('afterprint', () => restoreDocumentPrint?.());
+
 function printCurrentPage() {
   const pages = Array.from(document.querySelectorAll('.page'));
   pages.forEach(page => page.classList.remove('print-include'));
   const active = document.querySelector(`.page[data-page="${activePage}"]`);
   if (active) active.classList.add('print-include');
-  window.print();
-  if (active) active.classList.remove('print-include');
+  prepareDocumentPrint();
+  try { window.print(); }
+  finally {
+    restoreDocumentPrint?.();
+    if (active) active.classList.remove('print-include');
+  }
 }
 
 window.addEventListener('message', async (event) => {
