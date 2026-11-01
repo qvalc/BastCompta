@@ -3746,7 +3746,7 @@ function renderLinesTable(docKey, section, title = '') {
                   <td><input type="number" step="0.01" value="${num(row.qty)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'qty', parseFloat(this.value)||0)"></td>
                   <td><input value="${escapeAttr(row.unit)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unit', this.value)"></td>
                   <td><input type="number" step="0.01" value="${num(row.unitPrice)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'unitPrice', parseFloat(this.value)||0)"></td>
-                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.0001" value="${num(BastDocumentCalculations.lineUnitCost(row), 4)}" aria-label="Prix de revient unitaire HTVA" title="Coût HTVA d’une unité. Le revient total est la quantité multipliée par ce coût. Interne, non imprimé." onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"><small>Revient total : ${money(lineCost(row))}</small></td>` : ''}
+                  ${section === 'suppliesLines' ? `<td class="no-print"><input type="number" step="0.01" value="${num(BastDocumentCalculations.lineUnitCost(row), 2)}" aria-label="Prix de revient unitaire HTVA" title="Coût HTVA d’une unité. Le revient total est la quantité multipliée par ce coût. Interne, non imprimé." onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'costPrice', parseFloat(this.value)||0)"><small>Revient total : ${money(lineCost(row))}</small></td>` : ''}
                   <td><input type="number" step="0.01" value="${num(row.discount)}" onchange="setDocumentLineField('${docKey}', '${section}', ${i}, 'discount', parseFloat(this.value)||0)"></td>
                   <td>${money(lineNet(row))}</td>
                   <td class="line-vat">
@@ -4858,6 +4858,7 @@ document.addEventListener('keydown', event => {
 
 function renderPages() {
   const wrap = document.getElementById('pages');
+  const restoreInput = window.BastInputFocus?.capture(wrap);
   wrap.innerHTML = `
     ${renderQuote()}
     ${renderInvoice()}
@@ -4870,6 +4871,7 @@ function renderPages() {
     ${renderSettings()}
     ${renderEmailDatalist()}
   `;
+  restoreInput?.();
 }
 
 function renderInvoiceFirst() {

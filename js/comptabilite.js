@@ -1816,6 +1816,7 @@ function renderTabs() {
 
 function renderPages() {
   const wrap = document.getElementById('pages');
+  const restoreInput = window.BastInputFocus?.capture(wrap);
   wrap.innerHTML = `
         ${renderDashboard()}
         ${renderSales()}
@@ -1832,6 +1833,7 @@ function renderPages() {
         ${renderGoogleDrive()}
         ${renderSettings()}
       `;
+  restoreInput?.();
 }
 
 function renderDashboard() {
